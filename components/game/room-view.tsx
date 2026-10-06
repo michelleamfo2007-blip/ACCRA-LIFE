@@ -102,7 +102,7 @@ export function RoomView({
     const dz = target.z - start.z;
     setHeading(Math.atan2(dx, dz));
     setPose("walk");
-    const duration = Math.max(900, Math.hypot(dx, dz) * 420);
+    const duration = Math.max(550, Math.hypot(dx, dz) * 300);
     const started = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - started) / duration);
@@ -202,6 +202,10 @@ export function RoomView({
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
         onAsk={onAsk}
+        onWalk={(x, z) => {
+          if (draft || busy.current) return;
+          walkTo({ x: clampRoom(x, -4.6, 4.6), z: clampRoom(z, -3.4, 3.6) }, null);
+        }}
         onGo={(id) => {
           if (id === "door") {
             walkTo(SPOTS.door, "map");
@@ -225,6 +229,60 @@ export function RoomView({
         <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#3b6cff] shadow-lg">
           💤 Sleeping…
         </div>
+      ) : null}
+      {!draft && !fixture && !picked ? (
+        <>
+          <p className="pointer-events-none absolute bottom-[max(5.6rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
+            Tap floor to walk · drag to look · pinch zoom
+          </p>
+          <div className="absolute bottom-[max(5.8rem,calc(env(safe-area-inset-bottom)+5rem))] right-2 z-30 grid grid-cols-3 gap-1 sm:hidden">
+            <span />
+            <WalkPadBtn
+              label="Up"
+              onClick={() => {
+                if (busy.current) return;
+                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z - 0.85, -3.4, 3.6) };
+                walkTo(next, null);
+              }}
+            >
+              ↑
+            </WalkPadBtn>
+            <span />
+            <WalkPadBtn
+              label="Left"
+              onClick={() => {
+                if (busy.current) return;
+                const next = { x: clampRoom(posRef.current.x - 0.85, -4.6, 4.6), z: posRef.current.z };
+                walkTo(next, null);
+              }}
+            >
+              ←
+            </WalkPadBtn>
+            <span />
+            <WalkPadBtn
+              label="Right"
+              onClick={() => {
+                if (busy.current) return;
+                const next = { x: clampRoom(posRef.current.x + 0.85, -4.6, 4.6), z: posRef.current.z };
+                walkTo(next, null);
+              }}
+            >
+              →
+            </WalkPadBtn>
+            <span />
+            <WalkPadBtn
+              label="Down"
+              onClick={() => {
+                if (busy.current) return;
+                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z + 0.85, -3.4, 3.6) };
+                walkTo(next, null);
+              }}
+            >
+              ↓
+            </WalkPadBtn>
+            <span />
+          </div>
+        </>
       ) : null}
       {fixture && !draft ? <ItemSheet card={fixtureCard(fixture, life)} life={life} onPick={pickVerb} onClose={() => setFixture(null)} /> : null}
       {picked && !draft && pieceCard(picked) ? (
@@ -351,6 +409,19 @@ function PlaceCard({
 function Pad({ children, onClick }: { children: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="grid h-10 w-10 place-items-center rounded-full bg-[#f4f7fb] text-sm font-bold">
+      {children}
+    </button>
+  );
+}
+
+function WalkPadBtn({ children, label, onClick }: { children: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="grid h-12 w-12 place-items-center rounded-2xl bg-white/95 text-lg font-bold text-[#121212] shadow-lg active:scale-95"
+    >
       {children}
     </button>
   );

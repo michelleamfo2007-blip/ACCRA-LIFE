@@ -16,6 +16,7 @@ export function Apartment({
   sofaColor,
   onAsk,
   onGo,
+  onWalk,
   pieces = [],
   picked = null,
   placing = false,
@@ -31,6 +32,7 @@ export function Apartment({
   sofaColor: string | null;
   onAsk: () => void;
   onGo: (id: string) => void;
+  onWalk?: (x: number, z: number) => void;
   pieces?: Placed[];
   picked?: string | null;
   placing?: boolean;
@@ -47,7 +49,7 @@ export function Apartment({
       resize={{ scroll: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
-      <CameraRig frozen={placing} />
+      <CameraRig frozen={placing} follow={pos} />
       <color attach="background" args={[dark ? "#10131a" : look.sky]} />
       <ambientLight intensity={dark ? 0.22 : grade === "low" ? 0.42 : grade === "high" ? 1.05 : grade === "hall" ? 0.72 : 0.82} />
       <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : grade === "low" ? 0.45 : grade === "high" ? 1.15 : 0.95} />
@@ -70,6 +72,7 @@ export function Apartment({
       <Shower onGo={onGo} />
       <Radio onGo={onGo} />
       {placing && onDrag ? <PlacePad onDrag={onDrag} /> : null}
+      {!placing && onWalk ? <WalkPad onWalk={onWalk} /> : null}
       {pieces.map((piece) => {
         const item = SHOP.find((entry) => entry.id === piece.id);
         if (!item || item.consume || item.kind === "bed") return null;
@@ -137,21 +140,26 @@ export function Apartment({
   );
 }
 
-function CameraRig({ frozen }: { frozen: boolean }) {
+function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z: number } }) {
   const { camera, gl, size } = useThree();
   const pan = useRef({ x: 0, z: 0 });
   const zoom = useRef(1);
+  const soft = useRef({ x: follow.x, z: follow.z });
   const frozenRef = useRef(frozen);
+  const followRef = useRef(follow);
   frozenRef.current = frozen;
+  followRef.current = follow;
   useEffect(() => {
     const el = gl.domElement;
     const pointers = new Map<number, { x: number; y: number }>();
     let pinch = 0;
     let moved = 0;
+    let panning = false;
     const down = (event: PointerEvent) => {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       el.setPointerCapture(event.pointerId);
       moved = 0;
+      panning = false;
     };
     const move = (event: PointerEvent) => {
       const prev = pointers.get(event.pointerId);
@@ -161,26 +169,31 @@ function CameraRig({ frozen }: { frozen: boolean }) {
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.72, 1.05);
+        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.65, 1.15);
         pinch = dist;
         return;
       }
       const dx = event.clientX - prev.x;
       const dy = event.clientY - prev.y;
       moved += Math.abs(dx) + Math.abs(dy);
-      const step = 0.018 * zoom.current;
-      pan.current.x = clamp(pan.current.x - dx * step, -5.5, 5.5);
-      pan.current.z = clamp(pan.current.z + dy * step, -4.2, 4.2);
+      if (!panning) {
+        if (moved < 22) return;
+        panning = true;
+      }
+      const phone = size.width < 720;
+      const step = (phone ? 0.032 : 0.018) * zoom.current;
+      pan.current.x = clamp(pan.current.x - dx * step, -4.2, 4.2);
+      pan.current.z = clamp(pan.current.z + dy * step, -3.4, 3.4);
     };
     const up = (event: PointerEvent) => {
       pointers.delete(event.pointerId);
       if (pointers.size < 2) pinch = 0;
-      if (moved > 10) event.stopPropagation();
+      if (panning || moved > 22) event.stopPropagation();
     };
     const wheel = (event: WheelEvent) => {
       if (frozenRef.current) return;
       event.preventDefault();
-      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.72, 1.05);
+      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.65, 1.15);
     };
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
@@ -194,20 +207,39 @@ function CameraRig({ frozen }: { frozen: boolean }) {
       el.removeEventListener("pointercancel", up, true);
       el.removeEventListener("wheel", wheel);
     };
-  }, [gl]);
-  useFrame(() => {
+  }, [gl, size.width]);
+  useFrame((_, dt) => {
+    soft.current.x += (followRef.current.x - soft.current.x) * Math.min(1, dt * 4.5);
+    soft.current.z += (followRef.current.z - soft.current.z) * Math.min(1, dt * 4.5);
     const aspect = size.width / Math.max(1, size.height);
-    const distance = (aspect < 0.85 ? 16 : aspect < 1.15 ? 22 : 20) * zoom.current;
-    const lookX = pan.current.x;
+    const phone = aspect < 0.85;
+    const distance = (phone ? 11.8 : aspect < 1.15 ? 18 : 20) * zoom.current;
+    const lookX = soft.current.x + pan.current.x;
     const lookY = 0;
-    const lookZ = pan.current.z;
+    const lookZ = soft.current.z + pan.current.z;
     const lens = camera as PerspectiveCamera;
-    lens.position.set(lookX + distance * 0.42, lookY + distance * 0.72, lookZ + distance * 0.5);
-    lens.fov = 30;
-    lens.lookAt(lookX, lookY, lookZ);
+    lens.position.set(lookX + distance * (phone ? 0.36 : 0.42), lookY + distance * (phone ? 0.88 : 0.72), lookZ + distance * (phone ? 0.42 : 0.5));
+    lens.fov = phone ? 38 : 30;
+    lens.lookAt(lookX, lookY + (phone ? 0.35 : 0), lookZ);
     lens.updateProjectionMatrix();
   });
   return null;
+}
+
+function WalkPad({ onWalk }: { onWalk: (x: number, z: number) => void }) {
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.02, 0]}
+      onClick={(event) => {
+        event.stopPropagation();
+        onWalk(event.point.x, event.point.z);
+      }}
+    >
+      <planeGeometry args={[10.5, 7.6]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  );
 }
 
 function clamp(value: number, min: number, max: number) {
