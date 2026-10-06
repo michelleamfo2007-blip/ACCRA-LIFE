@@ -238,6 +238,13 @@ export async function readChat(username: string, withUser: string) {
   return (mailBag(player.life)[withUser] ?? []).map(({ who, text, time }) => ({ who, text, time }));
 }
 
+export function mutedNote(life: Life | null | undefined) {
+  const until = Date.parse(life?.net?.mutedUntil ?? "");
+  if (!Number.isFinite(until) || until <= Date.now()) return null;
+  const hours = Math.ceil((until - Date.now()) / 3600000);
+  return `The moderators paused your messages for ${hours} more hour${hours === 1 ? "" : "s"}.`;
+}
+
 export async function sendChat(from: string, to: string, text: string) {
   const body = text.trim().slice(0, 500);
   if (!body) return "Write something first.";
@@ -246,6 +253,9 @@ export async function sendChat(from: string, to: string, text: string) {
   const recipient = await readPlayer(to);
   if (!sender) return "Log in again.";
   if (!recipient) return "Nobody in Accra goes by that name.";
+  const muted = mutedNote(sender.life);
+  if (muted) return muted;
+  if (recipient.life?.net?.blocked?.includes(from)) return `@${to} is not taking messages from you.`;
   const note = { text: body, time: accraTime(), at: new Date().toISOString() };
   const senderBag = mailBag(sender.life);
   const recipientBag = mailBag(recipient.life);

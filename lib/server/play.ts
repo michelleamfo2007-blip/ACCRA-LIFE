@@ -5,9 +5,10 @@ import { applyMove, rollDie, startBoard, type GameKind, type Move } from "@/lib/
 import { vehicleOf } from "@/lib/game/fleet";
 import { carOf } from "@/lib/game/garage";
 import { CHOP_OPEN } from "@/lib/game/kitchen";
-import { CODE_LABEL, EVENT_INFO, crewGoal, crewWeek, type Crew, type EventKind, type LifeEvent, type Match, type NetRef } from "@/lib/game/net";
-import { SPOTS, cedis, type Life } from "@/lib/game/world";
-import { chargePlayer, creditPlayer, readPlayer, sendChat, updateLife } from "@/lib/server/live";
+import { CODE_LABEL, DOOR_FEES, EVENT_INFO, crewGoal, crewWeek, type Crew, type EventKind, type LifeEvent, type Match, type NetRef } from "@/lib/game/net";
+import { TURFS, TURF_MIN, TURF_PRIZE, turfById } from "@/lib/game/turf";
+import { SPOTS, TURF_CAP, cedis, turfWeekOf, type Life } from "@/lib/game/world";
+import { chargePlayer, creditPlayer, mutedNote, readPlayer, sendChat, updateLife } from "@/lib/server/live";
 import { accraTime, netOf, newId, withNet } from "@/lib/server/net";
 import { supabase } from "@/lib/server/supabase";
 
@@ -193,6 +194,8 @@ export async function shareCrewBank(username: string) {
 export async function sendCrew(username: string, text: string) {
   const body = text.trim().slice(0, 500);
   if (!body) return "Write something first.";
+  const muted = mutedNote((await readPlayer(username))?.life);
+  if (muted) return muted;
   const found = await myCrew(username);
   if (!found) return "You are not in a crew.";
   const saved = await updateLife(found.ref.owner, (life) =>
@@ -201,9 +204,10 @@ export async function sendCrew(username: string, text: string) {
   return saved ? null : "The message did not save.";
 }
 
-export async function hostEvent(username: string, kind: string, title: string, spot: string, startsIn: number, latest: Life): Promise<Done> {
+export async function hostEvent(username: string, kind: string, title: string, spot: string, startsIn: number, latest: Life, door = 0): Promise<Done> {
   const info = EVENT_INFO[kind as EventKind];
   if (!info) return { error: "Pick what kind of event." };
+  const fee = kind === "party" && DOOR_FEES.includes(door) ? door : 0;
   const place = SPOTS.find((item) => item.id === spot && !item.soon && item.id !== "home");
   if (!place) return { error: "Pick a real place in town." };
   const hours = Math.round(startsIn);
@@ -226,6 +230,7 @@ export async function hostEvent(username: string, kind: string, title: string, s
     code: info.code,
     attendees: [],
     gifts: 0,
+    ...(fee ? { door: fee, paid: [] } : {}),
   };
   const saved = await updateLife(username, (life) => withNet(life, (net) => ({ ...net, events: [...(net.events ?? []).filter((item) => Date.parse(item.endsAt) > now), event].slice(-5) })));
   if (!saved) {
@@ -251,17 +256,83 @@ async function loadEvent(ref: NetRef) {
   return (netOf(host?.life).events ?? []).find((item) => item.id === ref.id) ?? null;
 }
 
-export async function attendEvent(username: string, ref: NetRef): Promise<{ error: string } | { event: LifeEvent }> {
+export async function attendEvent(username: string, ref: NetRef, latest: Life | null): Promise<{ error: string } | { event: LifeEvent; life?: Life }> {
   const event = await loadEvent(ref);
   if (!event) return { error: "That event is over." };
   const now = Date.now();
   if (now < Date.parse(event.startsAt)) return { error: "It has not started yet." };
   if (now > Date.parse(event.endsAt)) return { error: "That event is over." };
-  if (!event.attendees.includes(username)) {
-    await updateLife(ref.owner, (life) => withNet(life, (net) => ({ ...net, events: (net.events ?? []).map((item) => (item.id === ref.id ? { ...item, attendees: [...new Set([...item.attendees, username])].slice(-200) } : item)) })));
+  const owes = Boolean(event.door) && event.host !== username && !(event.paid ?? []).includes(username);
+  if (owes && event.attendees.length >= 200) return { error: "The party is full." };
+  let life: Life | undefined;
+  if (owes) {
+    if (!latest) return { error: "Log in again." };
+    const charged = await chargePlayer(username, event.door!, latest, `You paid ${cedis(event.door!)} at the door of ${event.title}.`, "door");
+    if ("error" in charged) return { error: charged.error ?? "The door fee did not go through." };
+    life = charged.life;
+    await creditPlayer(event.host, event.door!, `@${username} paid ${cedis(event.door!)} at the door of ${event.title}.`, "door");
+  }
+  if (owes || !event.attendees.includes(username)) {
+    await updateLife(ref.owner, (current) =>
+      withNet(current, (net) => ({
+        ...net,
+        events: (net.events ?? []).map((item) => (item.id === ref.id ? { ...item, attendees: [...new Set([...item.attendees, username])].slice(-200), paid: owes ? [...new Set([...(item.paid ?? []), username])] : item.paid } : item)),
+      })),
+    );
     forget();
   }
-  return { event };
+  return { event, life };
+}
+
+function turfRows(rows: Row[], week: number) {
+  return rows.flatMap((row) => {
+    const turf = row.life?.turf;
+    if (!turf || !turfById(turf.area)) return [];
+    const now = turf.week === week ? turf.points : 0;
+    const prev = turf.week === week - 1 ? { area: turf.area, points: turf.points } : turf.last?.week === week - 1 ? { area: turf.last.area, points: turf.last.points } : null;
+    return [{ username: row.username, name: row.name, area: turf.area, points: Math.min(TURF_CAP, now), prev: prev && turfById(prev.area) ? { ...prev, points: Math.min(TURF_CAP, prev.points) } : null }];
+  });
+}
+
+function winnerOf(list: { area: string; points: number }[]) {
+  const totals = new Map<string, number>();
+  for (const item of list) totals.set(item.area, (totals.get(item.area) ?? 0) + item.points);
+  const best = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best && best[1] > 0 ? { area: best[0], points: best[1] } : null;
+}
+
+export async function turfView(username: string) {
+  const week = turfWeekOf();
+  const rows = turfRows(await everyone(), week);
+  const areas = TURFS.map((turf) => {
+    const members = rows.filter((row) => row.area === turf.id);
+    return { id: turf.id, points: members.reduce((sum, row) => sum + row.points, 0), players: members.filter((row) => row.points > 0).length };
+  }).sort((a, b) => b.points - a.points);
+  const mine = rows.find((row) => row.username === username) ?? null;
+  const last = winnerOf(rows.flatMap((row) => (row.prev ? [row.prev] : [])));
+  const me = await readPlayer(username);
+  const claimable = Boolean(last && mine?.prev && mine.prev.area === last.area && mine.prev.points >= TURF_MIN && netOf(me?.life).turfPaid !== week - 1);
+  const top = mine ? rows.filter((row) => row.area === mine.area && row.points > 0).sort((a, b) => b.points - a.points).slice(0, 5).map((row) => ({ username: row.username, name: row.name, points: row.points })) : [];
+  return { week, areas, last, claimable, top, mine: mine ? { area: mine.area, points: mine.points, prev: mine.prev } : null };
+}
+
+export async function claimTurf(username: string) {
+  const week = turfWeekOf();
+  const rows = turfRows(await everyone(true), week);
+  const last = winnerOf(rows.flatMap((row) => (row.prev ? [row.prev] : [])));
+  const mine = rows.find((row) => row.username === username);
+  if (!last || !mine?.prev || mine.prev.area !== last.area) return "Your area did not win last week.";
+  if (mine.prev.points < TURF_MIN) return `You needed ${TURF_MIN} points last week to share the prize.`;
+  let fresh = false;
+  const saved = await updateLife(username, (life) =>
+    withNet(life, (net) => {
+      fresh = net.turfPaid !== week - 1;
+      return { ...net, turfPaid: week - 1 };
+    }),
+  );
+  if (!saved || !fresh) return "You already collected last week's prize.";
+  await creditPlayer(username, TURF_PRIZE, `${turfById(last.area)?.name} won the week. Your share: ${cedis(TURF_PRIZE)}.`, "turf");
+  return null;
 }
 
 export async function giftEvent(username: string, ref: NetRef, amount: number, latest: Life): Promise<Done> {

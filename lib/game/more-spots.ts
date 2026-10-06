@@ -130,6 +130,7 @@ const GATEWAYS: Spot[] = [
     actions: [
       stroll("kotoka-planes", "Watch the planes land", "Wheels down, engines roaring, kids pointing at the fence."),
       act({ id: "kotoka-arrivals", label: "Meet arrivals", detail: "A cousin from abroad, two suitcases and a hug that lasts a minute.", minutes: 40, effects: { social: 22, fun: 10 }, social: true, emoji: "🤗" }),
+      act({ id: "kotoka-lounge", label: "Sit in the lounge", detail: "Quiet chairs, soft drinks, and a board of domestic flights to Kumasi.", minutes: 40, cost: 80, effects: { fun: 16, energy: 8, hygiene: 4 }, emoji: "🛋️" }),
       plate("kotoka-snack", "Arrivals hall snack", "Meat pie and a cold malt while you wait.", 25, 24),
     ],
   },
@@ -149,6 +150,23 @@ const GATEWAYS: Spot[] = [
 ];
 
 const TRIPS: Spot[] = [
+  {
+    id: "kumasi",
+    name: "Kumasi",
+    emoji: "👑",
+    x: 52,
+    y: 80,
+    group: "trip",
+    far: 270,
+    blurb: "Kumasi. The Garden City. Kejetia market, kente, and the seat of the Asantehene.",
+    actions: [
+      act({ id: "kumasi-kejetia", label: "Walk Kejetia market", detail: "The biggest market in West Africa. You will lose your way and find a bargain.", minutes: 90, cost: 20, effects: { fun: 22, social: 14, energy: -12, hygiene: -8 }, emoji: "🧺" }),
+      act({ id: "kumasi-palace", label: "Visit Manhyia Palace museum", detail: "Gold weights, stools, and the story of Asante royalty.", minutes: 80, cost: 40, effects: { fun: 18, social: 10, energy: -6 }, skill: "charm", emoji: "🏰" }),
+      act({ id: "kumasi-kente", label: "Buy a kente strip", detail: "Handwoven cloth from Bonwire. Heavy, bright, and worth the price.", minutes: 50, cost: 180, effects: { fun: 16, social: 8 }, emoji: "🟨" }),
+      plate("kumasi-fufu", "Fufu and light soup", "Ashanti fufu done properly. You will need a nap after.", 28, 48),
+      stroll("kumasi-lake", "Lake Bosomtwe day", "A crater lake outside the city. Quiet water and grilled tilapia."),
+    ],
+  },
   {
     id: "cape-coast",
     name: "Cape Coast Castle",

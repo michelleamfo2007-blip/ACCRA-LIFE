@@ -132,6 +132,8 @@ export function collectRent(life: Life, plotId: string): StepResult {
 export function sellPlot(life: Life, plotId: string): StepResult {
   const plot = plotsOf(life).find((item) => item.id === plotId);
   if (!plot) return { life, notes: [], error: "That plot is gone." };
+  const finished = plotsOf(life).filter((item) => item.stage >= STAGES.length - 1);
+  if (life.homeId === "own-house" && plot.stage >= STAGES.length - 1 && finished.length === 1) return { life, notes: [], error: "You live in that house. Move out in the Home app first." };
   const value = Math.round(plot.spent * 0.7) + rentDue(life, plot);
   const next = cloneLife(life);
   next.plots = plotsOf(next).filter((item) => item.id !== plotId);

@@ -19,7 +19,7 @@ import {
   type PostKind,
 } from "@/lib/game/net";
 import { cedis, mergeMoney, type Life } from "@/lib/game/world";
-import { chargePlayer, creditPlayer, readPlayer, savePlayer, sendChat, updateLife } from "@/lib/server/live";
+import { chargePlayer, creditPlayer, mutedNote, readPlayer, savePlayer, sendChat, updateLife } from "@/lib/server/live";
 import { netOf, newId, withNet } from "@/lib/server/net";
 import { everyone, forget } from "@/lib/server/play";
 
@@ -144,6 +144,8 @@ export async function makePost(username: string, kind: string, text: string, lat
   const body = text.trim().replace(/\s+/g, " ").slice(0, 200);
   if (kind === "status" && body.length < 2) return { error: "Write something first." };
   const me = await readPlayer(username);
+  const muted = mutedNote(me?.life);
+  if (muted) return { error: muted };
   const last = (netOf(me?.life).posts ?? []).at(-1);
   if (last && Date.now() - Date.parse(last.at) < POST_GAP_MS) return { error: `Give it ${Math.ceil((POST_GAP_MS - (Date.now() - Date.parse(last.at))) / 60000)} minutes before posting again.` };
   const post: Post = { id: newId(), kind: kind as PostKind, text: body, snap: postSnap(mergeMoney(me?.life ?? latest, latest), kind as PostKind), likes: [], at: new Date().toISOString() };

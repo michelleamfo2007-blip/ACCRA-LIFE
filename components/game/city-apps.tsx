@@ -27,6 +27,7 @@ import {
   stars,
 } from "@/lib/game/kitchen";
 import { TRIP_IDS } from "@/lib/game/more-spots";
+import { CABINS, ROUTES, bookFlight, flightWait, type Cabin } from "@/lib/game/flights";
 import { GOODS, buyPrice, isSupply } from "@/lib/game/trade";
 import { checkInReward, checkedIn, weeklyAt } from "@/lib/game/weekly";
 import { SPOTS, STAMP_BONUS, cedis, spotById, type Life, type StepResult } from "@/lib/game/world";
@@ -37,11 +38,14 @@ function hours(minutes: number) {
   return `${Math.round(minutes / 60)}h`;
 }
 
-export function TripsApp({ life, onBack, onGo }: { life: Life; onBack: () => void; onGo: (spot: string) => void }) {
+export function TripsApp({ life, onBack, onGo, onApply }: { life: Life; onBack: () => void; onGo: (spot: string) => void; onApply: Apply }) {
   const stamps = life.stamps ?? [];
   const got = TRIP_IDS.filter((id) => stamps.includes(id)).length;
   const markets = SPOTS.filter((spot) => isSupply(spot.id));
   const day = Math.floor(life.minutes / 1440);
+  const [cabin, setCabin] = useState<Cabin>("economy");
+  const wait = flightWait(life);
+  const seat = CABINS[cabin];
   return (
     <Screen title="Day trips" life={life} color="#7a3b0c" onBack={onBack}>
       <Card tone={got === TRIP_IDS.length ? "good" : undefined}>
@@ -49,7 +53,7 @@ export function TripsApp({ life, onBack, onGo }: { life: Life; onBack: () => voi
         <p className="font-display text-3xl">
           {got}/{TRIP_IDS.length} stamps
         </p>
-        <p className="text-xs text-[#5c6b82]">{got === TRIP_IDS.length ? "Complete. You have seen Ghana beyond Accra." : `Visit every destination for a ${cedis(STAMP_BONUS)} bonus. Take the intercity bus, a taxi, or your own car.`}</p>
+        <p className="text-xs text-[#5c6b82]">{got === TRIP_IDS.length ? "Complete. You have seen Ghana beyond Accra." : `Visit every destination for a ${cedis(STAMP_BONUS)} bonus. Bus, car, or fly Accra–Kumasi.`}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {TRIP_IDS.map((id) => (
             <span key={id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${stamps.includes(id) ? "bg-[#006B3F] text-white" : "bg-[#f4f7fb] text-[#8b97ab]"}`}>
@@ -58,6 +62,62 @@ export function TripsApp({ life, onBack, onGo }: { life: Life; onBack: () => voi
           ))}
         </div>
       </Card>
+
+      <Label>✈️ ACCRA ↔ KUMASI</Label>
+      <Card>
+        <p className="font-semibold">Domestic flight</p>
+        <p className="mt-1 text-xs text-[#5c6b82]">About 50 minutes in the air. Check in at Kotoka to fly up, or at Kumasi to fly home. Pick your cabin.</p>
+        <div className="mt-3 grid gap-2">
+          {(Object.keys(CABINS) as Cabin[]).map((id) => {
+            const option = CABINS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setCabin(id)}
+                className={`rounded-2xl px-3 py-2.5 text-left ${cabin === id ? "bg-[#121212] text-white" : "bg-[#f4f7fb]"}`}
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">
+                    {option.emoji} {option.label}
+                  </span>
+                  <span className="text-sm font-bold">{cedis(option.cost)}</span>
+                </span>
+                <span className={`mt-1 block text-[11px] ${cabin === id ? "text-white/75" : "text-[#5c6b82]"}`}>
+                  {option.minutes} min · {option.bag} bag{option.bag === 1 ? "" : "s"} · {option.detail}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {wait > 0 ? <p className="mt-2 text-xs font-semibold text-[#CE1126]">Next boarding in {Math.ceil(wait / 60)}h.</p> : null}
+        <div className="mt-3 grid gap-2">
+          {ROUTES.map((route) => {
+            const here = life.where === route.from;
+            return (
+              <div key={route.id} className="rounded-2xl border border-[#ead9c4] bg-white p-3">
+                <p className="text-sm font-semibold">{route.label}</p>
+                <p className="text-[11px] text-[#5c6b82]">
+                  Board at {spotById(route.from).name}
+                  {here ? " · you are here" : ""}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {!here ? (
+                    <Btn kind="light" onClick={() => onGo(route.from)}>
+                      Go to {spotById(route.from).name}
+                    </Btn>
+                  ) : (
+                    <Btn kind="dark" disabled={wait > 0 || life.cash < seat.cost} onClick={() => onApply(bookFlight(life, route.id, cabin))}>
+                      Board {seat.label} · {cedis(seat.cost)}
+                    </Btn>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       <Label>OUT OF TOWN</Label>
       {TRIP_IDS.map((id) => {
         const spot = spotById(id);
@@ -71,7 +131,7 @@ export function TripsApp({ life, onBack, onGo }: { life: Life; onBack: () => voi
                   {spot.name} {stamps.includes(id) ? "✅" : ""}
                 </span>
                 <span className="block text-[11px] font-bold text-[#7a3b0c]">
-                  {hours(far)} by bus · {cedis(Math.round(far / 3))} each way
+                  {id === "kumasi" ? `Fly ~50 min or ${hours(far)} by bus · bus ${cedis(Math.round(far / 3))}` : `${hours(far)} by bus · ${cedis(Math.round(far / 3))} each way`}
                 </span>
                 <span className="mt-1 block text-xs text-[#5c6b82]">{spot.blurb.split(". ").slice(1).join(". ")}</span>
               </span>

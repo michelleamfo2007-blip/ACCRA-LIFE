@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { NetAction } from "@/components/game/social-apps";
 import { GAME_LABEL, LUDO_HOME, LUDO_SAFE, LUDO_START, aiMove, applyMove, draughtsMoves, ludoMoves, ludoSquare, owareMoves, rollDie, startBoard, type Board, type GameKind, type Move, type Side } from "@/lib/game/boards";
-import { CODE_LABEL, EVENT_INFO, type EventKind, type LifeEvent, type Match } from "@/lib/game/net";
+import { CODE_LABEL, DOOR_FEES, EVENT_INFO, type EventKind, type LifeEvent, type Match } from "@/lib/game/net";
 import { SPOTS, cedis, cloneLife, dayIndex, realMinutes, spotById, type Life, type StepResult } from "@/lib/game/world";
 
 type Apply = (result: StepResult) => void;
@@ -264,8 +264,9 @@ export function EventsApp({ me, life, cloud, onBack, onNet, onGo }: { me: string
   const [data, refresh] = usePoll<{ events: LifeEvent[] }>(cloud ? "/api/live/play?view=events" : null, 30000);
   const [hosting, setHosting] = useState(false);
   const [kind, setKind] = useState<EventKind>("party");
-  const [spot, setSpot] = useState("osu");
+  const [spot, setSpot] = useState("republic");
   const [hours, setHours] = useState(2);
+  const [door, setDoor] = useState(0);
   const [title, setTitle] = useState("");
   const [notice, setNotice] = useState("");
   const now = useClock();
@@ -277,7 +278,7 @@ export function EventsApp({ me, life, cloud, onBack, onNet, onGo }: { me: string
   return (
     <Screen title="Events" color="#4a1d1d" life={life} onBack={onBack}>
       {notice ? <p className="rounded-2xl bg-[#fff4c2] px-3 py-2 text-xs font-semibold">{notice}</p> : null}
-      <p className="text-xs text-[#5c6b82]">Funerals, weddings, outdoorings and parties hosted by players. Go to the spot while it is on, dress for the code, and gift the host.</p>
+      <p className="text-xs text-[#5c6b82]">Funerals, weddings, knocking ceremonies, outdoorings and parties. Dress for the code, gift the host, and pay the door if it is a party.</p>
       {hosting ? (
         <div className="space-y-2 rounded-2xl bg-white p-3 shadow-sm">
           <p className="font-semibold">Host an event</p>
@@ -303,13 +304,22 @@ export function EventsApp({ me, life, cloud, onBack, onNet, onGo }: { me: string
               </button>
             ))}
           </div>
+          {kind === "party" ? (
+            <div className="flex flex-wrap gap-1.5">
+              {DOOR_FEES.map((fee) => (
+                <button key={fee} type="button" onClick={() => setDoor(fee)} className={`rounded-full px-3 py-1 text-xs font-semibold ${door === fee ? "bg-[#FCD116] text-[#121212]" : "bg-[#f4f7fb]"}`}>
+                  Door {fee ? cedis(fee) : "free"}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={`${info.label} at ${spotById(spot).name}`} maxLength={40} className="h-10 w-full rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
           <div className="flex gap-2">
             <Btn
               kind="dark"
               disabled={life.cash < info.cost}
               onClick={() =>
-                void onNet({ api: "play", action: "event-host", kind, spot, hours, title }).then((error) => {
+                void onNet({ api: "play", action: "event-host", kind, spot, hours, title, door: kind === "party" ? door : 0 }).then((error) => {
                   setNotice(error ?? "");
                   if (!error) {
                     setHosting(false);
@@ -340,7 +350,7 @@ export function EventsApp({ me, life, cloud, onBack, onNet, onGo }: { me: string
         return (
           <div key={event.id} className={`rounded-2xl bg-white p-3 shadow-sm ${live ? "ring-2 ring-[#CE1126]/50" : ""}`}>
             <div className="flex items-start gap-3">
-              <span className="text-2xl">{meta.emoji}</span>
+              <span className="text-2xl">{meta?.emoji ?? "🎉"}</span>
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold">{event.title}</span>
                 <span className="block text-xs text-[#5c6b82]">
@@ -348,6 +358,7 @@ export function EventsApp({ me, life, cloud, onBack, onNet, onGo }: { me: string
                 </span>
                 <span className="block text-xs text-[#5c6b82]">
                   Dress: {CODE_LABEL[event.code]} · {event.attendees.length} came · {cedis(event.gifts)} gifted
+                  {event.door ? ` · door ${cedis(event.door)}` : ""}
                 </span>
               </span>
             </div>

@@ -9,6 +9,7 @@ import {
   challenge,
   chipCrew,
   claimIdle,
+  claimTurf,
   createCrew,
   crewView,
   declineCrew,
@@ -23,6 +24,7 @@ import {
   playMove,
   sendCrew,
   shareCrewBank,
+  turfView,
 } from "@/lib/server/play";
 import { CLOUD_COOKIE, readSessionToken } from "@/lib/server/session";
 import { chartView, chopsAt, claimChart, eatAtChop, publishChop, weeklyView } from "@/lib/server/city";
@@ -108,6 +110,7 @@ export async function GET(request: Request) {
   if (view === "election") return NextResponse.json(await electionView(username));
   if (view === "chart") return NextResponse.json(await chartView(username));
   if (view === "weekly") return NextResponse.json(await weeklyView());
+  if (view === "turf") return NextResponse.json(await turfView(username));
   if (view === "chops") {
     const spot = String(new URL(request.url).searchParams.get("spot") ?? "").slice(0, 40);
     return NextResponse.json({ spot, chops: await chopsAt(username, spot) });
@@ -140,12 +143,14 @@ export async function POST(request: Request) {
     case "crew-send":
       return reply(await sendCrew(username, String(body?.text ?? "")));
     case "event-host":
-      return life ? done(await hostEvent(username, String(body?.kind ?? ""), String(body?.title ?? ""), String(body?.spot ?? ""), Number(body?.hours), life)) : reply("Log in again.");
+      return life ? done(await hostEvent(username, String(body?.kind ?? ""), String(body?.title ?? ""), String(body?.spot ?? ""), Number(body?.hours), life, Number(body?.door ?? 0))) : reply("Log in again.");
     case "event-attend": {
       if (!ref) return reply("That event is over.");
-      const result = await attendEvent(username, ref);
-      return "error" in result ? reply(result.error) : reply(null, { event: result.event });
+      const result = await attendEvent(username, ref, life);
+      return "error" in result ? reply(result.error) : reply(null, { event: result.event, life: result.life });
     }
+    case "turf-claim":
+      return reply(await claimTurf(username));
     case "event-gift":
       return ref && life ? done(await giftEvent(username, ref, Number(body?.amount), life)) : reply("That event is over.");
     case "game-challenge":

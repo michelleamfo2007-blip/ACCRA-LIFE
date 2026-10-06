@@ -50,7 +50,7 @@ export type Crew = {
 
 export type CrewAsk = { owner: string; id: string; name: string; at: string };
 
-export type EventKind = "funeral" | "wedding" | "outdooring" | "party";
+export type EventKind = "funeral" | "wedding" | "engagement" | "outdooring" | "party";
 export type DressCode = "black-red" | "white" | "kente" | "any";
 
 export type LifeEvent = {
@@ -64,6 +64,8 @@ export type LifeEvent = {
   code: DressCode;
   attendees: string[];
   gifts: number;
+  door?: number;
+  paid?: string[];
 };
 
 export type MatchStatus = "waiting" | "playing" | "done" | "declined";
@@ -119,11 +121,29 @@ export type Net = {
   events?: LifeEvent[];
   games?: Match[];
   gamesIn?: NetRef[];
+  blocked?: string[];
+  reports?: Report[];
+  mutedUntil?: string;
+  cleared?: string;
+  referredBy?: string;
+  referrals?: Referral[];
+  turfPaid?: number;
 };
+
+export type Report = { who: string; reason: string; quote: string; at: string };
+
+export type Referral = { username: string; at: string; paid?: boolean };
+
+export const REFER_PRIZE = 150;
+export const REFER_CAP = 10;
+export const DOOR_FEES = [0, 10, 20, 50];
+export const EMOTES = ["👋", "💃", "😂", "🙌", "❤️", "📸"] as const;
+export const EMOTE_MS = 6000;
 
 export const EVENT_INFO: Record<EventKind, { label: string; emoji: string; cost: number; code: DressCode; verb: string }> = {
   funeral: { label: "Funeral", emoji: "🖤", cost: 500, code: "black-red", verb: "Pay respects and dance" },
-  wedding: { label: "Wedding", emoji: "💒", cost: 800, code: "kente", verb: "Celebrate the couple" },
+  wedding: { label: "Wedding", emoji: "💒", cost: 800, code: "white", verb: "Celebrate the couple" },
+  engagement: { label: "Knocking ceremony", emoji: "💍", cost: 600, code: "kente", verb: "Witness the knocking" },
   outdooring: { label: "Outdooring", emoji: "👶", cost: 300, code: "white", verb: "Bless the baby" },
   party: { label: "House party", emoji: "🎉", cost: 200, code: "any", verb: "Join the party" },
 };
@@ -154,7 +174,7 @@ export const POST_LABEL: Record<PostKind, { label: string; emoji: string }> = {
   harvest: { label: "Harvest", emoji: "🧺" },
 };
 
-export type SpotPos = { where: string; x: number; y: number; at: string };
+export type SpotPos = { where: string; x: number; y: number; at: string; emote?: string; emoteAt?: string };
 
 export type HostHome = {
   username: string;
@@ -172,6 +192,7 @@ export type SocialView = {
   bond: Bond | null;
   asks: BondAsk[];
   invites: Invite[];
+  blocked?: string[];
 };
 
 export const BOND_LABEL: Record<BondStage, string> = { dating: "Dating", engaged: "Engaged", married: "Married" };

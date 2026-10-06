@@ -86,9 +86,14 @@ export type Life = {
   guide?: string[];
   seenParcels?: string[];
   stamps?: string[];
+  flewAt?: number;
   checkins?: string[];
   weekly?: { week: number; streak: number; count: number };
   chop?: ChopBar | null;
+  ranks?: Record<string, { rank: number; shifts: number; lastAsk?: number }>;
+  movedAt?: number;
+  tour?: boolean;
+  turf?: { area: string; week: number; points: number; last?: { week: number; points: number; area: string } };
 };
 
 export type ChopBar = {
@@ -366,7 +371,74 @@ export const HOMES = [
   },
 ] as const;
 
-export type Home = (typeof HOMES)[number];
+export const BIG_HOMES = [
+  {
+    id: "cantonments",
+    emoji: "🏡",
+    name: "Townhouse",
+    area: "Cantonments",
+    tag: "Moving up",
+    detail: "Two floors, a gate with a watchman, and mango trees over the wall.",
+    rent: 900,
+    grade: "high" as const,
+    comfort: 20,
+    neighbor: "Mrs Asante next door",
+  },
+  {
+    id: "trasacco",
+    emoji: "🏰",
+    name: "Trasacco villa",
+    area: "East Legon",
+    tag: "Made it",
+    detail: "A pool, a generator that never blinks, and security who salute your car.",
+    rent: 2500,
+    grade: "high" as const,
+    comfort: 28,
+    neighbor: "Nana Kwame across the road",
+  },
+  {
+    id: "own-house",
+    emoji: "🔑",
+    name: "Your own house",
+    area: "Your plot",
+    tag: "No landlord",
+    detail: "The house you built. Nobody knocks on Saturday for rent.",
+    rent: 0,
+    grade: "high" as const,
+    comfort: 22,
+    neighbor: "the tenant in the boys' quarters",
+  },
+] as const;
+
+export type Home = (typeof HOMES)[number] | (typeof BIG_HOMES)[number];
+
+export const JOB_RANKS = ["Trainee", "Staff", "Senior", "Supervisor", "Manager"] as const;
+export const RANK_PAY = [1, 1.12, 1.25, 1.4, 1.6];
+export const RANK_SHIFTS = [0, 4, 10, 20, 35];
+export const RANK_CAREER = [0, 1, 3, 5, 7];
+
+export const TURF_CAP = 100;
+
+export function turfWeekOf(at = Date.now()) {
+  return Math.floor((at / 86400000 + 3) / 7);
+}
+
+export function turfPoint(life: Life, points: number) {
+  const turf = life.turf;
+  if (!turf || points <= 0) return;
+  const week = turfWeekOf();
+  const current = turf.week === week ? turf.points : 0;
+  const last = turf.week === week ? turf.last : turf.week === week - 1 ? { week: turf.week, points: turf.points, area: turf.area } : turf.last;
+  life.turf = { area: turf.area, week, points: Math.min(TURF_CAP, current + points), last };
+}
+
+export function jobOfVerb(verbId: string) {
+  return JOBS.find((job) => job.verb.id === verbId) ?? null;
+}
+
+export function rankOf(life: Life, jobId: string) {
+  return life.ranks?.[jobId] ?? { rank: 0, shifts: 0 };
+}
 
 const eat = (partial: Partial<Verb> & Pick<Verb, "id" | "label" | "detail">): Verb => ({
   minutes: 30,
@@ -911,8 +983,8 @@ export function birthById(id: string) {
   return BIRTHS.find((birth) => birth.id === id) ?? BIRTHS[0];
 }
 
-export function homeById(id: string) {
-  return HOMES.find((home) => home.id === id) ?? HOMES[2];
+export function homeById(id: string): Home {
+  return HOMES.find((home) => home.id === id) ?? BIG_HOMES.find((home) => home.id === id) ?? HOMES[2];
 }
 
 const ROOM_LOOKS: Record<HomeGrade, { label: string; wall: string; side: string; tileA: string; tileB: string; woodA: string; woodB: string; bed: string; sofa: string; frame: string; sheet: string; door: string; yard: string; sky: string }> = {
@@ -1309,7 +1381,7 @@ export function farRide<T extends Ride>(ride: T, from: string, to: string): T & 
   return { ...ride, label: "Intercity bus", cost: Math.round(far / 3), minutes: far };
 }
 
-function stampTrip(life: Life, placeId: string, notes: string[]) {
+export function collectStamp(life: Life, placeId: string, notes: string[]) {
   if (!TRIP_IDS.includes(placeId) || (life.stamps ?? []).includes(placeId)) return;
   life.stamps = [...(life.stamps ?? []), placeId];
   const got = TRIP_IDS.filter((id) => life.stamps!.includes(id)).length;
@@ -1337,7 +1409,7 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}`);
-  stampTrip(timed.life, placeId, timed.notes);
+  collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
     timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel };
     if (Math.random() < 0.15) {
@@ -1378,6 +1450,12 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.cool) after.cool = { ...(after.cool ?? {}), [verb.id]: after.minutes + Math.max(30, verb.minutes) };
   if (verb.job) {
     earn *= careerLevel(after);
+    const job = jobOfVerb(verb.id);
+    if (job) {
+      const held = rankOf(after, job.id);
+      earn *= RANK_PAY[held.rank] ?? 1;
+      after.ranks = { ...after.ranks, [job.id]: { ...held, shifts: held.shifts + 1 } };
+    }
     if (after.traits.includes("hustler")) earn = Math.round(earn * 1.15);
     if (after.traits.includes("lazy")) earn = Math.round(earn * 0.85);
     earn = Math.round(earn * jobBoost(after));
@@ -1402,6 +1480,7 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "kenkey") after.needs.hunger = clampNeed(after.needs.hunger + 34);
   if (verb.skill) gainSkill(after, verb.skill, verb);
   if (verb.job) bump(after, "shifts");
+  turfPoint(after, verb.job ? 3 : verb.tag === "party" ? 2 : verb.social ? 1 : 0);
   if (verb.tag === "food") bump(after, "meals");
   if (verb.tag === "food" && placeId === "home" && verb.skill === "cooking") bump(after, "cooked");
   if (verb.tag === "party") bump(after, "parties");

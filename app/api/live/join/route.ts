@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { rollBirth } from "@/lib/game/world";
 import { digestPassword } from "@/lib/game/save";
-import { createPlayer, readPlayer } from "@/lib/server/live";
+import { createPlayer, readPlayer, updateLife } from "@/lib/server/live";
+import { withNet } from "@/lib/server/net";
 import { CLOUD_COOKIE, createSessionToken, sessionCookie } from "@/lib/server/session";
 
 export async function POST(request: Request) {
@@ -40,6 +41,10 @@ export async function POST(request: Request) {
   };
   const error = await createPlayer(player);
   if (error) return NextResponse.json({ error }, { status: error.includes("already") ? 409 : 503 });
+  const ref = String(body?.ref ?? "").trim().toLowerCase().replace(/^@/, "");
+  if (/^[a-z0-9_]{3,16}$/.test(ref) && ref !== username && (await readPlayer(ref))?.life) {
+    await updateLife(ref, (life) => withNet(life, (net) => ({ ...net, referrals: [...(net.referrals ?? []).filter((item) => item.username !== username), { username, at: new Date().toISOString() }].slice(-50) })));
+  }
   const response = NextResponse.json({ account: { ...player, cloud: true } });
   response.cookies.set(CLOUD_COOKIE, createSessionToken({ id: username, role: "user" }), sessionCookie);
   return response;

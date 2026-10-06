@@ -5,6 +5,8 @@ import type { Life } from "@/lib/game/world";
 import {
   answerBond,
   askBond,
+  blockPlayer,
+  claimReferral,
   createGroup,
   createSusu,
   endBond,
@@ -14,6 +16,8 @@ import {
   leaveSusu,
   paySusu,
   readGroup,
+  referralView,
+  reportPlayer,
   sendGroup,
   socialView,
 } from "@/lib/server/net";
@@ -57,6 +61,10 @@ export async function GET(request: Request) {
     const found = ref ? await readGroup(username, ref) : null;
     if (!found) return NextResponse.json({ error: "You are not in that group." }, { status: 404 });
     return NextResponse.json({ group: { name: found.name, members: found.members, messages: found.messages.map((mail) => ({ who: mail.from === username ? "me" : "them", from: mail.from, text: mail.text, time: mail.time })) } });
+  }
+  if (url.searchParams.get("view") === "refer") {
+    const refer = await referralView(username);
+    return refer ? NextResponse.json(refer) : NextResponse.json({ error: "Log in again." }, { status: 401 });
   }
   const host = url.searchParams.get("home");
   if (host) {
@@ -109,6 +117,14 @@ export async function POST(request: Request) {
       return reply(await endBond(username));
     case "invite":
       return reply(await invitePlayer(username, handle(body?.to)));
+    case "block":
+      return reply(await blockPlayer(username, handle(body?.to), true));
+    case "unblock":
+      return reply(await blockPlayer(username, handle(body?.to), false));
+    case "report":
+      return reply(await reportPlayer(username, handle(body?.to), String(body?.reason ?? ""), String(body?.quote ?? "")));
+    case "refer-claim":
+      return reply(await claimReferral(username, handle(body?.to)));
     default:
       return reply("Unknown action.");
   }

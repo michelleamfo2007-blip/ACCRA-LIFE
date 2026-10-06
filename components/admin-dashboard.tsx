@@ -26,10 +26,13 @@ type Snapshot = {
   places: { slug: string; name: string; area: string; featured: boolean }[];
 };
 
-const tabs = ["Overview", "Photos", "Places", "Events", "Reviews", "Submissions", "Users", "Reports"] as const;
+type GameSnap = { reports: { who: string; reason: string; quote: string; at: string; by: string }[] };
+
+const tabs = ["Overview", "Photos", "Places", "Events", "Reviews", "Submissions", "Users", "Reports", "Game chat"] as const;
 
 export function AdminDashboard() {
   const [data, setData] = useState<Snapshot | null>(null);
+  const [game, setGame] = useState<GameSnap | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("Overview");
   const [error, setError] = useState("");
 
@@ -69,6 +72,25 @@ export function AdminDashboard() {
     });
     await load();
   }
+
+  async function loadGame() {
+    const response = await fetch("/api/admin/game");
+    if (!response.ok) return;
+    setGame((await response.json()) as GameSnap);
+  }
+
+  async function gameAct(body: object) {
+    await fetch("/api/admin/game", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await loadGame();
+  }
+
+  useEffect(() => {
+    if (tab === "Game chat") void loadGame();
+  }, [tab]);
 
   if (error) return <p className="px-5 py-16 text-ink-soft">{error}</p>;
   if (!data) return <p className="px-5 py-16 text-muted">Opening the desk…</p>;
@@ -230,6 +252,36 @@ export function AdminDashboard() {
                 {report.status === "open" ? (
                   <button type="button" className="mt-3 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-paper" onClick={() => act({ action: "report", id: report.id })}>Resolve</button>
                 ) : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {tab === "Game chat" ? (
+          <div className="space-y-3">
+            {!game ? <p className="text-sm text-muted">Loading reports…</p> : null}
+            {game && game.reports.length === 0 ? <p className="text-sm text-muted">No player chat reports.</p> : null}
+            {game?.reports.map((report) => (
+              <article key={`${report.by}-${report.who}-${report.at}`} className="rounded-3xl border border-line bg-card p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted">
+                  @{report.by} → @{report.who} · {formatShortDate(report.at)}
+                </p>
+                <p className="mt-2 text-sm font-semibold">{report.reason}</p>
+                {report.quote ? <p className="mt-2 text-sm text-muted">&ldquo;{report.quote}&rdquo;</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className="rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-paper" onClick={() => gameAct({ action: "mute", who: report.who, hours: 24 })}>
+                    Mute 24h
+                  </button>
+                  <button type="button" className="rounded-full border border-line px-3 py-1.5 text-xs font-semibold" onClick={() => gameAct({ action: "mute", who: report.who, hours: 72 })}>
+                    Mute 3d
+                  </button>
+                  <button type="button" className="rounded-full border border-line px-3 py-1.5 text-xs font-semibold" onClick={() => gameAct({ action: "unmute", who: report.who })}>
+                    Unmute
+                  </button>
+                  <button type="button" className="rounded-full border border-line px-3 py-1.5 text-xs font-semibold" onClick={() => gameAct({ action: "clear", by: report.by, who: report.who, at: report.at })}>
+                    Clear
+                  </button>
+                </div>
               </article>
             ))}
           </div>

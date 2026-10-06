@@ -6,12 +6,14 @@ import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-
 import { BizApp } from "@/components/game/biz-app";
 import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
 import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
+import { HomeApp, InviteApp, TurfApp } from "@/components/game/ladder-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
 import { AlertsApp, BankApp, CalendarApp, CommunityApp, FeedApp, FleetApp, FootballApp, GuideApp, MarketApp, PetsApp, StoriesApp } from "@/components/game/town-apps";
 import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
+import { askPromotion, nextRank } from "@/lib/game/ladder";
 import { storyReady } from "@/lib/game/story";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
 import {
@@ -19,7 +21,9 @@ import {
   CLOTHS,
   DREAMS,
   JOBS,
+  JOB_RANKS,
   OUTFITS,
+  RANK_PAY,
   careerLevel,
   cedis,
   accraDateLabel,
@@ -29,6 +33,7 @@ import {
   hasCurrent,
   homeById,
   invitePerson,
+  rankOf,
   spareChange,
   spotById,
   treatPerson,
@@ -79,9 +84,12 @@ type AppId =
   | "trade"
   | "trips"
   | "chop"
-  | "charts";
+  | "charts"
+  | "house"
+  | "turf"
+  | "invite";
 
-const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts"];
+const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite"];
 
 export function Handset({
   life,
@@ -149,7 +157,10 @@ export function Handset({
   const [app, setApp] = useState<AppId>(launch ? "messages" : openTo && APP_IDS.includes(openTo as AppId) ? (openTo as AppId) : "home");
   const [thread, setThread] = useState<string | null>(launch?.id ?? null);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
-  const [blocked, setBlocked] = useState<string[]>([]);
+  const [blocked, setBlocked] = useState<string[]>(() => social?.blocked ?? []);
+  useEffect(() => {
+    if (social?.blocked) setBlocked(social.blocked.map((name) => `user:${name}`));
+  }, [social?.blocked]);
   const readRef = useRef(onRead);
   useEffect(() => {
     readRef.current = onRead;
@@ -357,14 +368,35 @@ export function Handset({
                     }
                   }}
                   onBlock={(id) => {
+                    const handle = id.startsWith("user:") ? id.slice(5) : "";
+                    if (cloud && handle) {
+                      void onNet({ action: "block", to: handle }).then((error) => {
+                        if (error) pushChat(id, { who: "note", text: error, time });
+                        else {
+                          setBlocked((current) => (current.includes(id) ? current : [...current, id]));
+                          pushChat(id, { who: "note", text: "Blocked. Their messages stay on their phone.", time });
+                        }
+                      });
+                      return;
+                    }
                     setBlocked((current) => (current.includes(id) ? current : [...current, id]));
                     pushChat(id, { who: "note", text: "Blocked. Their messages stay on their phone.", time });
                   }}
-                  onReport={(id) => pushChat(id, { who: "note", text: "Report sent. Accra Life will look at this chat.", time })}
+                  onReport={(id) => {
+                    const handle = id.startsWith("user:") ? id.slice(5) : "";
+                    const quote = (chats[id] ?? []).filter((mail) => mail.who === "them").at(-1)?.text ?? "";
+                    if (cloud && handle) {
+                      void onNet({ action: "report", to: handle, reason: "Chat", quote }).then((error) => {
+                        pushChat(id, { who: "note", text: error ?? "Report sent. Accra Life will look at this chat.", time });
+                      });
+                      return;
+                    }
+                    pushChat(id, { who: "note", text: "Report sent. Accra Life will look at this chat.", time });
+                  }}
                 />
               ) : null}
               {app === "work" ? (
-                <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} />
+                <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} onPromote={(jobId) => onSocial(askPromotion(life, jobId))} />
               ) : null}
               {app === "goals" ? <GoalsScreen life={life} onBack={() => setApp("home")} /> : null}
               {app === "momo" ? <MomoScreen life={life} username={username} onBack={() => setApp("home")} onRepay={onRepay} onLogout={onLogout} /> : null}
@@ -373,6 +405,9 @@ export function Handset({
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
               {app === "games" ? <GamesApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
               {app === "land" ? <LandApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "house" ? <HomeApp life={life} onBack={() => setApp("home")} onApply={onSocial} onLand={() => setApp("land")} /> : null}
+              {app === "turf" ? <TurfApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
+              {app === "invite" ? <InviteApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
               {app === "family" ? <FamilyApp life={life} married={married} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "studio" ? <StudioApp life={life} onBack={() => setApp("home")} onApply={onSocial} onGo={onGo} /> : null}
               {app === "school" ? <SchoolApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -395,7 +430,7 @@ export function Handset({
               {app === "alerts" ? <AlertsApp life={life} onBack={() => setApp("home")} onOpen={openApp} /> : null}
               {app === "feed" ? <FeedApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
               {app === "trade" ? <MarketApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
-              {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} /> : null}
+              {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} onApply={onSocial} /> : null}
               {app === "chop" ? <ChopApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "charts" ? <ChartsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
@@ -507,6 +542,9 @@ function HomeScreen({
         <AppIcon label="Jobs" color="#006B3F" onClick={() => onOpen("work")}>
           <Briefcase />
         </AppIcon>
+        <AppIcon label="Home" color="#0b3d6b" onClick={() => onOpen("house")}>
+          <span className="text-2xl">🏠</span>
+        </AppIcon>
         <AppIcon label="Stories" color="#5c2a86" badge={stories} onClick={() => onOpen("stories")}>
           <span className="text-2xl">📖</span>
         </AppIcon>
@@ -591,6 +629,12 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Events" color="#4a1d1d" onClick={() => onOpen("events")}>
           <span className="text-2xl">🎉</span>
+        </AppIcon>
+        <AppIcon label="Areas" color="#006B3F" onClick={() => onOpen("turf")}>
+          <span className="text-2xl">🗺️</span>
+        </AppIcon>
+        <AppIcon label="Invite" color="#CE1126" onClick={() => onOpen("invite")}>
+          <span className="text-2xl">📨</span>
         </AppIcon>
         <AppIcon label="Community" color="#1e3a5f" onClick={() => onOpen("community")}>
           <span className="text-2xl">⛪</span>
@@ -777,20 +821,40 @@ function BoutiqueScreen({ life, onBack, onWear }: { life: Life; onBack: () => vo
   );
 }
 
-function WorkScreen({ life, onBack, onWork }: { life: Life; onBack: () => void; onWork: (jobId: string) => void }) {
+function WorkScreen({ life, onBack, onWork, onPromote }: { life: Life; onBack: () => void; onWork: (jobId: string) => void; onPromote: (jobId: string) => void }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
       <AppHeader title="Jobs" onBack={onBack} />
       <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 py-3">
-        <p className="px-1 text-xs text-[#5c6b82]">Career level {careerLevel(life)}. A shift needs energy, and trotro fare if you are not already there.</p>
-        {JOBS.map((job) => (
-          <button key={job.id} type="button" onClick={() => onWork(job.id)} className="block w-full rounded-2xl bg-white px-4 py-3 text-left shadow-sm">
-            <span className="font-semibold">{job.title}</span>
-            <span className="mt-1 block text-sm text-[#5c6b82]">
-              {cedis(job.verb.earn * careerLevel(life))} · {Math.round(job.verb.minutes / 60)} hrs · {spotById(job.place).name}
-            </span>
-          </button>
-        ))}
+        <p className="px-1 text-xs text-[#5c6b82]">Career level {careerLevel(life)}. Ask for a promotion at the workplace when you have enough shifts.</p>
+        {JOBS.map((job) => {
+          const held = rankOf(life, job.id);
+          const title = JOB_RANKS[held.rank] ?? JOB_RANKS[0];
+          const pay = Math.round(job.verb.earn * careerLevel(life) * (RANK_PAY[held.rank] ?? 1));
+          const next = nextRank(life, job.id);
+          return (
+            <div key={job.id} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+              <button type="button" onClick={() => onWork(job.id)} className="block w-full text-left">
+                <span className="font-semibold">{job.title}</span>
+                <span className="mt-1 block text-sm text-[#5c6b82]">
+                  {title} · {cedis(pay)} · {Math.round(job.verb.minutes / 60)} hrs · {spotById(job.place).name}
+                </span>
+                {next ? (
+                  <span className="mt-1 block text-xs text-[#8b97ab]">
+                    Next: {next.title} after {Math.max(0, next.shifts - held.shifts)} more shifts · career {next.career}+
+                  </span>
+                ) : (
+                  <span className="mt-1 block text-xs text-[#006B3F]">You run this place.</span>
+                )}
+              </button>
+              {next ? (
+                <button type="button" onClick={() => onPromote(job.id)} className="mt-2 rounded-full bg-[#121212] px-3 py-1.5 text-xs font-bold text-white">
+                  Ask for a promotion
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

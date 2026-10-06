@@ -1,8 +1,8 @@
 import "server-only";
 import { cedis, type Life } from "@/lib/game/world";
 import type { Bond, BondStage, ChatGroup, HostHome, Net, NetRef, SocialView, SusuGroup } from "@/lib/game/net";
-import { RING_PRICE, WEDDING_PRICE } from "@/lib/game/net";
-import { chargePlayer, creditPlayer, readPlayer, sendChat, updateLife } from "@/lib/server/live";
+import { EMOTES, REFER_CAP, REFER_PRIZE, RING_PRICE, WEDDING_PRICE } from "@/lib/game/net";
+import { chargePlayer, creditPlayer, mutedNote, readPlayer, sendChat, updateLife } from "@/lib/server/live";
 
 const HANDLE = /^[a-z0-9_]{3,16}$/;
 
@@ -35,9 +35,11 @@ async function realHandles(list: string[]) {
   return found.filter((name): name is string => Boolean(name));
 }
 
-export async function movePlayer(username: string, where: string, x: number, y: number) {
+export async function movePlayer(username: string, where: string, x: number, y: number, emote = "") {
   if (!where || where === "home" || !Number.isFinite(x) || !Number.isFinite(y)) return false;
-  const spot = { where: where.slice(0, 40), x: Math.max(0, Math.min(100, Math.round(x))), y: Math.max(0, Math.min(100, Math.round(y))), at: new Date().toISOString() };
+  const at = new Date().toISOString();
+  const face = (EMOTES as readonly string[]).includes(emote) ? { emote, emoteAt: at } : {};
+  const spot = { where: where.slice(0, 40), x: Math.max(0, Math.min(100, Math.round(x))), y: Math.max(0, Math.min(100, Math.round(y))), at, ...face };
   const saved = await updateLife(username, (life) => ({ ...life, spot, where: spot.where }));
   return Boolean(saved);
 }
@@ -74,7 +76,8 @@ export async function socialView(username: string): Promise<SocialView | null> {
       incoming: group.messages.filter((mail) => mail.from !== username).slice(-30).map((mail) => ({ at: mail.at, text: `@${mail.from}: ${mail.text}` })),
     };
   });
-  return { susu, groups, bond: net.bond ?? null, asks: net.asks ?? [], invites: (net.invites ?? []).filter((item) => Date.now() - Date.parse(item.at) < 86400000) };
+  const blocked = net.blocked ?? [];
+  return { susu, groups, bond: net.bond ?? null, asks: (net.asks ?? []).filter((item) => !blocked.includes(item.from)), invites: (net.invites ?? []).filter((item) => Date.now() - Date.parse(item.at) < 86400000 && !blocked.includes(item.from)), blocked };
 }
 
 export async function createSusu(username: string, name: string, amount: number, members: unknown) {
@@ -160,6 +163,8 @@ export async function readGroup(username: string, ref: NetRef) {
 export async function sendGroup(username: string, ref: NetRef, text: string) {
   const body = text.trim().slice(0, 500);
   if (!body) return "Write something first.";
+  const muted = mutedNote((await readPlayer(username))?.life);
+  if (muted) return muted;
   const group = await ownedGroup(ref);
   if (!group || !group.members.includes(username)) return "You are not in that group.";
   const saved = await updateLife(ref.owner, (life) =>
@@ -252,10 +257,66 @@ export async function endBond(username: string) {
   return null;
 }
 
+export async function blockPlayer(username: string, who: string, on: boolean) {
+  if (!HANDLE.test(who) || who === username) return "Pick a real username.";
+  const saved = await updateLife(username, (life) =>
+    withNet(life, (net) => {
+      const rest = (net.blocked ?? []).filter((name) => name !== who);
+      return { ...net, blocked: on ? [...rest, who].slice(-100) : rest };
+    }),
+  );
+  return saved ? null : "That did not save.";
+}
+
+export async function reportPlayer(username: string, who: string, reason: string, quote: string) {
+  if (!HANDLE.test(who) || who === username) return "Pick a real username.";
+  if (!(await readPlayer(who))?.life) return "Nobody in Accra goes by that name.";
+  const report = { who, reason: reason.trim().slice(0, 40) || "Other", quote: quote.trim().slice(0, 300), at: new Date().toISOString() };
+  const saved = await updateLife(username, (life) => withNet(life, (net) => ({ ...net, reports: [...(net.reports ?? []).filter((item) => item.who !== who || item.quote !== report.quote), report].slice(-20) })));
+  return saved ? null : "The report did not send.";
+}
+
+export async function referralView(username: string) {
+  const me = await readPlayer(username);
+  if (!me?.life) return null;
+  const net = netOf(me.life);
+  const friends = await Promise.all(
+    (net.referrals ?? []).map(async (item) => {
+      const life = (await readPlayer(item.username))?.life;
+      return { ...item, ready: (life?.stats?.shifts ?? 0) > 0 };
+    }),
+  );
+  return { referrals: friends, paid: friends.filter((item) => item.paid).length, referredBy: net.referredBy ?? null };
+}
+
+export async function claimReferral(username: string, friend: string) {
+  const me = await readPlayer(username);
+  const net = netOf(me?.life);
+  const item = (net.referrals ?? []).find((entry) => entry.username === friend);
+  if (!item) return "That friend did not join with your link.";
+  if (item.paid) return "Already paid.";
+  if ((net.referrals ?? []).filter((entry) => entry.paid).length >= REFER_CAP) return `Invite rewards stop after ${REFER_CAP} friends.`;
+  const life = (await readPlayer(friend))?.life;
+  if (!life || (life.stats?.shifts ?? 0) < 1) return `@${friend} has to work one shift first.`;
+  let fresh = false;
+  const saved = await updateLife(username, (current) =>
+    withNet(current, (inner) => {
+      const list = inner.referrals ?? [];
+      fresh = list.some((entry) => entry.username === friend && !entry.paid);
+      return { ...inner, referrals: list.map((entry) => (entry.username === friend ? { ...entry, paid: true } : entry)) };
+    }),
+  );
+  if (!saved || !fresh) return "That did not save.";
+  await creditPlayer(username, REFER_PRIZE, `@${friend} settled into Accra. Invite reward: ${cedis(REFER_PRIZE)}.`, "refer");
+  await creditPlayer(friend, REFER_PRIZE, `Welcome bonus from @${username}'s invite: ${cedis(REFER_PRIZE)}.`, "refer");
+  return null;
+}
+
 export async function invitePlayer(username: string, to: string) {
   if (!HANDLE.test(to) || to === username) return "Pick a real username.";
   const them = await readPlayer(to);
   if (!them?.life) return "Nobody in Accra goes by that name.";
+  if (netOf(them.life).blocked?.includes(username)) return `@${to} is not taking invites from you.`;
   const saved = await updateLife(to, (life) => withNet(life, (net) => ({ ...net, invites: [...(net.invites ?? []).filter((item) => item.from !== username), { from: username, at: new Date().toISOString() }].slice(-10) })));
   if (!saved) return "The invite did not send.";
   await sendChat(username, to, "🏠 Come over to my place! Open People on your phone to visit.");

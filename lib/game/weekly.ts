@@ -1,4 +1,4 @@
-import { cedis, cloneLife, spotById, type Life, type StepResult, type Verb } from "@/lib/game/world";
+import { cedis, cloneLife, spotById, turfPoint, type Life, type StepResult, type Verb } from "@/lib/game/world";
 
 export type Weekly = { id: string; title: string; emoji: string; detail: string; weekday: number; start: number; end: number; spot: string; verbs: Verb[] };
 
@@ -141,6 +141,7 @@ export function checkIn(life: Life, at = new Date()): StepResult {
   next.weekly = { week: weekOf(at.getTime()), streak, count: (life.weekly?.count ?? 0) + 1 };
   next.needs.fun = Math.min(100, next.needs.fun + 10);
   next.needs.social = Math.min(100, next.needs.social + 10);
+  turfPoint(next, 10);
   const line = `Checked in at ${live.event.title}. +${cedis(reward)}${streak > 1 ? ` · ${streak}-week streak` : ""}.`;
   next.log = [line, ...next.log].slice(0, 14);
   return { life: next, notes: [line] };
