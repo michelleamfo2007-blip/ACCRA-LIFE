@@ -62,6 +62,7 @@ export type Verb = {
   special?: "pitch" | "gem";
   tag?: "food" | "party" | "gym" | "church";
   job?: boolean;
+  emoji?: string;
 };
 
 export type Spot = {
@@ -441,10 +442,14 @@ export const SPOTS: Spot[] = [
     x: 1620,
     y: 820,
     group: "hang",
-    blurb: "Teshie. Air conditioning, a food court, and a cinema queue.",
+    blurb: "Teshie. A cinema, a supermarket, a food court, and air-con for the afternoon.",
     actions: [
-      eat({ id: "window", label: "Window shop", detail: "Look at the price. Put it back. Repeat.", minutes: 40, effects: { fun: 12, social: 6 } }),
-      eat({ id: "food-court", label: "Food court", detail: "A tray, a tray number, and fries.", minutes: 35, cost: 35, effects: { hunger: 30, fun: 6 }, tag: "food" }),
+      eat({ id: "mall-grocery", emoji: "🛒", label: "Grocery run", detail: "Rice, oil, and the thing you forgot last week.", minutes: 40, cost: 80, effects: { fun: 4 } }),
+      eat({ id: "mall-cinema", emoji: "🎬", label: "Cinema", detail: "A ticket, a cold drink, and the lights going down.", minutes: 120, cost: 45, effects: { fun: 28, energy: -6 } }),
+      eat({ id: "mall-meal", emoji: "🍗", label: "Food court", detail: "A tray number and something hot.", minutes: 35, cost: 40, effects: { hunger: 32, fun: 6 }, tag: "food" }),
+      eat({ id: "mall-icecream", emoji: "🍦", label: "Ice cream", detail: "One scoop. Then the second one.", minutes: 15, cost: 18, effects: { hunger: 8, fun: 10 }, tag: "food" }),
+      eat({ id: "mall-outfit", emoji: "👗", label: "Try on an outfit", detail: "The mirror is honest. You still walk out with a bag.", minutes: 30, cost: 120, effects: { fun: 14, hygiene: 4 } }),
+      eat({ id: "window", emoji: "🛍️", label: "Window shop", detail: "Look at the price. Put it back. Repeat.", minutes: 40, effects: { fun: 12, social: 6 } }),
     ],
   },
   {
@@ -1113,7 +1118,7 @@ function bumpRelation(life: Life, name: string, amount: number) {
 export function giftCash(life: Life, name: string, amount: number): StepResult {
   const value = Math.round(amount);
   if (!Number.isFinite(value) || value < 1) return { life, notes: [], error: "Enter an amount in cedis." };
-  if (value > life.cash) return { life, notes: [], error: "MoMo cannot cover that." };
+  if (value > life.cash) return { life, notes: [], error: `MoMo cannot cover ${cedis(value)}. You have ${cedis(life.cash)}.` };
   const next = clone(life);
   next.cash -= value;
   next.needs.social = clampNeed(next.needs.social + 4);

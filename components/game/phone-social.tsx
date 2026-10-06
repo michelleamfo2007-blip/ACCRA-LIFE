@@ -311,8 +311,9 @@ function Thread({
           className="mx-4 mb-2 flex items-center gap-2 rounded-2xl bg-[#fff8e8] px-3 py-2"
           onSubmit={(event) => {
             event.preventDefault();
-            onAct("pay", Number(amount));
-            setPaying(false);
+            const value = Number(String(amount).replace(/[^\d.]/g, ""));
+            onAct("pay", value);
+            if (value >= 1 && value <= cash) setPaying(false);
           }}
         >
           <span className="text-sm text-[#8a6a12]">Wallet {cedis(cash)}</span>

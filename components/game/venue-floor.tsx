@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
-import { hourOf, peopleAt, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
+import { cedis, hourOf, peopleAt, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
 const SHIRTS = ["#2f6fed", "#f5c542", "#ec4899", "#3cba78", "#f4efe6", "#e5484d"];
@@ -16,7 +16,19 @@ const GARDENS = new Set(["aburi", "botanical", "golf", "sakumono"]);
 type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables";
 type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
 
-export function VenueFloor({ life, onHome, onAct, onOpenChat }: { life: Life; onHome: () => void; onAct: (verb: Verb, person?: string) => void; onOpenChat: (person: string) => void }) {
+export function VenueFloor({
+  life,
+  onHome,
+  onAct,
+  onOpenChat,
+  onPay,
+}: {
+  life: Life;
+  onHome: () => void;
+  onAct: (verb: Verb, person?: string) => void;
+  onOpenChat: (person: string) => void;
+  onPay: (person: string, amount: number) => string | null;
+}) {
   const spot = spotById(life.where);
   const people = peopleAt(spot.id);
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
@@ -63,10 +75,12 @@ export function VenueFloor({ life, onHome, onAct, onOpenChat }: { life: Life; on
         <TalkSheet
           person={who}
           place={spot.name}
+          cash={life.cash}
           lines={lines}
           onClose={() => setWho(null)}
           onChat={() => onOpenChat(who)}
           onPick={(talk) => speak(who, talk)}
+          onPay={(amount) => onPay(who, amount)}
         />
       ) : (
         <div className="absolute inset-x-3 bottom-[5.5rem] z-30 rounded-3xl bg-white p-3 shadow-xl">
@@ -132,18 +146,25 @@ function PersonTag({
 function TalkSheet({
   person,
   place,
+  cash,
   lines,
   onClose,
   onChat,
   onPick,
+  onPay,
 }: {
   person: string;
   place: string;
+  cash: number;
   lines: { from: "you" | "them"; text: string }[];
   onClose: () => void;
   onChat: () => void;
   onPick: (talk: TalkKind) => void;
+  onPay: (amount: number) => string | null;
 }) {
+  const [paying, setPaying] = useState(false);
+  const [amount, setAmount] = useState("20");
+  const [receipt, setReceipt] = useState<string | null>(null);
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-4 shadow-[0_-16px_50px_rgba(22,32,60,.22)]">
       <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d5dbe6]" />
@@ -167,6 +188,28 @@ function TalkSheet({
       <button type="button" onClick={onChat} className="mt-3 w-full rounded-full bg-[#3cba78] py-3 font-bold text-white">
         Chat
       </button>
+      <button type="button" onClick={() => setPaying((value) => !value)} className="mt-2 w-full rounded-full bg-[#fff4c2] py-3 text-sm font-bold text-[#8a6a12]">
+        💸 Send money
+      </button>
+      {paying ? (
+        <form
+          className="mt-2 flex items-center gap-2 rounded-2xl bg-[#fff8e8] px-3 py-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const value = Number(String(amount).replace(/[^\d.]/g, ""));
+            const error = onPay(value);
+            setReceipt(error ?? `You sent ${person} ${cedis(value)}.`);
+            if (!error) setPaying(false);
+          }}
+        >
+          <span className="text-sm text-[#8a6a12]">Wallet {cedis(cash)}</span>
+          <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" aria-label="Amount in cedis" className="h-9 w-20 rounded-full bg-white px-3 text-sm outline-none" />
+          <button type="submit" className="rounded-full bg-[#16203c] px-3 py-1.5 text-sm font-semibold text-white">
+            Send
+          </button>
+        </form>
+      ) : null}
+      {receipt ? <p className="mt-2 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-center text-sm">{receipt}</p> : null}
       <div className="mt-3 grid grid-cols-2 gap-2 pb-2">
         <TalkCard icon="👋" title="Say hello" meta="+Social" onClick={() => onPick("hello")} />
         <TalkCard icon="💬" title="Gist" meta="+Fun +Social" onClick={() => onPick("gist")} />

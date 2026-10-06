@@ -8,9 +8,10 @@ import { VenueFloor } from "@/components/game/venue-floor";
 import { Catalogue } from "@/components/game/catalogue";
 import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
+import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
-import { commitLife, digestPassword, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
+import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
 import {
   ACCENTS,
   CLOTHS,
@@ -97,6 +98,13 @@ export function GameApp() {
       const timed = passTime(account.life, 5);
       if (timed.notes.length) timed.life.inbox = [...timed.notes, ...timed.life.inbox].slice(0, 20);
       commitLife(account.username, timed.life);
+      if (account.cloud) {
+        void fetch("/api/live/life", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ life: timed.life }),
+        });
+      }
     }, 10000);
     return () => window.clearInterval(id);
   }, []);
@@ -268,39 +276,45 @@ function Auth({
       return;
     }
     setPending(true);
-    const passwordHash = await digestPassword(username, password);
-    if (mode === "login") {
-      const found = accounts.find((account) => account.username === username);
-      if (!found || found.passwordHash !== passwordHash) {
-        setPending(false);
-        setError("That username and password do not match.");
-        return;
-      }
-      writeSave(accounts, username);
-      flash(`Welcome back, @${username}.`);
-      return;
-    }
     const name = String(form.get("name") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
     const adult = form.get("adult") === "on";
-    if (name.length < 2) {
+    let response: Response;
+    try {
+      response = await fetch(mode === "login" ? "/api/live/login" : "/api/live/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username,
+        password,
+        name,
+        email,
+        adult,
+        birthId: mode === "signup" ? rollBirth().id : undefined,
+      }),
+    });
+    } catch {
       setPending(false);
-      setError("Tell us the name people call you.");
+      setError("Accra could not open that account.");
       return;
     }
-    if (!adult) {
+    const payload = (await response.json().catch(() => null)) as { error?: string; account?: Account } | null;
+    if (!response.ok || !payload?.account) {
       setPending(false);
-      setError("Accra Life is for players 18 and older.");
+      setError(payload?.error ?? "Accra could not open that account.");
       return;
     }
-    if (accounts.some((account) => account.username === username)) {
-      setPending(false);
-      setError("That username is already living in Accra.");
-      return;
-    }
-    const birth = rollBirth();
-    const account: Account = { name, username, passwordHash, email, birthId: birth.id, life: null };
-    writeSave([...accounts, account], username);
+    const local = accounts.find((account) => account.username === username);
+    const account: Account = {
+      ...payload.account,
+      cloud: true,
+      life: payload.account.life ?? local?.life ?? null,
+    };
+    writeSave(
+      [...accounts.filter((item) => item.username !== username), account],
+      username,
+    );
+    flash(mode === "login" ? `Welcome back, @${username}.` : `You're in, @${username}.`);
   }
 
   return (
@@ -343,7 +357,7 @@ function Auth({
             </label>
             <Field label="Password" name="password" type="password" placeholder="" hint="At least 6 characters." />
             {mode === "signup" ? (
-              <Field label="Email (optional)" name="email" type="email" placeholder="you@email.com" hint="Only used if you add a reset later. A lost password on this device stays lost." />
+              <Field label="Email (optional)" name="email" type="email" placeholder="you@email.com" hint="For getting back in. Your username is what people see." />
             ) : null}
             {mode === "signup" ? (
               <label className="flex items-start gap-3 rounded-2xl bg-white px-3 py-3 text-sm">
@@ -357,7 +371,7 @@ function Auth({
             <button type="submit" disabled={pending} className="w-full rounded-full bg-[#3cba78] py-3.5 font-bold text-white disabled:opacity-60">
               {pending ? "Please wait…" : mode === "signup" ? "Sign up · it's free" : "Log in"}
             </button>
-            <p className="text-center text-xs leading-5 text-[#5c6b82]">Your Sim lives in the same Accra on this browser as the other lives you create here.</p>
+            <p className="text-center text-xs leading-5 text-[#5c6b82]">Create a username and you can log in from any phone. That name is yours in Accra.</p>
           </form>
         </div>
       </div>
@@ -399,7 +413,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
   return (
     <div className="flex h-dvh flex-col bg-[#e7eef6] lg:flex-row">
       <div
-        className="relative flex min-h-[34vh] flex-1 items-center justify-center"
+        className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         onPointerDown={(event) => {
           const start = event.clientX;
           const base = spin;
@@ -433,7 +447,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             </button>
           </div>
         </div>
-        <div className="h-[58vh] w-[min(46vw,340px)]">
+        <div className="h-[min(40vh,320px)] w-[min(70vw,280px)]">
           <LowPolyHuman
             skin={look.skin}
             shirt={look.cloth}
@@ -448,7 +462,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
         </div>
         <p className="absolute bottom-4 text-xs text-[#8b97ab]">Drag to spin</p>
       </div>
-      <div className="max-h-[66vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
+      <div className="relative z-10 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
         {step === 0 ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-full bg-[#eef1f6] px-4 py-3">
@@ -592,6 +606,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [rideId, setRideId] = useState<(typeof RIDES)[number]["id"]>("trotro");
   const [enRoute, setEnRoute] = useState<string | null>(null);
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
+  const [onAir, setOnAir] = useState(false);
   if (!life) return null;
   const mood = moodOf(life.needs);
   const quest = questFor(life);
@@ -608,8 +623,37 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     if (note) flash(note);
   }
 
+  function paySomeone(name: string, amount: number, username?: string) {
+    const snap = parseRaw(getRaw());
+    const other = snap.accounts.find((item) => {
+      if (!item.life || item.username === account.username) return false;
+      if (username && item.username === username) return true;
+      return item.name === name || item.username === name;
+    });
+    const paid = giftCash(life, other?.name ?? name, amount);
+    if (paid.error) {
+      flash(paid.error);
+      return paid.error;
+    }
+    if (other?.life) {
+      const received = receiveCash(other.life, `@${account.username}`, amount);
+      writeSave(
+        snap.accounts.map((item) => {
+          if (item.username === account.username) return { ...item, life: paid.life };
+          if (item.username === other.username) return { ...item, life: received };
+          return item;
+        }),
+        snap.session,
+      );
+    } else commitLife(account.username, paid.life);
+    const note = paid.notes[0];
+    if (note) flash(note);
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 h-dvh w-full overflow-hidden overscroll-none touch-none">
+      <Soundtrack tune={tuneFor(life.where, onAir)} />
       {tab === "map" ? (
         <CityBoard
           night={hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5}
@@ -655,6 +699,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           life={life}
           onHome={() => apply(goTo(life, "home"))}
           onAct={(verb, person) => apply(runVerb(life, verb, life.where, person))}
+          onPay={(person, amount) => paySomeone(person, amount)}
           onOpenChat={(person) => {
             apply(meetPerson(life, person));
             setChatLaunch({ id: person });
@@ -686,10 +731,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             </button>
           </div>
           <div className={`absolute left-3 z-20 max-w-[calc(100%-1.5rem)] space-y-2 ${tab === "map" ? "top-[max(8rem,calc(env(safe-area-inset-top)+7rem))]" : "top-[max(5rem,calc(env(safe-area-inset-top)+4.25rem))]"}`}>
-            <div className="w-56 rounded-full bg-white px-3 py-2 shadow">
+            <button
+              type="button"
+              className="w-56 rounded-full bg-white px-3 py-2 text-left shadow"
+              onClick={() => {
+                if (life.needs.hunger < 55 || life.needs.bladder < 35 || life.needs.energy < 40) {
+                  setTab("home");
+                  flash(quest.detail);
+                  return;
+                }
+                setTab("map");
+              }}
+            >
               <p className="text-sm font-bold">{quest.title}</p>
               <p className="text-xs text-[#5c6b82]">{quest.detail}</p>
-            </div>
+            </button>
             {life.dumsor ? <p className="w-56 rounded-full bg-[#16203c] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
             <button type="button" className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow" onClick={() => setClean(true)}>
               ⌃ Clean screen
@@ -773,7 +829,17 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <Sheet onClose={() => setWalletOpen(false)} title="Wallet">
           <p className="font-display text-4xl">{cedis(life.cash)}</p>
           <p className="mt-2 text-sm text-[#5c6b82]">{life.loan > 0 ? `Susu left: ${cedis(life.loan)} · ${cedis(life.weeklyLoan)} every Saturday` : "No susu hanging over you."}</p>
-          <p className="mt-2 text-sm text-[#5c6b82]">Rent at {homeById(life.homeId).name}: {cedis(homeById(life.homeId).rent)} every Saturday. MoMo top-up comes later. Work a shift for now.</p>
+          <p className="mt-2 text-sm text-[#5c6b82]">Rent at {homeById(life.homeId).name}: {cedis(homeById(life.homeId).rent)} every Saturday. Work a shift when the wallet is thin.</p>
+          <WalletSend
+            cash={life.cash}
+            people={[
+              ...life.relations.map((person) => person.name),
+              ...parseRaw(getRaw())
+                .accounts.filter((item) => item.username !== account.username && item.life)
+                .map((item) => item.name),
+            ]}
+            onSend={paySomeone}
+          />
           {life.loan > 0 ? (
             <button type="button" className="mt-4 w-full rounded-full bg-[#16203c] py-3 font-bold text-white" onClick={() => apply(repayLoan(life))}>
               Pay toward the susu
@@ -841,6 +907,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           username={account.username}
           launch={chatLaunch}
           onLaunchConsumed={() => setChatLaunch(null)}
+          onAir={setOnAir}
           onClose={() => setTab("home")}
           onWork={(jobId) => {
             const job = JOBS.find((item) => item.id === jobId);
@@ -874,33 +941,50 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             );
           }}
           onSocial={(result) => apply(result)}
-          onPay={(name, handle, amount) => {
-            const username = handle.replace(/^@/, "");
-            const snap = parseRaw(getRaw());
-            const other = snap.accounts.find((item) => item.username === username && item.life && item.username !== account.username);
-            const paid = giftCash(life, other?.name ?? name, amount);
-            if (paid.error) {
-              flash(paid.error);
-              return false;
-            }
-            if (other?.life) {
-              const received = receiveCash(other.life, `@${account.username}`, amount);
-              writeSave(
-                snap.accounts.map((item) => {
-                  if (item.username === account.username) return { ...item, life: paid.life };
-                  if (item.username === other.username) return { ...item, life: received };
-                  return item;
-                }),
-                snap.session,
-              );
-            } else commitLife(account.username, paid.life);
-            const note = paid.notes[0];
-            if (note) flash(note);
-            return true;
-          }}
+          onPay={(name, handle, amount) => paySomeone(name, amount, handle.replace(/^@/, ""))}
         />
       ) : null}
     </div>
+  );
+}
+
+function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; onSend: (name: string, amount: number) => string | null }) {
+  const names = [...new Set(people)];
+  const [who, setWho] = useState(names[0] ?? "");
+  const [amount, setAmount] = useState("20");
+  const [receipt, setReceipt] = useState<string | null>(null);
+  return (
+    <form
+      className="mt-4 space-y-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!who) return;
+        const value = Number(String(amount).replace(/[^\d.]/g, ""));
+        const error = onSend(who, value);
+        setReceipt(error ?? `You sent ${who} ${cedis(value)}.`);
+      }}
+    >
+      <p className="text-sm font-semibold">Send money</p>
+      {names.length === 0 ? (
+        <p className="text-sm text-[#5c6b82]">Meet someone in Accra first. Tap them, then send.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {names.map((name) => (
+            <button key={name} type="button" onClick={() => setWho(name)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${who === name ? "bg-[#16203c] text-white" : "bg-[#f4f7fb]"}`}>
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-[#5c6b82]">{cedis(cash)}</span>
+        <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" aria-label="Amount in cedis" className="h-10 w-24 rounded-full bg-[#f4f7fb] px-3 text-sm outline-none" />
+        <button type="submit" disabled={!who} className="rounded-full bg-[#3cba78] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+          Send
+        </button>
+      </div>
+      {receipt ? <p className="rounded-2xl bg-[#f4f7fb] px-3 py-2 text-sm">{receipt}</p> : null}
+    </form>
   );
 }
 
@@ -968,6 +1052,9 @@ function PlaceSheet({
   onGem: (() => void) | null;
 }) {
   const ride = RIDES.find((item) => item.id === rideId) ?? RIDES[1];
+  const area = areaOf(place);
+  const blurb = place.blurb.startsWith(`${area}.`) ? place.blurb.slice(area.length + 1).trim() : place.blurb;
+  const [copied, setCopied] = useState(false);
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 max-h-[78vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
       <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d5dbe6]" />
@@ -975,27 +1062,34 @@ function PlaceSheet({
         <span className="grid h-12 w-12 place-items-center rounded-full bg-[#f4f7fb] text-2xl">{place.emoji}</span>
         <span className="min-w-0 flex-1">
           <span className="block font-display text-2xl">{place.name}</span>
-          <span className="text-sm text-[#5c6b82]">{areaOf(place)}</span>
+          <span className="text-sm text-[#5c6b82]">{area}</span>
         </span>
         <button type="button" onClick={onClose} className="rounded-full bg-[#f4f7fb] px-3 py-1 text-sm font-semibold">
           Hide
         </button>
       </div>
-      <p className="mt-3 text-sm leading-6 text-[#5c6b82]">{place.blurb}</p>
+      <p className="mt-3 text-sm leading-6 text-[#5c6b82]">{blurb}</p>
       <button
         type="button"
-        className="mt-3 text-sm font-semibold text-[#2f6fed]"
+        className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#2f6fed]"
         onClick={() => {
           const url = `${window.location.origin}/?spot=${place.id}`;
-          void navigator.clipboard?.writeText(url);
+          void navigator.clipboard?.writeText(url).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1600);
+          });
         }}
       >
-        Share a link to {place.name}
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5" strokeLinecap="round" />
+          <path d="M14 11a5 5 0 0 0-7.07 0L5.5 12.41a5 5 0 0 0 7.07 7.07L14 19" strokeLinecap="round" />
+        </svg>
+        {copied ? "Link copied" : `Share a link to ${place.name}`}
       </button>
       <div className="mt-3 flex flex-wrap gap-2">
         {place.actions.map((verb) => (
           <button key={verb.id} type="button" onClick={() => onAct(verb)} className="rounded-full bg-[#f4f7fb] px-3 py-1.5 text-sm font-semibold">
-            {verb.label}
+            {verbEmoji(verb)} {verb.label}
           </button>
         ))}
         {onGem ? (
@@ -1032,12 +1126,26 @@ function PlaceSheet({
             ))}
           </div>
           <button type="button" onClick={onGo} className="mt-3 w-full rounded-full bg-[#3cba78] py-3.5 font-bold text-white">
-            Go{ride.cost ? ` · ${cedis(ride.cost)}` : ""}
+            Go · {ride.cost ? cedis(ride.cost) : "Free"}
           </button>
         </>
       )}
     </div>
   );
+}
+
+function verbEmoji(verb: Verb) {
+  if (verb.emoji) return verb.emoji;
+  if (verb.tag === "food") return "🍽️";
+  if (verb.tag === "party") return "🎶";
+  if (verb.tag === "gym") return "💪";
+  if (verb.tag === "church") return "⛪";
+  const label = verb.label.toLowerCase();
+  if (label.includes("dance")) return "💃";
+  if (label.includes("drink") || label.includes("pint") || label.includes("cocktail") || label.includes("round")) return "🍹";
+  if (label.includes("walk") || label.includes("stroll") || label.includes("stand")) return "🚶";
+  if (label.includes("shop") || label.includes("outfit")) return "🛍️";
+  return "✨";
 }
 
 function areaOf(place: Spot) {

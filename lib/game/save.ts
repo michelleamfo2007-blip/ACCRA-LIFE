@@ -7,6 +7,7 @@ export type Account = {
   email: string;
   birthId: string;
   life: Life | null;
+  cloud?: boolean;
 };
 
 const ACCOUNTS = "accralife-accounts";

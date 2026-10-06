@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import path from "path";
+import { supabase } from "@/lib/server/supabase";
 import { seedEvents } from "@/lib/data/events";
 import { seedPlaces } from "@/lib/data/places";
 import { hashPassword } from "@/lib/server/password";
@@ -239,18 +240,36 @@ function seed(): Store {
   };
 }
 
+function remember(store: Store) {
+  if (!Array.isArray(store.library)) store.library = [];
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(store, null, 2));
+  cache = store;
+  return store;
+}
+
 function ensure() {
   if (cache) return cache;
-  if (!existsSync(file)) {
-    mkdirSync(path.dirname(file), { recursive: true });
-    const initial = seed();
-    writeFileSync(file, JSON.stringify(initial, null, 2));
-    cache = initial;
-    return cache;
+  if (!existsSync(file)) return remember(seed());
+  return remember(JSON.parse(readFileSync(file, "utf8")) as Store);
+}
+
+export async function hydrateStore() {
+  const db = supabase();
+  if (!db) return;
+  const { data, error } = await db.from("app_store").select("payload").eq("id", 1).maybeSingle();
+  if (error) return;
+  if (data?.payload && typeof data.payload === "object") {
+    remember(data.payload as Store);
+    return;
   }
-  cache = JSON.parse(readFileSync(file, "utf8")) as Store;
-  if (!Array.isArray(cache.library)) cache.library = [];
-  return cache;
+  await db.from("app_store").upsert({ id: 1, payload: ensure(), updated_at: new Date().toISOString() });
+}
+
+async function pushStore(store: Store) {
+  const db = supabase();
+  if (!db) return;
+  await db.from("app_store").upsert({ id: 1, payload: store, updated_at: new Date().toISOString() });
 }
 
 export function readStore() {
@@ -261,9 +280,8 @@ export function updateStore<T>(mutate: (store: Store) => T): Promise<T> {
   const run = queue.then(() => {
     const store = ensure();
     const result = mutate(store);
-    writeFileSync(file, JSON.stringify(store, null, 2));
-    cache = store;
-    return result;
+    remember(store);
+    return pushStore(store).then(() => result);
   });
   queue = run.then(
     () => undefined,

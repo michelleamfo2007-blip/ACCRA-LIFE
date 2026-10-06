@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import type { PublicUser } from "@/lib/types";
 
 export const SESSION_COOKIE = "al_session";
+export const CLOUD_COOKIE = "al_cloud";
 
 type SessionPayload = {
   uid: string;

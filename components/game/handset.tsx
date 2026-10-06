@@ -39,6 +39,7 @@ export function Handset({
   onPay,
   launch,
   onLaunchConsumed,
+  onAir,
 }: {
   life: Life;
   username: string;
@@ -53,9 +54,10 @@ export function Handset({
   onEmail: (email: string) => void;
   onNewLife: () => void;
   onSocial: (result: StepResult) => void;
-  onPay: (name: string, handle: string, amount: number) => boolean;
+  onPay: (name: string, handle: string, amount: number) => string | null;
   launch: { id: string } | null;
   onLaunchConsumed: () => void;
+  onAir: (playing: boolean) => void;
 }) {
   const [app, setApp] = useState<AppId>(launch ? "messages" : "home");
   const [thread, setThread] = useState<string | null>(launch?.id ?? null);
@@ -73,6 +75,11 @@ export function Handset({
     setUnread((current) => ({ ...current, [launch.id]: 0 }));
     onLaunchConsumed();
   }, [launch, onLaunchConsumed]);
+  useEffect(() => {
+    onAir(app === "radio");
+  }, [app, onAir]);
+
+  useEffect(() => () => onAir(false), [onAir]);
   const battery = Math.max(8, Math.min(100, life.needs.energy));
   const inApp = app !== "home" || Boolean(thread);
   const unreadTotal = Object.values(unread).reduce((sum, count) => sum + count, 0);
@@ -173,7 +180,8 @@ export function Handset({
                     }
                     if (kind === "pay") {
                       const value = Math.round(amount ?? 0);
-                      if (onPay(name, handle, value)) pushChat(thread, { who: "note", text: `You sent ${handle} ${cedis(value)}`, time });
+                      const error = onPay(name, handle, value);
+                      pushChat(thread, { who: "note", text: error ?? `You sent ${handle} ${cedis(value)}`, time });
                       return;
                     }
                     const result = kind === "invite" ? invitePerson(life, name) : kind === "visit" ? visitPerson(life, name) : treatPerson(life, name);
@@ -196,7 +204,7 @@ export function Handset({
               {app === "goals" ? <GoalsScreen life={life} onBack={() => setApp("home")} /> : null}
               {app === "momo" ? <MomoScreen life={life} username={username} onBack={() => setApp("home")} onRepay={onRepay} onLogout={onLogout} /> : null}
               {app === "contacts" ? <ContactsScreen life={life} onBack={() => setApp("home")} onOpen={openThread} /> : null}
-              {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy, Peace, and the highlife station that only wakes up after nine.", life.dumsor && !life.inventory.includes("generator") ? "The set is quiet. ECG took the current." : "The room radio is live. Tap Radio in the house to sit with it."]} /> : null}
+              {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy FM is on.", "Highlife, a gospel hour, and whoever just walked into the studio."]} /> : null}
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
               {app === "games" ? <NoteScreen title="Oware" onBack={() => setApp("home")} lines={["The board is on the stoop.", "A full game lands later. For now, the seeds are just sitting there, waiting on you."]} /> : null}
               {app === "boutique" ? <NoteScreen title="Boutique" onBack={() => setApp("home")} lines={[`${life.look.outfit} · ${life.look.cloth}`, "New cloth shows up in the room you already wear. The market lanes have the rest."]} /> : null}
