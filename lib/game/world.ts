@@ -47,6 +47,15 @@ export type Life = {
   outageCheckedDay: number;
   dumsor: boolean;
   gemDay: number;
+  furniture?: Placed[];
+  stored?: string[];
+};
+
+export type Placed = {
+  id: string;
+  x: number;
+  z: number;
+  rot: number;
 };
 
 export type Verb = {
@@ -824,6 +833,8 @@ function clone(life: Life): Life {
     log: [...life.log],
     inbox: [...life.inbox],
     relations: life.relations.map((person) => ({ ...person })),
+    furniture: (life.furniture ?? []).map((piece) => ({ ...piece })),
+    stored: [...(life.stored ?? [])],
   };
 }
 
@@ -873,6 +884,8 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
     outageCheckedDay: -1,
     dumsor: false,
     gemDay: -1,
+    furniture: [],
+    stored: [],
   };
   return life;
 }
@@ -1033,6 +1046,74 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   return { life: after, notes: [verb.label, ...notes.filter(Boolean)] };
 }
 
+export type Offer = {
+  id: string;
+  label: string;
+  detail: string;
+  minutes: number;
+  cost: number;
+  effects: Partial<Needs>;
+  outfit?: string;
+  cloth?: string;
+};
+
+export function offersFor(verb: Verb): Offer[] {
+  const name = `${verb.id} ${verb.label}`.toLowerCase();
+  if (name.includes("outfit") || name.includes("cloth") || name.includes("kente")) return CLOTHES;
+  if (name.includes("cinema") || name.includes("show") || name.includes("film")) return FILMS;
+  if (verb.tag === "food" || name.includes("food") || name.includes("eat") || name.includes("jollof") || name.includes("waakye") || name.includes("kelewele") || name.includes("ice")) return plates(verb);
+  return [
+    {
+      id: verb.id,
+      label: verb.label,
+      detail: verb.detail,
+      minutes: verb.minutes,
+      cost: verb.cost,
+      effects: verb.effects,
+    },
+  ];
+}
+
+const FILMS: Offer[] = [
+  { id: "film-ghana", label: "Ghanaian feature", detail: "Lights down. A story from here.", minutes: 120, cost: 35, effects: { fun: 26, energy: -6 } },
+  { id: "film-highlife", label: "Highlife concert film", detail: "A live set, filmed close.", minutes: 90, cost: 40, effects: { fun: 30, energy: -4 } },
+  { id: "film-late", label: "Late show", detail: "The cheap seat. The long one.", minutes: 130, cost: 25, effects: { fun: 22, energy: -8 } },
+];
+
+export const CLOTHES: Offer[] = [
+  { id: "fit-casual", label: "Casual", detail: "The everyday set.", minutes: 15, cost: 80, effects: { fun: 8 }, outfit: "Casual", cloth: "#2f7de1" },
+  { id: "fit-office", label: "Office", detail: "Sharp enough for Ridge.", minutes: 15, cost: 140, effects: { fun: 6 }, outfit: "Office", cloth: "#f4efe6" },
+  { id: "fit-white", label: "All-white", detail: "Friday white, pressed.", minutes: 15, cost: 160, effects: { fun: 10 }, outfit: "All-white", cloth: "#f7f4ef" },
+  { id: "fit-classic", label: "Classic", detail: "The cut you already know.", minutes: 15, cost: 90, effects: { fun: 6 }, outfit: "Classic", cloth: "#e7c85a" },
+  { id: "fit-site", label: "Site work", detail: "For a day that gets dusty.", minutes: 15, cost: 70, effects: { fun: 4 }, outfit: "Site work", cloth: "#f59e42" },
+];
+
+function plates(verb: Verb): Offer[] {
+  const base = Math.max(verb.cost, 12);
+  return [
+    { id: `${verb.id}-plate`, label: verb.label, detail: verb.detail, minutes: verb.minutes, cost: base, effects: verb.effects },
+    { id: `${verb.id}-small`, label: "Small plate", detail: "Enough to hold you.", minutes: Math.max(10, verb.minutes - 10), cost: Math.max(8, Math.round(base * 0.6)), effects: { hunger: 18, fun: 4 } },
+    { id: `${verb.id}-full`, label: "Full plate", detail: "The one you finish slowly.", minutes: verb.minutes + 5, cost: Math.round(base * 1.4), effects: { hunger: 40, fun: 8 } },
+  ];
+}
+
+export function payOffer(life: Life, verb: Verb, offer: Offer, placeId = life.where): StepResult {
+  if (offer.outfit || offer.cloth) {
+    if (life.cash < offer.cost) return { life, notes: [], error: "Wallet light. Make some money first." };
+    const next = clone(life);
+    next.look = { ...next.look, outfit: offer.outfit ?? next.look.outfit, cloth: offer.cloth ?? next.look.cloth };
+    const timed = passTime(next, offer.minutes);
+    timed.life.cash -= offer.cost;
+    pushLog(timed.life, `Bought ${offer.label}.`);
+    return { life: timed.life, notes: [`${offer.label} is what you are wearing.`] };
+  }
+  return runVerb(
+    life,
+    { ...verb, id: offer.id, label: offer.label, detail: offer.detail, minutes: offer.minutes, cost: offer.cost, effects: offer.effects, earn: verb.earn },
+    placeId,
+  );
+}
+
 function actionBoost(life: Life, verb: Verb) {
   let boost = 1;
   if (verb.tag === "food" && life.traits.includes("foodie")) boost += 0.25;
@@ -1043,10 +1124,40 @@ function actionBoost(life: Life, verb: Verb) {
   return boost;
 }
 
+const FLOOR_SPOTS = [
+  { x: -0.15, z: 0.85 },
+  { x: 1.55, z: 0.45 },
+  { x: -2.35, z: 1.45 },
+  { x: 0.35, z: -1.15 },
+  { x: 2.55, z: -0.35 },
+  { x: -1.15, z: 2.15 },
+  { x: 3.05, z: 0.15 },
+  { x: -3.05, z: -0.55 },
+];
+
+function openSpot(life: Life) {
+  const taken = life.furniture ?? [];
+  return FLOOR_SPOTS.find((slot) => !taken.some((piece) => Math.hypot(piece.x - slot.x, piece.z - slot.z) < 0.75)) ?? { x: 0.2, z: 0.4 };
+}
+
+export function sellValue(price: number) {
+  return Math.max(5, Math.round(price * 0.45));
+}
+
 export function buyItem(life: Life, itemId: string): StepResult {
   const item = SHOP.find((entry) => entry.id === itemId);
   if (!item) return { life, notes: [], error: "That item is gone." };
-  if (!item.consume && life.inventory.includes(item.id)) return { life, notes: [], error: "You already own that." };
+  if (!item.consume && life.inventory.includes(item.id)) {
+    if ((life.stored ?? []).includes(item.id)) {
+      const next = clone(life);
+      const spot = openSpot(next);
+      next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: 0 }];
+      next.stored = (next.stored ?? []).filter((id) => id !== item.id);
+      pushLog(next, `Put ${item.name} back out.`);
+      return { life: next, notes: [`${item.name} is back in the room.`] };
+    }
+    return { life, notes: [], error: "You already own that." };
+  }
   if (life.cash < item.price) return { life, notes: [], error: "Not enough cedis." };
   if (item.consume) {
     return runVerb({ ...clone(life) }, eat({ id: "kenkey", label: "Kenkey and fish", detail: item.detail, minutes: 15, cost: item.price, effects: { hunger: 34, fun: 4 }, tag: "food" }), life.where);
@@ -1054,9 +1165,43 @@ export function buyItem(life: Life, itemId: string): StepResult {
   const next = clone(life);
   next.cash -= item.price;
   next.inventory = [...next.inventory, item.id];
+  const spot = openSpot(next);
+  next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: 0 }];
   if (item.id === "generator") next.dumsor = false;
   pushLog(next, `Bought ${item.name}.`);
-  return { life: next, notes: [`${item.name} is yours.`] };
+  return { life: next, notes: [`Bought ${item.name}.`] };
+}
+
+export function layPiece(life: Life, id: string, x: number, z: number, rot: number): StepResult {
+  if (!life.inventory.includes(id)) return { life, notes: [], error: "That is not yours." };
+  const next = clone(life);
+  const piece = { id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, rot: ((rot % 4) + 4) % 4 };
+  next.furniture = [...(next.furniture ?? []).filter((item) => item.id !== id), piece];
+  next.stored = (next.stored ?? []).filter((item) => item !== id);
+  return { life: next, notes: [] };
+}
+
+export function storePiece(life: Life, id: string): StepResult {
+  const item = SHOP.find((entry) => entry.id === id);
+  if (!item || !life.inventory.includes(id)) return { life, notes: [], error: "Nothing there to store." };
+  const next = clone(life);
+  next.furniture = (next.furniture ?? []).filter((piece) => piece.id !== id);
+  next.stored = [...new Set([...(next.stored ?? []), id])];
+  pushLog(next, `Stored ${item.name}.`);
+  return { life: next, notes: [`${item.name} is stored.`] };
+}
+
+export function sellPiece(life: Life, id: string): StepResult {
+  const item = SHOP.find((entry) => entry.id === id);
+  if (!item || item.consume || !life.inventory.includes(id)) return { life, notes: [], error: "Nothing there to sell." };
+  const back = sellValue(item.price);
+  const next = clone(life);
+  next.cash += back;
+  next.inventory = next.inventory.filter((owned) => owned !== id);
+  next.furniture = (next.furniture ?? []).filter((piece) => piece.id !== id);
+  next.stored = (next.stored ?? []).filter((owned) => owned !== id);
+  pushLog(next, `Sold ${item.name} for ${cedis(back)}.`);
+  return { life: next, notes: [`Sold ${item.name} for ${cedis(back)}.`] };
 }
 
 export function repayLoan(life: Life): StepResult {

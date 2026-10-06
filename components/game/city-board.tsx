@@ -18,17 +18,17 @@ type Bld = { x: number; y: number; kind: Kind; hue: number; w: number };
 const CITY = makeCity();
 const TREES = makeTrees();
 
-const BOARDS: { x: number; y: number; fill: string; text: string }[] = [
-  { x: 200, y: 250, fill: "#1f7a4d", text: "Waakye open" },
-  { x: 520, y: 200, fill: "#121212", text: "Highlife tonight" },
-  { x: 760, y: 300, fill: "#8d3b2f", text: "Osu after 8" },
-  { x: 1040, y: 420, fill: "#355f86", text: "MoMo ready" },
-  { x: 1280, y: 520, fill: "#1f7a4d", text: "Labadi Sunday" },
-  { x: 360, y: 640, fill: "#121212", text: "Live Accra." },
-  { x: 980, y: 820, fill: "#8d3b2f", text: "Jollof still hot" },
-  { x: 1500, y: 760, fill: "#355f86", text: "Kente in stock" },
-  { x: 640, y: 980, fill: "#1f7a4d", text: "Trotro this way" },
-  { x: 1700, y: 280, fill: "#121212", text: "ECG, hold on" },
+export const BOARDS: { id: string; x: number; y: number; fill: string; road: string; text: string; price: number; mega?: boolean }[] = [
+  { id: "oxford", x: 200, y: 250, fill: "#1f7a4d", road: "Oxford Street", text: "Waakye open", price: 80 },
+  { id: "liberation", x: 520, y: 200, fill: "#121212", road: "Liberation Road", text: "Highlife tonight", price: 80 },
+  { id: "osu", x: 760, y: 300, fill: "#8d3b2f", road: "Osu", text: "Osu after 8", price: 80 },
+  { id: "independence", x: 1040, y: 420, fill: "#355f86", road: "Independence Avenue", text: "Live Accra.", price: 120, mega: true },
+  { id: "labadi", x: 1280, y: 520, fill: "#1f7a4d", road: "Labadi beach road", text: "Labadi Sunday", price: 120, mega: true },
+  { id: "spintex", x: 360, y: 640, fill: "#121212", road: "Spintex Road", text: "MoMo ready", price: 80 },
+  { id: "cantonments", x: 980, y: 820, fill: "#8d3b2f", road: "Cantonments", text: "Jollof still hot", price: 80 },
+  { id: "labone", x: 1500, y: 760, fill: "#355f86", road: "Labone", text: "Kente in stock", price: 80 },
+  { id: "adabraka", x: 640, y: 980, fill: "#1f7a4d", road: "Adabraka", text: "Trotro this way", price: 80 },
+  { id: "airport", x: 1700, y: 280, fill: "#121212", road: "Airport road", text: "ECG, hold on", price: 80 },
 ];
 
 const AREAS = [
@@ -45,12 +45,16 @@ export function CityBoard({
   filter,
   boards = true,
   night = false,
+  ads = {},
   onSelect,
+  onBoard,
 }: {
   filter: Spot["group"] | "all";
   boards?: boolean;
   night?: boolean;
+  ads?: Record<string, string>;
   onSelect: (id: string) => void;
+  onBoard?: (id: string) => void;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ x: -160, y: -40, z: 0.55 });
@@ -100,7 +104,7 @@ export function CityBoard({
       ref={boardRef}
       className="absolute inset-0 cursor-grab touch-none overflow-hidden bg-[#b7d48c] active:cursor-grabbing"
       onPointerDown={(event) => {
-        if ((event.target as HTMLElement).closest("button")) return;
+        if ((event.target as Element).closest("button, [data-board]")) return;
         event.currentTarget.setPointerCapture(event.pointerId);
         points.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (points.current.size === 1) {
@@ -145,7 +149,7 @@ export function CityBoard({
         }
       }}
       onDoubleClick={(event) => {
-        if ((event.target as HTMLElement).closest("button")) return;
+        if ((event.target as Element).closest("button, [data-board]")) return;
         const rect = event.currentTarget.getBoundingClientRect();
         const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35);
         viewRef.current = next;
@@ -185,7 +189,17 @@ export function CityBoard({
             <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} />
           ))}
           {boards
-            ? BOARDS.map((board) => <Board key={`${board.x}-${board.y}`} x={board.x} y={board.y} fill={board.fill} text={board.text} />)
+            ? BOARDS.map((board) => (
+                <Board
+                  key={board.id}
+                  x={board.x}
+                  y={board.y}
+                  fill={board.fill}
+                  text={ads[board.id] || board.text}
+                  mega={board.mega}
+                  onOpen={onBoard ? () => onBoard(board.id) : undefined}
+                />
+              ))
             : null}
           {AREAS.map(([x, y, label]) => (
             <text key={String(label)} x={Number(x)} y={Number(y)} textAnchor="middle" fill="white" fillOpacity="0.92" fontSize="20" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
@@ -218,7 +232,7 @@ export function CityBoard({
           );
         })}
       </div>
-      <div className="absolute bottom-28 right-4 z-30 flex flex-col gap-2">
+      <div className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
           +
         </button>
@@ -345,14 +359,16 @@ function Tree({ x, y, r }: { x: number; y: number; r: number }) {
   );
 }
 
-function Board({ x, y, fill, text }: { x: number; y: number; fill: string; text: string }) {
+function Board({ x, y, fill, text, onOpen, mega }: { x: number; y: number; fill: string; text: string; onOpen?: () => void; mega?: boolean }) {
+  const w = mega ? 280 : 230;
+  const h = mega ? 96 : 78;
   return (
-    <g>
-      <rect x={x + 34} y={y + 28} width="5" height="34" fill="#6b6256" />
-      <polygon points={`${x},${y + 8} ${x + 92},${y} ${x + 92},${y + 34} ${x},${y + 42}`} fill={fill} />
-      <polygon points={`${x + 92},${y} ${x + 100},${y + 5} ${x + 100},${y + 39} ${x + 92},${y + 34}`} fill="#111" opacity="0.28" />
-      <text x={x + 46} y={y + 26} textAnchor="middle" fill="white" fontSize="10" fontFamily="ui-sans-serif">
-        {text}
+    <g data-board="true" onClick={onOpen} className={onOpen ? "cursor-pointer" : undefined}>
+      <rect x={x + w * 0.46} y={y + h - 4} width="10" height="70" fill="#6b6256" />
+      <rect x={x} y={y} width={w} height={h} rx="8" fill={fill} />
+      <rect x={x + 8} y={y + 8} width={w - 16} height={h - 16} rx="4" fill="none" stroke="white" strokeOpacity="0.35" />
+      <text x={x + w / 2} y={y + h / 2 + 7} textAnchor="middle" fill="white" fontSize={mega ? 22 : 18} fontWeight="700" fontFamily="ui-sans-serif">
+        {text.slice(0, 22)}
       </text>
     </g>
   );

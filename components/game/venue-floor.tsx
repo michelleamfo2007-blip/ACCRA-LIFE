@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
-import { accraHour, cedis, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
+import { ActionDeck } from "@/components/game/action-deck";
+import { accraHour, cedis, spotById, type Life, type Offer, type Spot, type Verb } from "@/lib/game/world";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
 const SHIRTS = ["#CE1126", "#f5c542", "#ec4899", "#006B3F", "#f4efe6", "#e5484d"];
@@ -23,6 +24,7 @@ export function VenueFloor({
   onAct,
   onOpenChat,
   onPay,
+  focus = null,
 }: {
   life: Life;
   people: { username: string; name: string }[];
@@ -30,21 +32,30 @@ export function VenueFloor({
   onAct: (verb: Verb, person?: string) => void;
   onOpenChat: (person: string) => void;
   onPay: (person: string, amount: number) => string | null;
+  focus?: string | null;
 }) {
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);
+  const [youAt, setYouAt] = useState({ left: "34%", top: "62%" });
+  const party = BEACHES.has(spot.id) || CLUB_IDS.has(spot.id);
+  const staff = staffFor(spot);
   const stands = [
-    { left: "24%", top: "62%" },
     { left: "50%", top: "46%" },
-    { left: "72%", top: "60%" },
-    { left: "18%", top: "48%" },
     { left: "62%", top: "70%" },
     { left: "40%", top: "38%" },
+    { left: "30%", top: "55%" },
   ];
   const open = people.find((person) => person.username === who) ?? null;
+
+  function approach(style: { left: string; top: string }, then: () => void) {
+    const left = Number.parseFloat(style.left);
+    const top = Number.parseFloat(style.top);
+    setYouAt({ left: `${Math.min(84, left + 9)}%`, top: `${Math.min(76, top + 12)}%` });
+    window.setTimeout(then, 680);
+  }
 
   function speak(person: string, talk: TalkKind) {
     const verb = talkVerb(person, talk, spot);
@@ -56,7 +67,48 @@ export function VenueFloor({
     <div className="relative h-full overflow-hidden" style={{ background: night ? "radial-gradient(circle at 50% 30%, #243044 0%, #12151c 70%)" : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)" }}>
       <div className="absolute inset-x-1 top-[4.25rem] bottom-36">
         <div className="relative mx-auto h-full max-w-3xl">
-          <VenueScene spot={spot} night={night} kind={kind} />
+          <VenueScene spot={spot} night={night} kind={kind} party={party} />
+          {staff.map((person) => (
+            <PersonTag
+              key={person.role}
+              name={person.role}
+              tone="blue"
+              style={person.style}
+              skin={person.skin}
+              shirt={person.shirt}
+              hair={person.hair}
+              pants="#1c1917"
+              onClick={() =>
+                approach(person.style, () => {
+                  setWho(`staff:${person.role}`);
+                  setLines([{ from: "them", text: person.line }]);
+                })
+              }
+            />
+          ))}
+          {party
+            ? [
+                { left: "52%", top: "40%" },
+                { left: "40%", top: "52%" },
+              ].map((style, index) => (
+                <PersonTag
+                  key={`party-${index}`}
+                  name="Party"
+                  tone="blue"
+                  style={style}
+                  skin={SKINS[index + 2]}
+                  shirt={index ? "#FCD116" : "#CE1126"}
+                  hair="Afro"
+                  pants="#1c1917"
+                  onClick={() =>
+                    approach(style, () => {
+                      setWho(`party:${index}`);
+                      setLines([{ from: "them", text: "We came for the party. The floor is already moving." }]);
+                    })
+                  }
+                />
+              ))
+            : null}
           {people.slice(0, stands.length).map((person, index) => (
             <PersonTag
               key={person.username}
@@ -67,16 +119,27 @@ export function VenueFloor({
               shirt={SHIRTS[(index + 1) % SHIRTS.length]}
               hair={HAIR[index % HAIR.length]}
               pants={PANTS[index % PANTS.length]}
-              onClick={() => {
-                setWho(person.username);
-                setLines([]);
-              }}
+              onClick={() =>
+                approach(stands[index], () => {
+                  setWho(person.username);
+                  setLines([]);
+                })
+              }
             />
           ))}
-          <PersonTag name="You" tone="pink" style={{ left: "36%", top: "78%" }} skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} pants={life.look.body === "woman" ? "#1c1917" : life.look.accent} />
+          <PersonTag name="You" tone="pink" style={youAt} walk skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} pants={life.look.body === "woman" ? "#1c1917" : life.look.accent} />
         </div>
       </div>
-      {open ? (
+      {who?.startsWith("staff:") || who?.startsWith("party:") ? (
+        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-30 rounded-3xl bg-white p-4 shadow-xl">
+          <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
+          <p className="text-sm text-[#5c6b82]">{who.startsWith("party:") ? `Out at ${spot.name}. Not a player account.` : `Works at ${spot.name}. Not a player account.`}</p>
+          <p className="mt-2 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-sm">{lines[0]?.text}</p>
+          <button type="button" onClick={() => setWho(null)} className="mt-3 w-full rounded-full bg-[#121212] py-2.5 text-sm font-bold text-white">
+            Close
+          </button>
+        </div>
+      ) : open ? (
         <TalkSheet
           person={`${open.name} · @${open.username}`}
           place={spot.name}
@@ -88,21 +151,16 @@ export function VenueFloor({
           onPay={(amount) => onPay(open.name, amount)}
         />
       ) : (
-        <div className="absolute inset-x-3 bottom-[5.5rem] z-30 rounded-3xl bg-white p-3 shadow-xl">
+        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
           <p className="font-semibold">
             {spot.emoji} {spot.name}
           </p>
           <p className="text-sm text-[#5c6b82]">{spot.blurb}</p>
-          <div className="mt-2 flex gap-2 overflow-auto">
-            {spot.actions.map((verb) => (
-              <button key={verb.id} type="button" onClick={() => onAct(verb)} className="shrink-0 rounded-full bg-[#f4f7fb] px-3 py-1.5 text-sm font-semibold">
-                {verb.label}
-              </button>
-            ))}
-            <button type="button" onClick={onHome} className="shrink-0 rounded-full bg-[#121212] px-3 py-1.5 text-sm font-semibold text-white">
-              Head home · ₵5
-            </button>
-          </div>
+          {party ? <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">Party on. Highlife, and the floor is already full.</p> : null}
+          <ActionDeck verbs={spot.actions} here focus={focus} onPay={(verb, offer) => onAct(payVerb(verb, offer))} />
+          <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
+            Head home · ₵5
+          </button>
         </div>
       )}
     </div>
@@ -117,6 +175,7 @@ function PersonTag({
   shirt,
   hair = "Bob",
   pants = "#1c1917",
+  walk = false,
   onClick,
 }: {
   name: string;
@@ -126,6 +185,7 @@ function PersonTag({
   shirt: string;
   hair?: string;
   pants?: string;
+  walk?: boolean;
   onClick?: () => void;
 }) {
   const body = (
@@ -136,7 +196,7 @@ function PersonTag({
   );
   if (!onClick) {
     return (
-      <div className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center" style={style}>
+      <div className={`pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center ${walk ? "transition-[left,top] duration-700 ease-out" : ""}`} style={style}>
         {body}
       </div>
     );
@@ -235,6 +295,33 @@ function TalkCard({ icon, title, meta, onClick }: { icon: string; title: string;
   );
 }
 
+function payVerb(verb: Verb, offer: Offer): Verb {
+  return { ...verb, id: offer.id, label: offer.label, detail: offer.detail, minutes: offer.minutes, cost: offer.cost, effects: offer.effects, outfit: offer.outfit, cloth: offer.cloth } as Verb & { outfit?: string; cloth?: string };
+}
+
+function staffFor(spot: Spot) {
+  const shore = BEACHES.has(spot.id);
+  const club = CLUB_IDS.has(spot.id);
+  return [
+    {
+      role: shore ? "Beach usher" : club ? "Door" : "Manager",
+      line: shore ? "The chairs are this way. The grill is already hot." : club ? "List is at the door. The night is inside." : `I run ${spot.name}. Tell me what you came for.`,
+      style: { left: "18%", top: "42%" },
+      skin: "#8d5a3b",
+      shirt: "#006B3F",
+      hair: "Bun",
+    },
+    {
+      role: shore || club ? "Floor" : "Cashier",
+      line: shore ? "Feet in the water is free. Kelewele is not." : club ? "The floor is open. Drinks are at the bar." : "I take the money. The price is on the menu.",
+      style: { left: "72%", top: "36%" },
+      skin: "#c68a62",
+      shirt: "#FCD116",
+      hair: "Afro",
+    },
+  ];
+}
+
 function sceneKind(spot: Spot): Kind {
   if (HOTELS.has(spot.id)) return "hotel";
   if (CLUB_IDS.has(spot.id)) return "club";
@@ -263,7 +350,7 @@ function youSay(talk: TalkKind, place: string) {
   return "Ei. I just got here.";
 }
 
-function VenueScene({ spot, night, kind }: { spot: Spot; night: boolean; kind: Kind }) {
+function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
   const indoor = kind === "hotel" || kind === "club" || kind === "tables" || kind === "hall" || kind === "gym";
   const floor = kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
   const wall = night ? "#3d4658" : "#f7f4ef";
@@ -284,6 +371,13 @@ function VenueScene({ spot, night, kind }: { spot: Spot; night: boolean; kind: K
           ...items,
         ]}
       />
+      {party ? (
+        <g>
+          <circle cx="180" cy="90" r="10" fill="#CE1126" opacity="0.85" />
+          <circle cx="560" cy="70" r="12" fill="#FCD116" opacity="0.9" />
+          <circle cx="400" cy="120" r="8" fill="#006B3F" />
+        </g>
+      ) : null}
       {kind === "shore" ? <ShoreDress /> : null}
       {kind === "garden" ? <GardenDress /> : null}
       {kind === "hotel" ? <Pool /> : null}

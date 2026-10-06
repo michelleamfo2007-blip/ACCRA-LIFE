@@ -248,7 +248,7 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
       aria-pressed={playing}
       aria-label={playing ? `Pause ${song.label}` : `Play ${song.label}`}
       onClick={() => (playing ? stop() : void start())}
-      className={`absolute right-3 top-[max(7.25rem,calc(env(safe-area-inset-top)+6.4rem))] z-30 flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold shadow-lg ${playing ? "bg-[#121212] text-white" : "bg-white text-[#121212]"}`}
+      className={`absolute right-2 top-[max(7.5rem,calc(env(safe-area-inset-top)+6.6rem))] z-30 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-lg sm:right-3 sm:px-3 sm:py-2 sm:text-sm ${playing ? "bg-[#121212] text-white" : "bg-white text-[#121212]"}`}
     >
       <span aria-hidden>{playing ? "♫" : "♪"}</span>
       <span>{playing ? song.label : "Play music"}</span>

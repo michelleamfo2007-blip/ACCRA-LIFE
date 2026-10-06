@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { IsoHuman } from "@/components/game/iso-human";
 import { MessagesApp, SettingsApp, openingUnread, type ChatMsg } from "@/components/game/phone-social";
 import {
+  CLOTHES,
+  CLOTHS,
   DREAMS,
   JOBS,
+  OUTFITS,
   careerLevel,
   cedis,
   accraDateLabel,
@@ -18,6 +22,7 @@ import {
   treatPerson,
   visitPerson,
   type Life,
+  type Look,
   type StepResult,
 } from "@/lib/game/world";
 
@@ -28,6 +33,7 @@ export function Handset({
   username,
   onClose,
   onWork,
+  onWear,
   onRepay,
   onLogout,
   onRide,
@@ -46,6 +52,7 @@ export function Handset({
   username: string;
   onClose: () => void;
   onWork: (jobId: string) => void;
+  onWear: (look: Look, cost?: number) => void;
   onRepay: () => void;
   onLogout: () => void;
   onRide: () => void;
@@ -248,7 +255,7 @@ export function Handset({
               {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy FM is on.", "Highlife, a gospel hour, and whoever just walked into the studio."]} /> : null}
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
               {app === "games" ? <NoteScreen title="Oware" onBack={() => setApp("home")} lines={["The board is on the stoop.", "A full game lands later. For now, the seeds are just sitting there, waiting on you."]} /> : null}
-              {app === "boutique" ? <NoteScreen title="Boutique" onBack={() => setApp("home")} lines={[`${life.look.outfit} · ${life.look.cloth}`, "New cloth shows up in the room you already wear. The market lanes have the rest."]} /> : null}
+              {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", life.inventory.includes("generator") ? "Your generator can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb or a generator is in the catalogue."]} /> : null}
               {app === "settings" ? (
                 <SettingsApp email={email} onBack={() => setApp("home")} onEmail={onEmail} onLogout={onLogout} onMenu={onClose} onNewLife={onNewLife} />
@@ -451,6 +458,48 @@ function ThreadRow({ name, preview, time, onClick }: { name: string; preview: st
         <span className="mt-0.5 block truncate text-sm text-[#5c6b82]">{preview}</span>
       </span>
     </button>
+  );
+}
+
+function BoutiqueScreen({ life, onBack, onWear }: { life: Life; onBack: () => void; onWear: (look: Look, cost?: number) => void }) {
+  const [wear, setWear] = useState("Everyday");
+  const picks = CLOTHES.filter((item) => {
+    if (wear === "Sleep") return item.outfit === "All-white" || item.outfit === "Classic";
+    if (wear === "Date night") return item.outfit === "Office" || item.outfit === "Classic";
+    if (wear === "Home") return item.outfit === "Casual" || item.outfit === "Classic";
+    return true;
+  });
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
+      <AppHeader title="Accra Boutique" onBack={onBack} />
+      <div className="relative grid h-40 place-items-center bg-gradient-to-b from-[#f3e4ff] to-[#fff6df]">
+        <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} className="h-36" />
+        <p className="absolute bottom-2 left-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold shadow">Your look today</p>
+      </div>
+      <div className="flex gap-2 overflow-auto px-3 py-2 text-xs font-semibold">
+        {["Everyday", "Home", "Sleep", "Date night"].map((item) => (
+          <button key={item} type="button" onClick={() => setWear(item)} className={`shrink-0 rounded-full px-3 py-1.5 ${wear === item ? "bg-[#CE1126] text-white" : "bg-white"}`}>
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 pb-4">
+        {picks.map((item) => (
+          <button key={item.id} type="button" onClick={() => onWear({ ...life.look, outfit: item.outfit ?? life.look.outfit, cloth: item.cloth ?? life.look.cloth }, item.cost)} className={`block w-full rounded-2xl bg-white px-4 py-3 text-left shadow-sm ${life.look.outfit === item.outfit ? "ring-2 ring-[#006B3F]" : ""}`}>
+            <span className="flex items-center justify-between gap-2">
+              <span className="font-semibold">{item.label}</span>
+              <span className="text-sm font-bold text-[#006B3F]">{cedis(item.cost)}</span>
+            </span>
+            <span className="mt-1 block text-xs text-[#5c6b82]">{item.detail} Wear it for {wear.toLowerCase()}.</span>
+          </button>
+        ))}
+        <div className="flex flex-wrap gap-2 pt-1">
+          {CLOTHS.map((cloth) => (
+            <button key={cloth} type="button" aria-label="Cloth colour" onClick={() => onWear({ ...life.look, cloth })} className={`h-8 w-8 rounded-full border-2 ${life.look.cloth === cloth ? "border-[#121212]" : "border-white"}`} style={{ background: cloth }} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

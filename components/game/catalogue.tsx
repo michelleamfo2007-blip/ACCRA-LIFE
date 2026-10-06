@@ -17,11 +17,13 @@ const MARKS: Record<ShopCategory, string> = {
 export function Catalogue({
   cash,
   owned,
+  stored = [],
   onBuy,
   onClose,
 }: {
   cash: number;
   owned: string[];
+  stored?: string[];
   onBuy: (id: string) => void;
   onClose: () => void;
 }) {
@@ -29,34 +31,38 @@ export function Catalogue({
   const items = SHOP.filter((item) => item.category === category);
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 flex max-h-[78vh] flex-col rounded-t-[28px] bg-[#f7f8fb] shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
+    <div className="absolute inset-x-0 bottom-0 z-40 flex max-h-[min(78vh,100dvh-4.5rem)] flex-col rounded-t-[28px] bg-[#f7f8fb] pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
       <div className="flex items-center justify-between px-5 pt-4">
         <h2 className="font-display text-2xl tracking-tight text-[#121212]">Catalogue</h2>
         <button type="button" onClick={onClose} className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-[#5c6b82] shadow-sm">
           Hide
         </button>
       </div>
-      <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
+      <div className="no-scrollbar relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:px-5">
         {SHOP_CATEGORIES.map((chip) => (
           <button
             key={chip.id}
             type="button"
             onClick={() => setCategory(chip.id)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold ${category === chip.id ? "bg-[#121212] text-white" : "bg-[#fff1c9] text-[#121212]"}`}
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold sm:px-3.5 ${category === chip.id ? "bg-[#121212] text-white" : "bg-[#fff1c9] text-[#121212]"}`}
           >
             {MARKS[chip.id]} {chip.label}
           </button>
         ))}
       </div>
-      <p className="px-5 pb-2 text-xs text-[#8b97ab]">Wallet {cedis(cash)}</p>
+      <p className="relative z-10 px-4 pb-2 pt-1 text-xs text-[#8b97ab] sm:px-5">Wallet {cedis(cash)}</p>
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
         {items.map((item) => {
           const have = !item.consume && owned.includes(item.id);
+          const parked = stored.includes(item.id);
           return (
             <button
               key={item.id}
               type="button"
-              onClick={() => onBuy(item.id)}
+              onClick={() => {
+                if (have && !parked) return;
+                onBuy(item.id);
+              }}
               className="rounded-[22px] bg-white p-3 text-left shadow-sm"
             >
               <span className="flex items-center justify-between text-[11px] text-[#8b97ab]">
@@ -67,7 +73,7 @@ export function Catalogue({
                 <ItemArt item={item} />
               </span>
               <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
-              <span className={`mt-1 block text-sm font-bold ${have ? "text-[#8b97ab]" : "text-[#006B3F]"}`}>{have ? "In the room" : cedis(item.price)}</span>
+              <span className={`mt-1 block text-sm font-bold ${have && !parked ? "text-[#8b97ab]" : "text-[#006B3F]"}`}>{parked ? "Put it out" : have ? "In the room" : cedis(item.price)}</span>
             </button>
           );
         })}

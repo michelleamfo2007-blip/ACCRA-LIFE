@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { Figure } from "@/components/game/low-poly-human";
-import { moodOf, type Life } from "@/lib/game/world";
+import { moodOf, SHOP, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
 const WALL = "#3e8f84";
 const WALL_DARK = "#357a70";
@@ -19,6 +19,11 @@ export function Apartment({
   sofaColor,
   onAsk,
   onGo,
+  pieces = [],
+  picked = null,
+  placing = false,
+  onPick,
+  onDrag,
 }: {
   life: Life;
   pos: { x: number; z: number };
@@ -29,6 +34,11 @@ export function Apartment({
   sofaColor: string | null;
   onAsk: () => void;
   onGo: (id: string) => void;
+  pieces?: Placed[];
+  picked?: string | null;
+  placing?: boolean;
+  onPick?: (id: string) => void;
+  onDrag?: (x: number, z: number) => void;
 }) {
   return (
     <Canvas
@@ -38,7 +48,7 @@ export function Apartment({
       resize={{ scroll: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
-      <CameraRig />
+      <CameraRig frozen={placing} />
       <color attach="background" args={[dark ? "#10131a" : "#d7e7f2"]} />
       <ambientLight intensity={dark ? 0.22 : 0.82} />
       <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : 0.95} />
@@ -58,6 +68,31 @@ export function Apartment({
       <Shower onGo={onGo} />
       <Radio onGo={onGo} />
       <WindowBars />
+      {placing && onDrag ? <PlacePad onDrag={onDrag} /> : null}
+      {pieces.map((piece) => {
+        const item = SHOP.find((entry) => entry.id === piece.id);
+        if (!item || item.consume || item.kind === "bed") return null;
+        const active = picked === piece.id;
+        return (
+          <group
+            key={piece.id}
+            position={[piece.x, 0, piece.z]}
+            rotation={[0, (piece.rot * Math.PI) / 2, 0]}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPick?.(piece.id);
+            }}
+          >
+            {active ? (
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+                <planeGeometry args={[1.25, 1.25]} />
+                <meshBasicMaterial color="#8fd18a" transparent opacity={0.9} />
+              </mesh>
+            ) : null}
+            <Prop item={item} />
+          </group>
+        );
+      })}
       <group position={[pos.x, 0, pos.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
           <circleGeometry args={[0.32, 16]} />
@@ -81,10 +116,12 @@ export function Apartment({
   );
 }
 
-function CameraRig() {
+function CameraRig({ frozen }: { frozen: boolean }) {
   const { camera, gl, size } = useThree();
   const pan = useRef({ x: 0, z: 0 });
   const zoom = useRef(1);
+  const frozenRef = useRef(frozen);
+  frozenRef.current = frozen;
   useEffect(() => {
     const el = gl.domElement;
     const pointers = new Map<number, { x: number; y: number }>();
@@ -99,6 +136,7 @@ function CameraRig() {
       const prev = pointers.get(event.pointerId);
       if (!prev) return;
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (frozenRef.current) return;
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -119,6 +157,7 @@ function CameraRig() {
       if (moved > 10) event.stopPropagation();
     };
     const wheel = (event: WheelEvent) => {
+      if (frozenRef.current) return;
       event.preventDefault();
       zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.62, 1.7);
     };
@@ -153,6 +192,92 @@ function CameraRig() {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function PlacePad({ onDrag }: { onDrag: (x: number, z: number) => void }) {
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.025, 0]}
+      onClick={(event) => {
+        event.stopPropagation();
+        onDrag(event.point.x, event.point.z);
+      }}
+      onPointerMove={(event) => {
+        if (event.buttons !== 1) return;
+        event.stopPropagation();
+        onDrag(event.point.x, event.point.z);
+      }}
+    >
+      <planeGeometry args={[10.5, 7.6]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function Prop({ item }: { item: ShopItem }) {
+  const color = item.color;
+  if (item.kind === "chair") {
+    return (
+      <group>
+        <Box color={color} position={[0, 0.28, 0]} size={[0.55, 0.12, 0.55]} />
+        <Box color={color} position={[0, 0.5, -0.22]} size={[0.55, 0.38, 0.1]} />
+        <Box color="#6b4428" position={[-0.2, 0.14, -0.18]} size={[0.06, 0.28, 0.06]} />
+        <Box color="#6b4428" position={[0.2, 0.14, -0.18]} size={[0.06, 0.28, 0.06]} />
+        <Box color="#6b4428" position={[-0.2, 0.14, 0.18]} size={[0.06, 0.28, 0.06]} />
+        <Box color="#6b4428" position={[0.2, 0.14, 0.18]} size={[0.06, 0.28, 0.06]} />
+      </group>
+    );
+  }
+  if (item.kind === "sofa") {
+    return (
+      <group>
+        <Box color={color} position={[0, 0.28, 0.04]} size={[1.55, 0.26, 0.58]} />
+        <Box color={color} position={[0, 0.52, -0.22]} size={[1.55, 0.38, 0.14]} />
+        <Box color={color} position={[-0.72, 0.42, 0.04]} size={[0.12, 0.32, 0.58]} />
+        <Box color={color} position={[0.72, 0.42, 0.04]} size={[0.12, 0.32, 0.58]} />
+      </group>
+    );
+  }
+  if (item.kind === "table") {
+    return (
+      <group>
+        <Box color={color} position={[0, 0.42, 0]} size={[1.15, 0.08, 0.7]} />
+        <Box color="#8a623c" position={[-0.46, 0.2, -0.26]} size={[0.06, 0.4, 0.06]} />
+        <Box color="#8a623c" position={[0.46, 0.2, -0.26]} size={[0.06, 0.4, 0.06]} />
+        <Box color="#8a623c" position={[-0.46, 0.2, 0.26]} size={[0.06, 0.4, 0.06]} />
+        <Box color="#8a623c" position={[0.46, 0.2, 0.26]} size={[0.06, 0.4, 0.06]} />
+        <Box color="#9aa7b2" position={[0.12, 0.5, 0]} size={[0.34, 0.04, 0.24]} />
+      </group>
+    );
+  }
+  if (item.kind === "fan") {
+    return (
+      <group>
+        <Box color="#9aa3ad" position={[0, 0.55, 0]} size={[0.06, 1.05, 0.06]} />
+        <Box color={color} position={[0, 1.05, 0.08]} size={[0.42, 0.42, 0.08]} />
+        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.22, 12]} />
+          <meshLambertMaterial color="#c5ced6" />
+        </mesh>
+      </group>
+    );
+  }
+  if (item.kind === "ac") {
+    return <Box color={color} position={[0, 0.7, 0]} size={[0.85, 0.28, 0.28]} />;
+  }
+  if (item.kind === "lamp") {
+    return (
+      <group>
+        <Box color="#d7dde4" position={[0, 0.35, 0]} size={[0.08, 0.7, 0.08]} />
+        <mesh position={[0, 0.78, 0]}>
+          <sphereGeometry args={[0.16, 10, 8]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+      </group>
+    );
+  }
+  return <Box color={color} position={[0, 0.28, 0]} size={[0.48, 0.48, 0.48]} />;
 }
 
 function Floor() {

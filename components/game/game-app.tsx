@@ -2,12 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { CityBoard } from "@/components/game/city-board";
+import { ActionDeck } from "@/components/game/action-deck";
+import { BOARDS, CityBoard } from "@/components/game/city-board";
 import { IsoHuman } from "@/components/game/iso-human";
 import { VenueFloor } from "@/components/game/venue-floor";
 import { Catalogue } from "@/components/game/catalogue";
 import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
+import { Payday, ShiftFloor, StreetRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
@@ -25,13 +27,16 @@ import {
   SKINS,
   SPOTS,
   TRAITS,
+  accraDateLabel,
   birthById,
   buyItem,
   cedis,
+  CLOTHES,
   clockLabel,
   freshLife,
   gemSpotId,
   giftCash,
+  layPiece,
   receiveCash,
   goTo,
   homeById,
@@ -39,14 +44,19 @@ import {
   realMinutes,
   huntGem,
   moodOf,
+  payOffer,
   passTime,
   questFor,
   RIDES,
   repayLoan,
   rollBirth,
   runVerb,
+  sellPiece,
+  storePiece,
   spotById,
   type Look,
+  type Offer,
+  type Ride,
   type Spot,
   type StepResult,
   type Verb,
@@ -84,6 +94,7 @@ export function GameApp() {
   const { session, accounts } = useSave();
   const me = accounts.find((account) => account.username === session) ?? null;
   const [auth, setAuth] = useState<"signup" | "login" | null>(null);
+  const [resumed, setResumed] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const cookieOk = useCookie();
 
@@ -127,8 +138,10 @@ export function GameApp() {
 
   return (
     <div className="game-root relative h-dvh overflow-hidden bg-[#fff6df] text-[#121212]">
-      {me?.life?.needs ? (
+      {me?.life?.needs && resumed ? (
         <Play account={me} flash={flash} />
+      ) : me?.life?.needs ? (
+        <Resume account={me} onContinue={() => setResumed(true)} />
       ) : me ? (
         <Creator account={me} flash={flash} />
       ) : auth ? (
@@ -169,6 +182,73 @@ function useCityCrowd() {
     };
   }, []);
   return crowd;
+}
+
+function Resume({ account, onContinue }: { account: Account; onContinue: () => void }) {
+  const life = account.life;
+  const [when, setWhen] = useState("");
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    setWhen(accraDateLabel(new Date()));
+  }, []);
+  if (!life) return null;
+  return (
+    <div className="relative h-dvh overflow-hidden bg-[#d7ecf8]">
+      <div className="pointer-events-none absolute inset-0">
+        <RoomView life={life} onAct={() => {}} onMap={() => {}} onAsk={() => {}} />
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-[#d7ecf8] via-[#d7ecf8]/80 to-transparent pb-16 pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
+        <p className="text-2xl" aria-hidden>
+          👑
+        </p>
+        <h1 className="font-display text-4xl tracking-tight">Accra Life</h1>
+        <p className="text-sm text-[#5c6b82]">Live your Accra story.</p>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 z-20 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto w-full max-w-md rounded-[28px] bg-white p-4 shadow-2xl">
+          <div className="flex items-center gap-3 px-1">
+            <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full" style={{ background: life.look.skin }}>
+              <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} className="h-16 translate-y-3" />
+            </span>
+            <div>
+              <p className="font-bold">{account.username}</p>
+              <p className="text-sm text-[#5c6b82]">
+                {when || "Accra"} · {cedis(life.cash)}
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onContinue} className="mt-4 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white">
+            Continue
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!armed) {
+                setArmed(true);
+                return;
+              }
+              const snap = parseRaw(getRaw());
+              writeSave(
+                snap.accounts.map((item) => (item.username === account.username ? { ...item, life: null } : item)),
+                snap.session,
+              );
+            }}
+            className="mt-2 w-full rounded-full bg-[#fff6df] py-3.5 font-bold"
+          >
+            {armed ? "Tap again. This clears the room and the cash." : "New life"}
+          </button>
+          <div className="mt-3 flex items-center justify-between px-1 text-sm">
+            <p className="text-[#5c6b82]">
+              Signed in as <span className="font-semibold text-[#121212]">@{account.username}</span>
+            </p>
+            <button type="button" className="font-semibold text-[#CE1126]" onClick={() => writeSave(parseRaw(getRaw()).accounts, null)}>
+              Log out
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Guest({
@@ -631,18 +711,33 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [tab, setTab] = useState<"home" | "buy" | "map" | "phone">("home");
   const [filter, setFilter] = useState<Spot["group"] | "all">("all");
   const [boards, setBoards] = useState(true);
+  const [ads, setAds] = useState<Record<string, string>>({});
+  const [boardId, setBoardId] = useState<string | null>(null);
+  const [adLine, setAdLine] = useState("");
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [needsOpen, setNeedsOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const [clean, setClean] = useState(false);
   const [doOpen, setDoOpen] = useState(false);
   const [rideId, setRideId] = useState<(typeof RIDES)[number]["id"]>("trotro");
-  const [enRoute, setEnRoute] = useState<string | null>(null);
+  const [trip, setTrip] = useState<{ name: string; placeId: string; ride: Ride } | null>(null);
+  const [shiftId, setShiftId] = useState<string | null>(null);
+  const [payday, setPayday] = useState<{ earned: number; performance: number } | null>(null);
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
   const [onAir, setOnAir] = useState(false);
+  const [errand, setErrand] = useState<{ spot: string; n: number } | null>(null);
+  const [menuFocus, setMenuFocus] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
   const herePeople = usePlacePeople(account.life?.where ?? null);
   const sheetPeople = usePlacePeople(placeId);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("accralife-boards");
+      if (saved) setAds(JSON.parse(saved) as Record<string, string>);
+    } catch {
+      setAds({});
+    }
+  }, []);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     tick();
@@ -703,6 +798,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           night={now != null && (accraHour(new Date(now)) >= 19 || accraHour(new Date(now)) < 5)}
           filter={filter}
           boards={boards}
+          ads={ads}
+          onBoard={setBoardId}
           onSelect={(id) => {
             const spot = spotById(id);
             if (spot.soon) {
@@ -710,19 +807,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               return;
             }
             if (id === "home") {
-              const snapshot = life;
-              setEnRoute("Home");
-              window.setTimeout(() => {
-                const result = goTo(snapshot, "home");
-                setEnRoute(null);
-                if (result.error) {
-                  flash(result.error);
-                  return;
-                }
-                apply(result);
-                setTab("home");
-                setPlaceId(null);
-              }, 1100);
+              setTrip({ name: "Home", placeId: "home", ride: RIDES[1] });
+              setPlaceId(null);
               return;
             }
             setPlaceId(id);
@@ -731,8 +817,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       ) : tab === "home" && life.where === "home" ? (
         <RoomView
           life={life}
+          errand={errand}
           onMap={() => setTab("map")}
           onAsk={() => setDoOpen(true)}
+          onLay={(id, x, z, rot) => apply(layPiece(life, id, x, z, rot))}
+          onStore={(id) => apply(storePiece(life, id))}
+          onSell={(id) => apply(sellPiece(life, id))}
           onAct={(id) => {
             const verb = HOME_VERBS.find((item) => item.id === id);
             if (verb) apply(runVerb(life, verb, "home"));
@@ -742,8 +832,9 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <VenueFloor
           life={life}
           people={herePeople}
-          onHome={() => apply(goTo(life, "home"))}
-          onAct={(verb, person) => apply(runVerb(life, verb, life.where, person))}
+          focus={menuFocus}
+          onHome={() => setTrip({ name: "Home", placeId: "home", ride: RIDES[1] })}
+          onAct={(verb, person) => apply(person ? runVerb(life, verb, life.where, person) : payOffer(life, verb, offerFrom(verb), life.where))}
           onPay={(person, amount) => paySomeone(person, amount)}
           onOpenChat={(username) => {
             setChatLaunch({ id: `user:${username}` });
@@ -759,29 +850,54 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         </button>
       ) : (
         <>
-          <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-full bg-white px-3 py-2 text-sm shadow-lg">
+          <div className="absolute left-2 right-2 top-[max(0.5rem,env(safe-area-inset-top))] z-20 flex items-center gap-1.5 sm:left-3 sm:right-3 sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-full bg-white px-2.5 py-1.5 text-xs shadow-lg sm:gap-2 sm:px-3 sm:py-2 sm:text-sm">
               <span>🌙</span>
               <span className="truncate font-semibold">{now == null ? "Accra" : clockLabel(undefined, new Date(now))}</span>
               <span className="text-[#c5ceda]">|</span>
-              <span>
-                {mood.emoji} {mood.label}
+              <span className="shrink-0">
+                {mood.emoji} <span className="hidden min-[420px]:inline">{mood.label}</span>
               </span>
-              <span className="shrink-0 text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
+              <span className="hidden shrink-0 text-[#5c6b82] min-[520px]:inline">{crowd.players.toLocaleString("en-GH")}</span>
               <span className="shrink-0 text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span>
             </div>
-            <button type="button" className="rounded-full bg-white px-3 py-2 text-sm font-bold shadow-lg" onClick={() => setWalletOpen(true)}>
+            <button type="button" className="shrink-0 rounded-full bg-white px-2.5 py-1.5 text-xs font-bold shadow-lg sm:px-3 sm:py-2 sm:text-sm" onClick={() => setWalletOpen(true)}>
               {cedis(life.cash)} +
             </button>
           </div>
-          <div className={`absolute left-3 z-20 max-w-[calc(100%-1.5rem)] space-y-2 ${tab === "map" ? "top-[max(8rem,calc(env(safe-area-inset-top)+7rem))]" : "top-[max(5rem,calc(env(safe-area-inset-top)+4.25rem))]"}`}>
+          <div className={`absolute left-2 z-20 max-w-[min(13rem,calc(100%-5.5rem))] space-y-2 sm:left-3 ${tab === "map" ? "top-[max(7.4rem,calc(env(safe-area-inset-top)+6.6rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
             <button
               type="button"
-              className="w-56 rounded-full bg-white px-3 py-2 text-left shadow"
+              className="w-full rounded-full bg-white px-3 py-2 text-left shadow"
               onClick={() => {
-                if (life.needs.hunger < 55 || life.needs.bladder < 35 || life.needs.energy < 40) {
+                const sendHome = (spot: string) => {
+                  if (life.where !== "home") {
+                    flash(spot === "cooler" ? "Head home. The cooler is there." : spot === "toilet" ? "The toilet is at home." : "The bed is at home.");
+                    return;
+                  }
                   setTab("home");
-                  flash(quest.detail);
+                  setErrand((current) => ({ spot, n: (current?.n ?? 0) + 1 }));
+                };
+                if (quest.title === "Eat something") {
+                  if (life.where === "home") {
+                    sendHome("cooler");
+                    return;
+                  }
+                  const food = spotById(life.where).actions.find((verb) => verb.tag === "food");
+                  setTab("home");
+                  if (food) {
+                    setMenuFocus(food.id);
+                    return;
+                  }
+                  flash("Head home. The cooler is there.");
+                  return;
+                }
+                if (quest.title === "Find a toilet") {
+                  sendHome("toilet");
+                  return;
+                }
+                if (quest.title === "Rest your body") {
+                  sendHome("bed");
                   return;
                 }
                 setTab("map");
@@ -790,17 +906,23 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <p className="text-sm font-bold">{quest.title}</p>
               <p className="text-xs text-[#5c6b82]">{quest.detail}</p>
             </button>
-            {life.dumsor ? <p className="w-56 rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
+            {life.gemDay !== Math.floor(life.minutes / 1440) && quest.title !== "Daily gem hunt" ? (
+              <button type="button" className="w-full rounded-full bg-white px-3 py-2 text-left shadow" onClick={() => setTab("map")}>
+                <p className="text-sm font-bold">Daily gem hunt</p>
+                <p className="text-xs text-[#5c6b82]">Look around {spotById(gemSpotId(life.minutes)).name}. Next find is {cedis(40)}.</p>
+              </button>
+            ) : null}
+            {life.dumsor ? <p className="w-full rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
             <button type="button" className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow" onClick={() => setClean(true)}>
               ⌃ Clean screen
             </button>
           </div>
           {tab === "map" ? (
-            <div className="no-scrollbar absolute left-3 right-3 top-[max(4.15rem,calc(env(safe-area-inset-top)+3.4rem))] z-30 flex justify-start gap-2 overflow-x-auto sm:justify-center">
+            <div className="no-scrollbar absolute left-2 right-2 top-[max(3.6rem,calc(env(safe-area-inset-top)+3.1rem))] z-30 flex justify-start gap-2 overflow-x-auto px-1 pb-1 sm:left-3 sm:right-3 sm:justify-center">
               <LayerChip active={filter === "all"} onClick={() => setFilter("all")}>
                 Free road
               </LayerChip>
-              <LayerChip active={boards} onClick={() => setBoards((open) => !open)}>
+              <LayerChip active={boards || Boolean(boardId)} onClick={() => setBoardId((current) => (current ? null : "oxford"))}>
                 Billboards
               </LayerChip>
               <LayerChip active={filter === "hang"} onClick={() => setFilter("hang")}>
@@ -814,11 +936,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               </LayerChip>
             </div>
           ) : null}
-          <button type="button" className="absolute bottom-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] left-3 z-20 flex items-center gap-2 rounded-full bg-white p-1.5 shadow-lg" onClick={() => setNeedsOpen(true)} aria-label="Open needs">
-            <span className="grid h-12 w-12 place-items-center rounded-full text-xl" style={{ background: life.look.skin }} aria-hidden>
+          <button type="button" className="absolute bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] left-2 z-20 flex items-center gap-2 rounded-full bg-white p-1 shadow-lg sm:bottom-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:left-3 sm:p-1.5" onClick={() => setNeedsOpen(true)} aria-label="Open needs">
+            <span className="grid h-10 w-10 place-items-center rounded-full text-lg sm:h-12 sm:w-12 sm:text-xl" style={{ background: life.look.skin }} aria-hidden>
               🙂
             </span>
-            <span className="grid grid-cols-3 gap-1 pr-2">
+            <span className="hidden grid-cols-3 gap-1 pr-2 sm:grid">
               <Need n={life.needs.hunger} icon="🍛" />
               <Need n={life.needs.energy} icon="⚡" />
               <Need n={life.needs.fun} icon="🎉" />
@@ -827,7 +949,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <Need n={life.needs.bladder} icon="🚽" />
             </span>
           </button>
-          <nav className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-1 rounded-full bg-white p-1.5 shadow-xl">
+          <nav className="absolute bottom-[max(0.6rem,env(safe-area-inset-bottom))] left-1/2 z-20 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-0.5 rounded-full bg-white p-1 shadow-xl sm:gap-1 sm:p-1.5">
             {(
               [
                 ["home", "Home"],
@@ -901,27 +1023,15 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onClose={() => setPlaceId(null)}
           onGo={() => {
             const ride = RIDES.find((item) => item.id === rideId) ?? RIDES[1];
-            const snapshot = life;
-            const id = place.id;
-            setEnRoute(place.name);
-            window.setTimeout(() => {
-              const result = goTo(snapshot, id, ride);
-              setEnRoute(null);
-              if (result.error) {
-                flash(result.error);
-                return;
-              }
-              apply(result);
-              setPlaceId(null);
-              setTab("home");
-            }, 1100);
+            setTrip({ name: place.name, placeId: place.id, ride });
+            setPlaceId(null);
           }}
           onAct={(verb) => {
             if (life.where !== place.id) {
               flash("Pick a ride, then go.");
               return;
             }
-            apply(runVerb(life, verb, place.id));
+            apply(payOffer(life, verb, offerFrom(verb), place.id));
           }}
           onGem={gemSpotId(life.minutes) === place.id ? () => apply(huntGem(life)) : null}
         />
@@ -937,13 +1047,103 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
         />
       ) : null}
-      {enRoute ? (
-        <div className="pointer-events-none absolute left-1/2 top-20 z-50 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-semibold shadow-lg">
-          On the way to {enRoute}…
-        </div>
+      {trip ? (
+        <StreetRide
+          life={life}
+          place={trip.name}
+          ride={trip.ride}
+          onBack={() => setTrip(null)}
+          onArrive={() => {
+            const going = trip;
+            setTrip(null);
+            const result = goTo(life, going.placeId, going.ride);
+            if (result.error) {
+              flash(result.error);
+              return;
+            }
+            apply(result);
+            setTab("home");
+          }}
+        />
       ) : null}
+      {shiftId ? (
+        <ShiftFloor
+          life={life}
+          title={JOBS.find((job) => job.id === shiftId)?.title ?? "Shift"}
+          place={spotById(JOBS.find((job) => job.id === shiftId)?.place ?? life.where).name}
+          minutes={JOBS.find((job) => job.id === shiftId)?.verb.minutes ?? 60}
+          onLeave={() => setShiftId(null)}
+          onDone={() => {
+            const job = JOBS.find((item) => item.id === shiftId);
+            setShiftId(null);
+            if (!job) return;
+            const before = life.cash;
+            const result = runVerb(life, job.verb, job.place);
+            if (result.error) {
+              flash(result.error);
+              return;
+            }
+            apply(result);
+            setPayday({ earned: result.life.cash - before, performance: Math.min(96, 40 + life.skills.career * 4) });
+            setTab("home");
+          }}
+        />
+      ) : null}
+      {payday ? <Payday earned={payday.earned} performance={payday.performance} onClose={() => setPayday(null)} /> : null}
       {tab === "buy" ? (
-        <Catalogue cash={life.cash} owned={life.inventory} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
+        <Catalogue cash={life.cash} owned={life.inventory} stored={life.stored ?? []} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
+      ) : null}
+      {boardId ? (
+        <div className="absolute inset-x-0 bottom-0 z-40 max-h-[min(78vh,100dvh-4.5rem)] overflow-auto rounded-t-[28px] bg-white p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)] sm:p-5">
+          <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d5dbe6]" />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl">Billboards</h2>
+              <p className="text-sm text-[#5c6b82]">Digital. Live when you pay. Your line stays on that board.</p>
+            </div>
+            <button type="button" onClick={() => setBoardId(null)} className="rounded-full bg-[#f4f7fb] px-3 py-1 text-sm font-semibold">
+              Hide
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {BOARDS.map((board) => (
+              <button key={board.id} type="button" onClick={() => setBoardId(board.id)} className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-3 text-left ${boardId === board.id ? "bg-[#fff4c2]" : "bg-[#f4f7fb]"}`}>
+                <span>
+                  <span className="block font-semibold">
+                    {board.road}
+                    {board.mega ? <span className="ml-2 rounded-full bg-[#121212] px-2 py-0.5 text-[10px] font-bold text-white">MEGA</span> : null}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-[#5c6b82]">{ads[board.id] ? `On air · ${ads[board.id]}` : board.text}</span>
+                </span>
+                <span className="shrink-0 text-sm font-bold text-[#006B3F]">{cedis(board.price)}</span>
+              </button>
+            ))}
+          </div>
+          <form
+            className="mt-3 space-y-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const board = BOARDS.find((item) => item.id === boardId);
+              const line = adLine.trim();
+              if (!board || !line) return;
+              if (life.cash < board.price) {
+                flash("Wallet light for that board.");
+                return;
+              }
+              const next = { ...ads, [board.id]: line.slice(0, 22) };
+              setAds(next);
+              localStorage.setItem("accralife-boards", JSON.stringify(next));
+              commitLife(account.username, { ...life, cash: life.cash - board.price });
+              setAdLine("");
+              flash(`${board.road} is carrying your line.`);
+            }}
+          >
+            <input value={adLine} onChange={(event) => setAdLine(event.target.value)} maxLength={22} placeholder="Your line, 22 letters" className="h-11 w-full rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
+            <button type="submit" className="w-full rounded-full bg-[#006B3F] py-3 font-bold text-white">
+              Put it on {BOARDS.find((item) => item.id === boardId)?.road} · {cedis(BOARDS.find((item) => item.id === boardId)?.price ?? 0)}
+            </button>
+          </form>
+        </div>
       ) : null}
       {tab === "phone" ? (
         <Handset
@@ -953,6 +1153,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onLaunchConsumed={() => setChatLaunch(null)}
           onAir={setOnAir}
           onClose={() => setTab("home")}
+          onWear={(look, cost) => {
+            if (!cost) {
+              commitLife(account.username, { ...life, look });
+              return;
+            }
+            const cut = CLOTHES.find((item) => item.outfit === look.outfit);
+            apply(
+              payOffer(
+                life,
+                { id: cut?.id ?? "cloth", label: look.outfit, detail: "From the boutique.", minutes: 15, cost, earn: 0, effects: { fun: 6 } },
+                { id: cut?.id ?? "cloth", label: look.outfit, detail: "From the boutique.", minutes: 15, cost, effects: { fun: 6 }, outfit: look.outfit, cloth: look.cloth },
+                life.where,
+              ),
+            );
+          }}
           onWork={(jobId) => {
             const job = JOBS.find((item) => item.id === jobId);
             if (!job) return;
@@ -960,7 +1175,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               flash("You are too tired to work. Sleep first.");
               return;
             }
-            apply(runVerb(life, job.verb, job.place));
+            setShiftId(jobId);
             setTab("home");
           }}
           onRepay={() => apply(repayLoan(life))}
@@ -1016,6 +1231,20 @@ function usePlacePeople(where: string | null) {
     };
   }, [where]);
   return people;
+}
+
+function offerFrom(verb: Verb): Offer {
+  const extra = verb as Verb & { outfit?: string; cloth?: string };
+  return {
+    id: verb.id,
+    label: verb.label,
+    detail: verb.detail,
+    minutes: verb.minutes,
+    cost: verb.cost,
+    effects: verb.effects,
+    outfit: extra.outfit,
+    cloth: extra.cloth,
+  };
 }
 
 function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; onSend: (name: string, amount: number) => string | null }) {
@@ -1126,7 +1355,7 @@ function PlaceSheet({
   const blurb = place.blurb.startsWith(`${area}.`) ? place.blurb.slice(area.length + 1).trim() : place.blurb;
   const [copied, setCopied] = useState(false);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[78vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
+    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[min(78vh,100dvh-4.5rem)] overflow-auto rounded-t-[28px] bg-white p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)] sm:p-5">
       <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d5dbe6]" />
       <div className="flex items-start gap-3">
         <span className="grid h-12 w-12 place-items-center rounded-full bg-[#f4f7fb] text-2xl">{place.emoji}</span>
@@ -1156,18 +1385,12 @@ function PlaceSheet({
         </svg>
         {copied ? "Link copied" : `Share a link to ${place.name}`}
       </button>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {place.actions.map((verb) => (
-          <button key={verb.id} type="button" onClick={() => onAct(verb)} className="rounded-full bg-[#f4f7fb] px-3 py-1.5 text-sm font-semibold">
-            {verbEmoji(verb)} {verb.label}
-          </button>
-        ))}
-        {onGem ? (
-          <button type="button" onClick={onGem} className="rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
-            Search for the gem
-          </button>
-        ) : null}
-      </div>
+      <ActionDeck verbs={place.actions} here={here} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
+      {onGem ? (
+        <button type="button" onClick={onGem} className="mt-2 rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
+          Search for the gem
+        </button>
+      ) : null}
       <p className="mt-4 text-sm font-semibold text-[#5c6b82]">Here now</p>
       {people.length ? null : <p className="mt-2 text-sm text-[#5c6b82]">Nobody else is here.</p>}
       <div className="mt-2 flex gap-3">

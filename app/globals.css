@@ -311,6 +311,105 @@ body {
   }
 }
 
+.street-world {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.street-sky {
+  position: absolute;
+  inset: 0 0 42% 0;
+  background: linear-gradient(#9fd4f2, #e7f6ff);
+}
+.street-road {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: 18%;
+  height: 46%;
+  background: #2a3038;
+  transform: perspective(420px) rotateX(48deg);
+  transform-origin: center bottom;
+  overflow: hidden;
+}
+.street-road::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46%;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, #f4efe6 0 28px, transparent 28px 52px);
+  animation: street-dash 0.7s linear infinite;
+}
+.street-walk {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22%;
+  background: #d9d3c7;
+}
+.street-car {
+  position: absolute;
+  top: 18%;
+  height: 28px;
+  width: 64px;
+  border-radius: 6px 10px 6px 6px;
+  background: #f0b429;
+  animation: street-traffic 3.4s linear infinite;
+}
+.street-car-b {
+  top: 58%;
+  background: #f7f4ef;
+  animation-duration: 4.6s;
+  animation-delay: -1.4s;
+}
+.street-car-c {
+  top: 36%;
+  width: 78px;
+  background: #006b3f;
+  animation-duration: 5.2s;
+  animation-delay: -2s;
+}
+.street-sim {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  height: 42%;
+  transform: translateX(-50%);
+}
+.street-side .street-sim {
+  left: 28%;
+  bottom: 16%;
+}
+.street-selfie .street-sim {
+  height: 58%;
+  bottom: 4%;
+}
+.street-side .street-road,
+.street-selfie .street-road {
+  transform: none;
+  height: 28%;
+  bottom: 24%;
+}
+@keyframes street-dash {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-52px);
+  }
+}
+@keyframes street-traffic {
+  from {
+    left: 110%;
+  }
+  to {
+    left: -30%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
