@@ -1,8 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
+import type { FlightPhase } from "@/components/game/flight-outside";
 import { cedis, type Life, type Ride } from "@/lib/game/world";
+
+const FlightOutside = dynamic(() => import("@/components/game/flight-outside").then((mod) => mod.FlightOutside), { ssr: false });
 
 const LINES = [
   "The beach road is bright. Palms on one side, the Gulf on the other.",
@@ -316,6 +320,7 @@ export function FlightRide({
   const [gone, setGone] = useState(0);
   const arriveRef = useRef(onArrive);
   const finished = useRef(false);
+  const lockedAir = useRef(false);
   arriveRef.current = onArrive;
 
   function finish() {
@@ -326,7 +331,7 @@ export function FlightRide({
 
   useEffect(() => {
     const started = Date.now();
-    const span = 12000;
+    const span = 14000;
     const id = window.setInterval(() => {
       const next = Math.min(1, (Date.now() - started) / span);
       setGone(next);
@@ -345,21 +350,19 @@ export function FlightRide({
   const left = Math.max(0, Math.ceil(minutes * (1 - gone)));
   const code = from.slice(0, 3).toUpperCase();
   const dest = to.slice(0, 3).toUpperCase();
-  const phase = beat.phase;
+  const phase = beat.phase as FlightPhase;
   const air = phase === "climb" || phase === "cruise" || phase === "descent";
+
+  useEffect(() => {
+    if (air && !lockedAir.current) {
+      lockedAir.current = true;
+      setCam("outside");
+    }
+  }, [air]);
 
   return (
     <div className="absolute inset-0 z-50 overflow-hidden bg-[#9ec8e8]">
-      {cam === "outside" ? (
-        <div className={`flight-sky ${air ? "flight-sky-air" : "flight-sky-ground"}`}>
-          <div className="flight-horizon" />
-          {air ? <div className="flight-fields" /> : <div className="flight-tarmac" />}
-          <div className={`flight-plane flight-plane-${phase}`}>
-            <Airliner />
-          </div>
-          {phase === "boarding" || phase === "taxi" ? <div className="flight-bridge" /> : null}
-        </div>
-      ) : null}
+      {cam === "outside" ? <FlightOutside phase={phase} progress={gone} /> : null}
       {cam === "cabin" ? <CabinView seat={false} /> : null}
       {cam === "seat" ? <CabinView seat /> : null}
 
@@ -382,7 +385,7 @@ export function FlightRide({
         </div>
         <p className="mt-2 text-xs font-semibold text-white/90">
           {phase === "boarding"
-            ? `Boarding · gate 2 · ${Math.max(1, Math.ceil((0.12 - gone) * 12))}s`
+            ? `Boarding · gate 2 · ${Math.max(1, Math.ceil((0.12 - gone) * 14))}s`
             : phase === "land"
               ? "Arrived"
               : `${left} min to landing`}
@@ -416,49 +419,53 @@ export function FlightRide({
   );
 }
 
-function Airliner() {
-  return (
-    <svg viewBox="0 0 280 90" className="h-full w-full drop-shadow-xl">
-      <ellipse cx="150" cy="48" rx="110" ry="18" fill="#f8fafc" />
-      <path d="M40 48 L8 58 L8 42 Z" fill="#f8fafc" />
-      <rect x="70" y="38" width="120" height="6" rx="2" fill="#006B3F" />
-      <text x="90" y="36" fill="#006B3F" fontSize="10" fontWeight="700" fontFamily="ui-sans-serif">
-        ACCRA LIFE AIR
-      </text>
-      {[78, 92, 106, 120, 134, 148, 162].map((x) => (
-        <rect key={x} x={x} y="46" width="8" height="5" rx="1" fill="#7ec8ea" />
-      ))}
-      <path d="M95 48 L145 20 L165 20 L130 48 Z" fill="#e2e8f0" />
-      <path d="M95 48 L145 76 L165 76 L130 48 Z" fill="#cbd5e1" />
-      <path d="M220 30 L248 18 L255 22 L230 48 Z" fill="#006B3F" />
-      <circle cx="238" cy="28" r="7" fill="#FCD116" />
-      <text x="238" y="31" textAnchor="middle" fill="#121212" fontSize="7" fontWeight="800">
-        AL
-      </text>
-      <rect x="210" y="54" width="10" height="14" rx="2" fill="#94a3b8" />
-      <rect x="120" y="54" width="10" height="14" rx="2" fill="#94a3b8" />
-    </svg>
-  );
-}
+const CABIN_PAX = [
+  { skin: "#5c3a24", shirt: "#CE1126", hair: "#1a1a1a" },
+  { skin: "#8d5a3b", shirt: "#FCD116", hair: "#2b2118" },
+  { skin: "#3f2a1d", shirt: "#006B3F", hair: "#111" },
+  { skin: "#6b4423", shirt: "#1d4ed8", hair: "#1a1a1a" },
+  { skin: "#a0673a", shirt: "#ec4899", hair: "#3b2a1a" },
+  { skin: "#4a2f1c", shirt: "#f97316", hair: "#111" },
+];
 
 function CabinView({ seat }: { seat: boolean }) {
   return (
-    <div className={`flight-cabin ${seat ? "flight-cabin-seat" : ""}`}>
-      <div className="flight-cabin-ceiling" />
-      <div className="flight-cabin-aisle">
-        {Array.from({ length: 8 }, (_, row) => (
-          <div key={row} className="flight-cabin-row">
-            <span className="flight-seat" />
-            <span className="flight-seat" />
-            <span className="flight-aisle-gap" />
-            <span className="flight-seat flight-seat-you" />
-            <span className="flight-seat" />
-          </div>
-        ))}
-        <div className="flight-cabin-trolley" aria-hidden>
+    <div className={`flight-cabin-3d ${seat ? "flight-cabin-3d-seat" : ""}`}>
+      <div className="flight-cabin-3d-tunnel">
+        <div className="flight-cabin-3d-ceiling" />
+        <div className="flight-cabin-3d-floor" />
+        {Array.from({ length: 6 }, (_, row) => {
+          const pax = CABIN_PAX[row % CABIN_PAX.length];
+          const depth = 8 + row * 12;
+          return (
+            <div key={row} className="flight-cabin-3d-row" style={{ bottom: `${depth}%`, transform: `translateX(-50%) scale(${1 - row * 0.08})` }}>
+              <span className="flight-cabin-3d-bench">
+                <span className="flight-cabin-3d-pax">
+                  <IsoHuman skin={pax.skin} shirt={pax.shirt} hair={pax.hair} cloth={pax.shirt} pose="idle" face={1} className="h-full" />
+                </span>
+              </span>
+              <span className="flight-cabin-3d-gap" />
+              <span className={`flight-cabin-3d-bench ${row === 1 ? "flight-cabin-3d-you" : ""}`}>
+                {row === 1 ? (
+                  <span className="flight-cabin-3d-pax">
+                    <IsoHuman skin="#8d5a3b" shirt="#e7c85a" hair="#2b2118" cloth="#e7c85a" pose="idle" face={-1} className="h-full" />
+                  </span>
+                ) : (
+                  <span className="flight-cabin-3d-pax">
+                    <IsoHuman skin={CABIN_PAX[(row + 2) % CABIN_PAX.length].skin} shirt={CABIN_PAX[(row + 2) % CABIN_PAX.length].shirt} hair={CABIN_PAX[(row + 2) % CABIN_PAX.length].hair} cloth={CABIN_PAX[(row + 2) % CABIN_PAX.length].shirt} pose="idle" face={-1} className="h-full" />
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+        <div className="flight-cabin-3d-crew" aria-hidden>
+          <IsoHuman skin="#5c3a24" shirt="#006B3F" hair="#1a1a1a" cloth="#006B3F" pose="walk" face={1} className="h-full" />
+        </div>
+        <div className="flight-cabin-3d-cart" aria-hidden>
           🧳
         </div>
-        <p className="flight-cabin-wc">WC</p>
+        <p className="flight-cabin-3d-wc">WC</p>
       </div>
     </div>
   );
