@@ -440,7 +440,6 @@ function Guest({
   const [boards, setBoards] = useState(true);
   const [spotId, setSpotId] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState(false);
-  const crowd = useCityCrowd();
   const headline = useCityHeadline();
   const spot = SPOTS.find((item) => item.id === spotId) ?? null;
 
@@ -460,7 +459,7 @@ function Guest({
           setSpotId(id);
         }}
       />
-      <TopBrand crowd={crowd} onSignup={() => onAuth("signup")} onLogin={() => onAuth("login")} />
+      <TopBrand onSignup={() => onAuth("signup")} onLogin={() => onAuth("login")} />
       <div className="absolute left-1/2 top-[4.6rem] z-20 flex max-w-[96vw] -translate-x-1/2 flex-wrap justify-center gap-2">
         <LayerChip active={filter === "all"} onClick={() => setFilter("all")}>
           Free road
@@ -497,7 +496,7 @@ function Guest({
                 <span key={color} className="h-8 w-8 rounded-full border-2 border-white" style={{ background: color }} />
               ))}
             </div>
-            <p className="text-sm font-semibold">{crowd.online.toLocaleString("en-GH")} Accra people in the game · free</p>
+            <p className="text-sm font-semibold">Live your Accra story · free</p>
           </div>
           <div className="grid grid-cols-[1.4fr_.8fr] gap-2">
             <button type="button" onClick={() => onAuth("signup")} className="rounded-full bg-[#006B3F] py-3.5 text-base font-bold text-white">
@@ -1169,7 +1168,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <span className="shrink-0">
                 {mood.emoji} <span className="hidden min-[420px]:inline">{mood.label}</span>
               </span>
-              <span className="shrink-0 text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} in the game</span>
+              {crowd.online > 0 ? <span className="shrink-0 text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span> : null}
             </div>
             <button type="button" className="shrink-0 rounded-full bg-white px-2.5 py-1.5 text-xs font-bold shadow-lg sm:px-3 sm:py-2 sm:text-sm" onClick={() => setWalletOpen(true)}>
               {cedis(life.cash)} +
@@ -2043,11 +2042,10 @@ function tagsFor(verb: Verb) {
   return tags;
 }
 
-function TopBrand({ crowd, onSignup, onLogin }: { crowd: { players: number; online: number }; onSignup: () => void; onLogin: () => void }) {
+function TopBrand({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => void }) {
   return (
     <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg">
       <span className="font-display text-lg tracking-tight">Accra Life</span>
-      <span className="text-xs font-semibold text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} in the game</span>
       <span className="ml-auto flex gap-2">
         <button type="button" onClick={onSignup} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-sm font-bold text-white">
           Sign up

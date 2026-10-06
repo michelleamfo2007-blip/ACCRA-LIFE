@@ -183,12 +183,19 @@ export async function maybeTopUpJoinWallets() {
 
 export async function crowdCounts() {
   const client = db();
-  if (!client) return { players: 0, online: 0 };
+  if (!client) return { players: 0, online: 0, signedUp: 0 };
   void maybeTopUpJoinWallets();
   const { count: players } = await client.from("players").select("*", { count: "exact", head: true });
-  // Public "online" is total signed-up players for now — makes Accra look busy and pulls people in.
   const signedUp = players ?? 0;
-  return { players: signedUp, online: signedUp };
+  const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  const filtered = await client.from("players").select("*", { count: "exact", head: true }).filter("life->>seen", "gte", since);
+  if (!filtered.error) return { players: signedUp, online: filtered.count ?? 0, signedUp };
+  const { data } = await client.from("players").select("life");
+  const online = (data ?? []).filter((row) => {
+    const seen = (row as { life?: { seen?: string } }).life?.seen;
+    return typeof seen === "string" && seen >= since;
+  }).length;
+  return { players: signedUp, online, signedUp };
 }
 
 export type AdminPlayer = {

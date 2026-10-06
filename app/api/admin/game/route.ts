@@ -20,7 +20,7 @@ export async function GET() {
     players,
     stats: {
       players: crowd.players || players.length,
-      online: crowd.online || online,
+      online,
       withLife,
       houses: withLife,
     },
