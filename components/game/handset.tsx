@@ -358,8 +358,24 @@ export function Handset({
                     }
                     if (kind === "pay") {
                       const value = Math.round(amount ?? 0);
+                      if (!thread.startsWith("user:")) {
+                        pushChat(thread, { who: "note", text: "Pay a real account by username.", time });
+                        return;
+                      }
+                      const other = thread.slice(5);
                       void Promise.resolve(onPay(name, handle, value)).then((error) => {
-                        pushChat(thread, { who: "note", text: error ?? `You sent ${handle} ${cedis(value)}`, time });
+                        if (error) {
+                          pushChat(thread, { who: "note", text: error, time });
+                          return;
+                        }
+                        pushChat(thread, { who: "me", text: `💸 You sent ${cedis(value)}`, time });
+                        // Pull the saved MoMo line from the server so it does not vanish on refresh.
+                        void fetch(`/api/live/chat?with=${encodeURIComponent(other)}`)
+                          .then((response) => response.json())
+                          .then((payload: { messages?: ChatMsg[] }) => {
+                            if (Array.isArray(payload.messages)) setChats((current) => ({ ...current, [thread]: payload.messages ?? [] }));
+                          })
+                          .catch(() => undefined);
                       });
                       return;
                     }

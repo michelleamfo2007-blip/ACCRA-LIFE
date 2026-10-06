@@ -423,5 +423,22 @@ export async function sendMoney(from: string, to: string, amount: number, latest
     await savePlayer({ ...sender, life: { ...current, ...keep } });
     return { error: "MoMo did not go through." };
   }
+  await postMoneyChat(from, to, value);
   return { life: sent, note: `@${to} has ${cedis(value)} in their wallet.` };
+}
+
+async function postMoneyChat(from: string, to: string, amount: number) {
+  const time = accraTime();
+  const at = new Date().toISOString();
+  const sender = await readPlayer(from);
+  const recipient = await readPlayer(to);
+  if (!sender || !recipient) return;
+  const senderBag = mailBag(sender.life);
+  const recipientBag = mailBag(recipient.life);
+  const outText = `💸 You sent ${cedis(amount)}`;
+  const inText = `💸 @${from} sent you ${cedis(amount)}`;
+  senderBag[to] = [...(senderBag[to] ?? []), { who: "me" as const, text: outText, time, at }].slice(-80);
+  recipientBag[from] = [...(recipientBag[from] ?? []), { who: "them" as const, text: inText, time, at }].slice(-80);
+  await keepChats(from, senderBag);
+  await keepChats(to, recipientBag);
 }

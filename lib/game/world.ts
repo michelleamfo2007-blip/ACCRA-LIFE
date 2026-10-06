@@ -1777,14 +1777,21 @@ export function giftCash(life: Life, name: string, amount: number): StepResult {
   next.cash -= value;
   next.needs.social = clampNeed(next.needs.social + 4);
   bumpRelation(next, name, 6);
-  pushLog(next, `You sent ${cedis(value)} to ${handleOf(name)}.`);
-  return { life: next, notes: [`${handleOf(name)} has the ${cedis(value)}.`] };
+  const handle = handleOf(name);
+  const id = `momo-local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  next.transfers = [...(next.transfers ?? []), { id, delta: -value, note: `You sent ${cedis(value)} to ${handle}.` }].slice(-80);
+  next.seenTransfers = [...new Set([...(next.seenTransfers ?? []), id])].slice(-80);
+  pushLog(next, `You sent ${cedis(value)} to ${handle}.`);
+  return { life: next, notes: [`${handle} has the ${cedis(value)}.`] };
 }
 
 export function receiveCash(life: Life, from: string, amount: number) {
   const next = clone(life);
-  next.cash += Math.round(amount);
-  pushLog(next, `${from} sent you ${cedis(amount)}.`);
+  const value = Math.round(amount);
+  next.cash += value;
+  const id = `momo-local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  next.transfers = [...(next.transfers ?? []), { id, delta: value, note: `${from} sent you ${cedis(value)}.` }].slice(-80);
+  pushLog(next, `${from} sent you ${cedis(value)}.`);
   return next;
 }
 

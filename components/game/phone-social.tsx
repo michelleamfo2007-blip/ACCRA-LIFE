@@ -106,9 +106,13 @@ function Inbox({
   const [groupPeople, setGroupPeople] = useState("");
   const [making, setMaking] = useState(false);
   const [notice, setNotice] = useState("");
-  const [found, setFound] = useState<{ username: string; name: string }[]>([]);
-  const [previews, setPreviews] = useState<Record<string, ChatMsg>>({});
+  const [found, setFound] = useState<{ username: string; name: string }[]>(() => peopleFromMoney(life));
+  const [previews, setPreviews] = useState<Record<string, ChatMsg>>(() => previewsFromMoney(life));
   const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setFound((current) => mergePeople(current, peopleFromMoney(life)));
+    setPreviews((current) => ({ ...previewsFromMoney(life), ...current }));
+  }, [life]);
   useEffect(() => {
     let stop = false;
     const load = () => {
@@ -125,11 +129,12 @@ function Inbox({
             const known = new Set(threads.map((thread) => thread.username));
             return [...threads.map((thread) => ({ username: thread.username, name: thread.name })), ...current.filter((person) => !known.has(person.username))];
           });
-          setPreviews(
-            Object.fromEntries(
+          setPreviews((current) => ({
+            ...current,
+            ...Object.fromEntries(
               threads.filter((thread) => thread.last).map((thread) => [`user:${thread.username}`, { who: thread.mine ? "me" : "them", text: thread.last ?? "", time: thread.time ?? "" } as ChatMsg]),
             ),
-          );
+          }));
           setReady(true);
         })
         .catch(() => {
@@ -627,6 +632,42 @@ function peopleBook(players: { username: string; name: string }[]) {
     seen.add(player.username);
     return [{ id: `user:${player.username}`, name: player.name, handle: `@${player.username}` }];
   });
+}
+
+function mergePeople(current: { username: string; name: string }[], extra: { username: string; name: string }[]) {
+  const seen = new Set(current.map((person) => person.username));
+  return [...current, ...extra.filter((person) => !seen.has(person.username))];
+}
+
+function peopleFromMoney(life: Life) {
+  const seen = new Set<string>();
+  const out: { username: string; name: string }[] = [];
+  for (const note of life.transfers ?? []) {
+    const match = note.note.match(/@([a-z0-9_]{3,16})/i);
+    if (!match) continue;
+    const username = match[1].toLowerCase();
+    if (seen.has(username)) continue;
+    seen.add(username);
+    out.push({ username, name: username });
+  }
+  return out;
+}
+
+function previewsFromMoney(life: Life) {
+  const out: Record<string, ChatMsg> = {};
+  for (const note of [...(life.transfers ?? [])].reverse()) {
+    const match = note.note.match(/@([a-z0-9_]{3,16})/i);
+    if (!match) continue;
+    const id = `user:${match[1].toLowerCase()}`;
+    if (out[id]) continue;
+    const mine = note.delta < 0;
+    out[id] = {
+      who: mine ? "me" : "them",
+      text: mine ? `💸 You sent ${cedis(Math.abs(note.delta))}` : `💸 @${match[1].toLowerCase()} sent you ${cedis(Math.abs(note.delta))}`,
+      time: "",
+    };
+  }
+  return out;
 }
 
 function resolvePerson(id: string, players: { username: string; name: string }[]) {
