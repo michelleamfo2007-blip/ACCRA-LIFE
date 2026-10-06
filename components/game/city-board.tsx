@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, memo, type PointerEvent as ReactPointerEvent } from "react";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -66,19 +66,29 @@ export function CityBoard({
   onBoard?: (id: string) => void;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
   const floorZ = useRef(MIN_Z);
   const size = useRef({ w: 0, h: 0 });
-  const [view, setView] = useState<View>({ x: -160, y: -40, z: 0.72 });
-  const viewRef = useRef(view);
+  const viewRef = useRef<View>({ x: -160, y: -40, z: 0.72 });
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const pinch = useRef<{ dist: number; z: number; view: View } | null>(null);
   const points = useRef(new Map<number, { x: number; y: number }>());
   const moved = useRef(false);
+  const frame = useRef(0);
 
-  function show(next: View) {
+  function paint(next: View) {
     const clamped = clampView(next, size.current.w, size.current.h);
     viewRef.current = clamped;
-    setView(clamped);
+    const node = worldRef.current;
+    if (node) node.style.transform = `translate(${clamped.x}px, ${clamped.y}px) scale(${clamped.z})`;
+  }
+
+  function show(next: View) {
+    if (frame.current) cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      paint(next);
+    });
   }
 
   useEffect(() => {
@@ -96,10 +106,10 @@ export function CityBoard({
         const z = close ? 0.95 : 0.72;
         const focusX = close ? 860 : 1000;
         const focusY = close ? 560 : 680;
-        show({ z, x: rect.width / 2 - focusX * z, y: rect.height / 2 - focusY * z });
+        paint({ z, x: rect.width / 2 - focusX * z, y: rect.height / 2 - focusY * z });
         return;
       }
-      show({ ...viewRef.current, z: Math.max(floorZ.current, viewRef.current.z) });
+      paint({ ...viewRef.current, z: Math.max(floorZ.current, viewRef.current.z) });
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -128,13 +138,13 @@ export function CityBoard({
 
   function zoomBy(factor: number) {
     const { w, h } = size.current;
-    show(zoomToward(viewRef.current, w / 2, h / 2, viewRef.current.z * factor, floorZ.current));
+    paint(zoomToward(viewRef.current, w / 2, h / 2, viewRef.current.z * factor, floorZ.current));
   }
 
   function zoomOutAll() {
     const { w, h } = size.current;
     const z = floorZ.current;
-    show({ z, x: (w - WORLD.w * z) / 2, y: (h - WORLD.h * z) / 2 });
+    paint({ z, x: (w - WORLD.w * z) / 2, y: (h - WORLD.h * z) / 2 });
   }
 
   function release(event: ReactPointerEvent<HTMLDivElement>) {
@@ -146,6 +156,8 @@ export function CityBoard({
       drag.current = { x: left.x, y: left.y, px: viewRef.current.x, py: viewRef.current.y };
     }
   }
+
+  const start = viewRef.current;
 
   return (
     <div
@@ -180,7 +192,7 @@ export function CityBoard({
           const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
           const midX = (pair[0].x + pair[1].x) / 2 - rect.left;
           const midY = (pair[0].y + pair[1].y) / 2 - rect.top;
-          show(zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current));
+          paint(zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current));
           return;
         }
         if (!drag.current) return;
@@ -193,7 +205,7 @@ export function CityBoard({
             event.currentTarget.setPointerCapture(event.pointerId);
           } catch {}
         }
-        show({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
+        paint({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
       }}
       onPointerUp={release}
       onPointerCancel={release}
@@ -209,69 +221,15 @@ export function CityBoard({
       onDoubleClick={(event) => {
         if ((event.target as Element).closest("button, [data-board]")) return;
         const rect = event.currentTarget.getBoundingClientRect();
-        show(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current));
+        paint(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current));
       }}
     >
-      <div className="absolute left-0 top-0 origin-top-left" style={{ width: WORLD.w, height: WORLD.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
-        <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="h-full w-full">
-          <rect width={WORLD.w} height={WORLD.h} fill="#d7ebbc" />
-          <Hills />
-          <path d="M0 1196 C 500 1172, 1000 1212, 1500 1180 C 1800 1164, 2000 1192, 2000 1192 V 1400 H 0 Z" fill="#f4e3c4" />
-          <path d="M0 1296 C 500 1272, 1000 1312, 1500 1280 C 1800 1264, 2000 1292, 2000 1292 V 1400 H 0 Z" fill="#b9e4f5" />
-          <path d="M0 1336 C 500 1316, 1000 1352, 1500 1320 C 1800 1306, 2000 1332, 2000 1332 V 1400 H 0 Z" fill="#8fd0ea" />
-          <ellipse cx="500" cy="1048" rx="168" ry="70" fill="#7ec4e4" />
-          <ellipse cx="500" cy="1048" rx="118" ry="44" fill="#c5e9f6" />
-          <ellipse cx="960" cy="760" rx="130" ry="78" fill="#c5e2a4" />
-          {ROADS_Y.map((y) => (
-            <g key={`hy-${y}`}>
-              <rect x="36" y={y - 13} width="1928" height="26" rx="8" fill="#e7ebf2" />
-              <line x1="52" y1={y} x2="1948" y2={y} stroke="white" strokeWidth="2" strokeDasharray="16 14" />
-            </g>
-          ))}
-          {ROADS_X.map((x) => (
-            <g key={`vx-${x}`}>
-              <rect x={x - 13} y="28" width="26" height="1145" rx="8" fill="#e7ebf2" />
-              <line x1={x} y1="44" x2={x} y2="1168" stroke="white" strokeWidth="2" strokeDasharray="16 14" />
-            </g>
-          ))}
-          <Highway x={0} label="N1 WEST · CAPE COAST · ELMINA · KAKUM" />
-          <Highway x={1904} label="MOTORWAY EAST · SHAI HILLS · AKOSOMBO · ADA" />
-          <circle cx="780" cy="620" r="36" fill="#e7ebf2" />
-          <circle cx="780" cy="620" r="16" fill="#b7d48c" />
-          <rect x="40" y="458" width="230" height="14" rx="2" fill="#d5dae3" />
-          <line x1="52" y1="465" x2="258" y2="465" stroke="white" strokeDasharray="12 8" />
-          {CITY.map((building) => (
-            <Building key={`${building.x}-${building.y}`} building={building} night={night} />
-          ))}
-          {TREES.map((tree) => (
-            <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} />
-          ))}
-          {boards
-            ? BOARDS.map((board) => (
-                <Board
-                  key={board.id}
-                  x={board.x}
-                  y={board.y}
-                  fill={board.fill}
-                  text={ads[board.id] || board.text}
-                  mega={board.mega}
-                  onOpen={onBoard ? () => onBoard(board.id) : undefined}
-                />
-              ))
-            : null}
-          {AREAS.map(([x, y, label]) => (
-            <text key={String(label)} x={Number(x)} y={Number(y)} textAnchor="middle" fill="white" fillOpacity="0.92" fontSize="20" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
-              {label}
-            </text>
-          ))}
-          <text x="500" y="1054" textAnchor="middle" fill="white" fontSize="16" letterSpacing="3" fontFamily="ui-sans-serif">
-            KORLE
-          </text>
-          <text x="1000" y="1364" textAnchor="middle" fill="white" fontSize="22" letterSpacing="6" fontFamily="ui-sans-serif">
-            GULF OF GUINEA
-          </text>
-          {night ? <rect width={WORLD.w} height={WORLD.h} fill="rgba(10,16,40,.16)" /> : null}
-        </svg>
+      <div
+        ref={worldRef}
+        className="absolute left-0 top-0 origin-top-left will-change-transform"
+        style={{ width: WORLD.w, height: WORLD.h, transform: `translate(${start.x}px, ${start.y}px) scale(${start.z})` }}
+      >
+        <CityArt night={night} boards={boards} ads={ads} onBoard={onBoard} />
         {SPOTS.map((spot) => {
           const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
           const open = active === spot.id;
@@ -343,6 +301,80 @@ function roll(n: number) {
   return Math.abs((n * 1103515245 + 12345) % 997);
 }
 
+const CityArt = memo(function CityArt({
+  night,
+  boards,
+  ads,
+  onBoard,
+}: {
+  night: boolean;
+  boards: boolean;
+  ads: Record<string, string>;
+  onBoard?: (id: string) => void;
+}) {
+  return (
+    <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="h-full w-full">
+      <rect width={WORLD.w} height={WORLD.h} fill="#d7ebbc" />
+      <Hills />
+      <path d="M0 1196 C 500 1172, 1000 1212, 1500 1180 C 1800 1164, 2000 1192, 2000 1192 V 1400 H 0 Z" fill="#f4e3c4" />
+      <path d="M0 1296 C 500 1272, 1000 1312, 1500 1280 C 1800 1264, 2000 1292, 2000 1292 V 1400 H 0 Z" fill="#b9e4f5" />
+      <path d="M0 1336 C 500 1316, 1000 1352, 1500 1320 C 1800 1306, 2000 1332, 2000 1332 V 1400 H 0 Z" fill="#8fd0ea" />
+      <ellipse cx="500" cy="1048" rx="168" ry="70" fill="#7ec4e4" />
+      <ellipse cx="500" cy="1048" rx="118" ry="44" fill="#c5e9f6" />
+      <ellipse cx="960" cy="760" rx="130" ry="78" fill="#c5e2a4" />
+      {ROADS_Y.map((y) => (
+        <g key={`hy-${y}`}>
+          <rect x="36" y={y - 13} width="1928" height="26" rx="8" fill="#e7ebf2" />
+          <line x1="52" y1={y} x2="1948" y2={y} stroke="white" strokeWidth="2" strokeDasharray="16 14" />
+        </g>
+      ))}
+      {ROADS_X.map((x) => (
+        <g key={`vx-${x}`}>
+          <rect x={x - 13} y="28" width="26" height="1145" rx="8" fill="#e7ebf2" />
+          <line x1={x} y1="44" x2={x} y2="1168" stroke="white" strokeWidth="2" strokeDasharray="16 14" />
+        </g>
+      ))}
+      <Highway x={0} label="N1 WEST · CAPE COAST · ELMINA · KAKUM" />
+      <Highway x={1904} label="MOTORWAY EAST · SHAI HILLS · AKOSOMBO · ADA" />
+      <circle cx="780" cy="620" r="36" fill="#e7ebf2" />
+      <circle cx="780" cy="620" r="16" fill="#b7d48c" />
+      <rect x="40" y="458" width="230" height="14" rx="2" fill="#d5dae3" />
+      <line x1="52" y1="465" x2="258" y2="465" stroke="white" strokeDasharray="12 8" />
+      {CITY.map((building) => (
+        <Building key={`${building.x}-${building.y}`} building={building} night={night} />
+      ))}
+      {TREES.map((tree) => (
+        <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} />
+      ))}
+      {boards
+        ? BOARDS.map((board) => (
+            <Board
+              key={board.id}
+              x={board.x}
+              y={board.y}
+              fill={board.fill}
+              text={ads[board.id] || board.text}
+              mega={board.mega}
+              onOpen={onBoard ? () => onBoard(board.id) : undefined}
+            />
+          ))
+        : null}
+      {AREAS.map(([x, y, label]) => (
+        <text key={String(label)} x={Number(x)} y={Number(y)} textAnchor="middle" fill="white" fillOpacity="0.92" fontSize="20" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
+          {label}
+        </text>
+      ))}
+      <text x="500" y="1054" textAnchor="middle" fill="white" fontSize="16" letterSpacing="3" fontFamily="ui-sans-serif">
+        KORLE
+      </text>
+      <text x="1000" y="1364" textAnchor="middle" fill="white" fontSize="22" letterSpacing="6" fontFamily="ui-sans-serif">
+        GULF OF GUINEA
+      </text>
+      {night ? <rect width={WORLD.w} height={WORLD.h} fill="rgba(10,16,40,.16)" /> : null}
+    </svg>
+  );
+});
+
 function makeCity() {
   const buildings: Bld[] = [];
   let n = 4;
@@ -381,19 +413,20 @@ function makeTrees() {
   const trees: { x: number; y: number; r: number }[] = [];
   let n = 9;
   for (const y of ROADS_Y) {
-    for (let x = 70; x < 1960; x += 78) {
+    for (let x = 70; x < 1960; x += 110) {
       n += 1;
-      if (roll(n) % 3 === 0) trees.push({ x: x + (roll(n) % 10), y: y + 24, r: 8 + (roll(n + 1) % 5) });
+      if (roll(n) % 4 === 0) trees.push({ x: x + (roll(n) % 10), y: y + 24, r: 8 + (roll(n + 1) % 5) });
     }
   }
-  for (let i = 0; i < 18; i += 1) {
+  for (let i = 0; i < 12; i += 1) {
     trees.push({ x: 900 + (i % 6) * 28, y: 720 + Math.floor(i / 6) * 26, r: 9 + (i % 3) });
   }
   for (let i = 0; i < ROADS_X.length - 1; i += 1) {
     for (let j = 0; j < ROADS_Y.length - 1; j += 1) {
+      if ((i + j) % 2 === 0) continue;
       const x = ROADS_X[i] + 70;
       const y = ROADS_Y[j] + 70;
-      trees.push({ x, y, r: 7 }, { x: x + 90, y: y + 36, r: 8 });
+      trees.push({ x, y, r: 7 });
     }
   }
   return trees;
