@@ -234,7 +234,7 @@ export function VenueFloor({
           />
         </div>
       </div>
-      <p className="pointer-events-none absolute left-1/2 top-[4.6rem] z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">Tap to walk · swipe to look around</p>
+      <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">Tap to walk · swipe to look around</p>
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
         <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-30 rounded-3xl bg-white p-4 shadow-xl">
           <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
