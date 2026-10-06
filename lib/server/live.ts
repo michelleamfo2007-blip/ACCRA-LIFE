@@ -1,6 +1,6 @@
 import "server-only";
 import { timingSafeEqual } from "crypto";
-import { SPOTS, type Life, type Spot } from "@/lib/game/world";
+import { cedis, mergeMoney, SPOTS, type Life, type Spot } from "@/lib/game/world";
 import { supabase } from "@/lib/server/supabase";
 
 export type CloudPlayer = {
@@ -238,5 +238,69 @@ export async function sendChat(from: string, to: string, text: string) {
 export async function loginPlayer(username: string, passwordHash: string) {
   const player = await readPlayer(username);
   if (!player || !same(player.passwordHash, passwordHash)) return null;
-  return player;
+  if (!player.life) return player;
+  const settled = mergeMoney(player.life, player.life);
+  if (settled.cash === player.life.cash && (settled.seenTransfers?.length ?? 0) === (player.life.seenTransfers?.length ?? 0)) return player;
+  const life = { ...settled, chats: (player.life as Life & { chats?: unknown }).chats };
+  const saved = await savePlayer({ ...player, life });
+  return saved ? { ...player, life } : player;
+}
+
+export async function saveMergedLife(username: string, incoming: Life) {
+  const player = await readPlayer(username);
+  if (!player) return null;
+  if (!player.life) {
+    const saved = await savePlayer({ ...player, life: incoming });
+    return saved ? incoming : null;
+  }
+  let merged = mergeMoney(player.life, incoming);
+  const latest = await readPlayer(username);
+  const known = new Set((merged.transfers ?? []).map((note) => note.id));
+  const extra = (latest?.life?.transfers ?? []).filter((note) => note.id && !known.has(note.id));
+  if (extra.length && latest?.life) merged = mergeMoney({ ...latest.life, transfers: [...(merged.transfers ?? []), ...extra] }, merged);
+  const chats = (latest?.life as (Life & { chats?: unknown }) | undefined)?.chats ?? (player.life as Life & { chats?: unknown }).chats;
+  const life = chats ? { ...merged, chats } : merged;
+  const saved = await savePlayer({ ...player, life });
+  return saved ? life : null;
+}
+
+export async function sendMoney(from: string, to: string, amount: number, latest: Life) {
+  const value = Math.round(amount);
+  if (!/^[a-z0-9_]{3,16}$/.test(to)) return { error: "That username is not in Accra." };
+  if (to === from) return { error: "You cannot send money to yourself." };
+  if (!Number.isFinite(value) || value < 1) return { error: "Enter an amount in cedis." };
+  const sender = await readPlayer(from);
+  if (!sender?.life) return { error: "Log in again." };
+  const current = mergeMoney(sender.life, latest);
+  if (value > current.cash) return { error: `MoMo cannot cover ${cedis(value)}. You have ${cedis(current.cash)}.` };
+  const recipient = await readPlayer(to);
+  if (!recipient?.life) return { error: "That username is not in Accra." };
+  const id = `momo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const noteOut = `You sent ${cedis(value)} to @${to}.`;
+  const noteIn = `@${from} sent you ${cedis(value)}.`;
+  const sent: Life = {
+    ...current,
+    cash: current.cash - value,
+    transfers: [...(current.transfers ?? []), { id, delta: -value, note: noteOut }].slice(-80),
+    seenTransfers: [...new Set([...(current.seenTransfers ?? []), id])].slice(-80),
+    log: [noteOut, ...(current.log ?? [])].slice(0, 14),
+  };
+  const senderChats = (sender.life as Life & { chats?: unknown }).chats;
+  const senderSaved = await savePlayer({ ...sender, life: senderChats ? { ...sent, chats: senderChats } : sent });
+  if (!senderSaved) return { error: "MoMo did not go through." };
+  const fresh = await readPlayer(to);
+  if (!fresh?.life) {
+    await savePlayer({ ...sender, life: senderChats ? { ...current, chats: senderChats } : current });
+    return { error: "That username is not in Accra." };
+  }
+  const waiting: Life = {
+    ...fresh.life,
+    transfers: [...(fresh.life.transfers ?? []), { id, delta: value, note: noteIn }].slice(-80),
+  };
+  const recipientSaved = await savePlayer({ ...fresh, life: waiting });
+  if (!recipientSaved) {
+    await savePlayer({ ...sender, life: senderChats ? { ...current, chats: senderChats } : current });
+    return { error: "MoMo did not go through." };
+  }
+  return { life: sent, note: `@${to} has ${cedis(value)} in their wallet.` };
 }

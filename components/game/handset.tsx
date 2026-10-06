@@ -15,6 +15,7 @@ import {
   clockLabel,
   dreamStatus,
   handleOf,
+  hasCurrent,
   homeById,
   invitePerson,
   spareChange,
@@ -62,7 +63,7 @@ export function Handset({
   onEmail: (email: string) => void;
   onNewLife: () => void;
   onSocial: (result: StepResult) => void;
-  onPay: (name: string, handle: string, amount: number) => string | null;
+  onPay: (name: string, handle: string, amount: number) => string | null | Promise<string | null>;
   launch: { id: string } | null;
   onLaunchConsumed: () => void;
   onAir: (playing: boolean) => void;
@@ -228,8 +229,9 @@ export function Handset({
                     }
                     if (kind === "pay") {
                       const value = Math.round(amount ?? 0);
-                      const error = onPay(name, handle, value);
-                      pushChat(thread, { who: "note", text: error ?? `You sent ${handle} ${cedis(value)}`, time });
+                      void Promise.resolve(onPay(name, handle, value)).then((error) => {
+                        pushChat(thread, { who: "note", text: error ?? `You sent ${handle} ${cedis(value)}`, time });
+                      });
                       return;
                     }
                     const result = kind === "invite" ? invitePerson(life, name) : kind === "visit" ? visitPerson(life, name) : treatPerson(life, name);
@@ -256,7 +258,7 @@ export function Handset({
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
               {app === "games" ? <NoteScreen title="Oware" onBack={() => setApp("home")} lines={["The board is on the stoop.", "A full game lands later. For now, the seeds are just sitting there, waiting on you."]} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
-              {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", life.inventory.includes("generator") ? "Your generator can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb or a generator is in the catalogue."]} /> : null}
+              {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "settings" ? (
                 <SettingsApp email={email} onBack={() => setApp("home")} onEmail={onEmail} onLogout={onLogout} onMenu={onClose} onNewLife={onNewLife} />
               ) : null}

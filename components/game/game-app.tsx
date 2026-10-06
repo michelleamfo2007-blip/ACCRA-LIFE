@@ -40,6 +40,7 @@ import {
   receiveCash,
   goTo,
   homeById,
+  homeLook,
   accraHour,
   realMinutes,
   huntGem,
@@ -54,6 +55,8 @@ import {
   sellPiece,
   storePiece,
   spotById,
+  takePurse,
+  type Life,
   type Look,
   type Offer,
   type Ride,
@@ -125,7 +128,20 @@ export function GameApp() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ life }),
-        });
+        })
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data: { life?: Life } | null) => {
+            if (!data?.life) return;
+            const snap = parseRaw(getRaw());
+            const current = snap.accounts.find((item) => item.username === account.username)?.life;
+            if (!current) return;
+            const next = takePurse(current, life, data.life);
+            if (next === current) return;
+            const gained = next.cash > current.cash;
+            commitLife(account.username, next);
+            if (gained) setToast(next.log[0] ?? "Money landed in your wallet.");
+          })
+          .catch(() => undefined);
       }
     }, 15000);
     return () => window.clearInterval(id);
@@ -687,6 +703,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
                   </p>
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#006B3F]">{home.tag}</p>
                   <p className="mt-1 text-sm leading-5 text-[#5c6b82]">{blocked ? "Work your way here." : home.detail}</p>
+                  <p className="text-sm text-[#5c6b82]">{homeLook(home.id).label}</p>
                   <p className="mt-1 text-sm font-semibold">Rent {cedis(home.rent)}/wk</p>
                 </button>
               );
@@ -760,9 +777,31 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     if (note) flash(note);
   }
 
-  function paySomeone(name: string, amount: number, username?: string) {
+  async function paySomeone(name: string, amount: number, username?: string) {
     const mine = account.life;
     if (!mine) return "No life yet.";
+    let handle = (username ?? "").trim().toLowerCase().replace(/^@/, "");
+    if (account.cloud && !/^[a-z0-9_]{3,16}$/.test(handle)) {
+      const found = await fetch(`/api/live/people?q=${encodeURIComponent(name)}`).then((response) => response.json()).catch(() => null);
+      const match = (found?.people as { username: string; name: string }[] | undefined)?.find((person) => person.username === name.trim().toLowerCase() || person.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (match) handle = match.username;
+    }
+    if (account.cloud && /^[a-z0-9_]{3,16}$/.test(handle) && handle !== account.username) {
+      const response = await fetch("/api/live/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: handle, amount, life: mine }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string; life?: Life; note?: string } | null;
+      if (!response.ok || !data?.life) {
+        const error = data?.error ?? "MoMo did not go through.";
+        flash(error);
+        return error;
+      }
+      commitLife(account.username, data.life);
+      if (data.note) flash(data.note);
+      return null;
+    }
     const snap = parseRaw(getRaw());
     const other = snap.accounts.find((item) => {
       if (!item.life || item.username === account.username) return false;
@@ -835,7 +874,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           focus={menuFocus}
           onHome={() => setTrip({ name: "Home", placeId: "home", ride: RIDES[1] })}
           onAct={(verb, person) => apply(person ? runVerb(life, verb, life.where, person) : payOffer(life, verb, offerFrom(verb), life.where))}
-          onPay={(person, amount) => paySomeone(person, amount)}
+          onPay={(person, amount, username) => paySomeone(person, amount, username)}
           onOpenChat={(username) => {
             setChatLaunch({ id: `user:${username}` });
             setTab("phone");
@@ -1091,7 +1130,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       ) : null}
       {payday ? <Payday earned={payday.earned} performance={payday.performance} onClose={() => setPayday(null)} /> : null}
       {tab === "buy" ? (
-        <Catalogue cash={life.cash} owned={life.inventory} stored={life.stored ?? []} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
+        <Catalogue cash={life.cash} owned={life.inventory} stored={life.stored ?? []} floor={life.floor} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
       ) : null}
       {boardId ? (
         <div className="absolute inset-x-0 bottom-0 z-40 max-h-[min(78vh,100dvh-4.5rem)] overflow-auto rounded-t-[28px] bg-white p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)] sm:p-5">
@@ -1247,7 +1286,7 @@ function offerFrom(verb: Verb): Offer {
   };
 }
 
-function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; onSend: (name: string, amount: number) => string | null }) {
+function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; onSend: (name: string, amount: number) => string | null | Promise<string | null> }) {
   const names = [...new Set(people)];
   const [who, setWho] = useState(names[0] ?? "");
   const [amount, setAmount] = useState("20");
@@ -1259,8 +1298,9 @@ function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; 
         event.preventDefault();
         if (!who) return;
         const value = Number(String(amount).replace(/[^\d.]/g, ""));
-        const error = onSend(who, value);
-        setReceipt(error ?? `You sent ${who} ${cedis(value)}.`);
+        void Promise.resolve(onSend(who, value)).then((error) => {
+          setReceipt(error ?? `You sent ${who} ${cedis(value)}.`);
+        });
       }}
     >
       <p className="text-sm font-semibold">Send money</p>

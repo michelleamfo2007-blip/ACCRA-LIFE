@@ -31,7 +31,7 @@ export function VenueFloor({
   onHome: () => void;
   onAct: (verb: Verb, person?: string) => void;
   onOpenChat: (person: string) => void;
-  onPay: (person: string, amount: number) => string | null;
+  onPay: (person: string, amount: number, username?: string) => string | null | Promise<string | null>;
   focus?: string | null;
 }) {
   const spot = spotById(life.where);
@@ -148,7 +148,7 @@ export function VenueFloor({
           onClose={() => setWho(null)}
           onChat={() => onOpenChat(open.username)}
           onPick={(talk) => speak(open.name, talk)}
-          onPay={(amount) => onPay(open.name, amount)}
+          onPay={(amount) => onPay(open.name, amount, open.username)}
         />
       ) : (
         <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
@@ -225,7 +225,7 @@ function TalkSheet({
   onClose: () => void;
   onChat: () => void;
   onPick: (talk: TalkKind) => void;
-  onPay: (amount: number) => string | null;
+  onPay: (amount: number) => string | null | Promise<string | null>;
 }) {
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState("20");
@@ -262,9 +262,10 @@ function TalkSheet({
           onSubmit={(event) => {
             event.preventDefault();
             const value = Number(String(amount).replace(/[^\d.]/g, ""));
-            const error = onPay(value);
-            setReceipt(error ?? `You sent ${person} ${cedis(value)}.`);
-            if (!error) setPaying(false);
+            void Promise.resolve(onPay(value)).then((error) => {
+              setReceipt(error ?? `You sent ${person} ${cedis(value)}.`);
+              if (!error) setPaying(false);
+            });
           }}
         >
           <span className="text-sm text-[#8a6a12]">Wallet {cedis(cash)}</span>

@@ -12,22 +12,27 @@ const MARKS: Record<ShopCategory, string> = {
   fun: "📺",
   skills: "🎸",
   light: "💡",
+  decor: "🪴",
+  pets: "🐕",
+  luxury: "💎",
 };
 
 export function Catalogue({
   cash,
   owned,
   stored = [],
+  floor,
   onBuy,
   onClose,
 }: {
   cash: number;
   owned: string[];
   stored?: string[];
+  floor?: string;
   onBuy: (id: string) => void;
   onClose: () => void;
 }) {
-  const [category, setCategory] = useState<(typeof SHOP_CATEGORIES)[number]["id"]>("comfort");
+  const [category, setCategory] = useState<(typeof SHOP_CATEGORIES)[number]["id"]>("design");
   const items = SHOP.filter((item) => item.category === category);
 
   return (
@@ -55,12 +60,15 @@ export function Catalogue({
         {items.map((item) => {
           const have = !item.consume && owned.includes(item.id);
           const parked = stored.includes(item.id);
+          const laid = item.kind === "floor" && floor === item.id;
+          const pricey = item.price >= 20000;
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => {
-                if (have && !parked) return;
+                if (laid) return;
+                if (have && !parked && item.kind !== "floor") return;
                 onBuy(item.id);
               }}
               className="rounded-[22px] bg-white p-3 text-left shadow-sm"
@@ -73,7 +81,10 @@ export function Catalogue({
                 <ItemArt item={item} />
               </span>
               <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
-              <span className={`mt-1 block text-sm font-bold ${have && !parked ? "text-[#8b97ab]" : "text-[#006B3F]"}`}>{parked ? "Put it out" : have ? "In the room" : cedis(item.price)}</span>
+              <span className={`mt-1 block text-sm font-bold ${laid || (have && !parked && item.kind !== "floor") ? "text-[#8b97ab]" : pricey ? "text-[#9a3412]" : "text-[#006B3F]"}`}>
+                {laid ? "On the floor" : item.kind === "floor" && have ? "Lay this floor" : parked ? "Put it out" : have ? "In the room" : cedis(item.price)}
+              </span>
+              {item.upkeep ? <span className="mt-0.5 block text-[11px] font-semibold text-[#9a3412]">+{cedis(item.upkeep)} a week</span> : null}
             </button>
           );
         })}
@@ -93,23 +104,111 @@ function ItemArt({ item }: { item: ShopItem }) {
 
 function Piece({ item }: { item: ShopItem }) {
   const { id, kind, color, size } = item;
+  if (kind === "floor") return <FloorCard a={color} b={item.accent ?? "#fff"} />;
   if (id === "armchair") return <Armchair color={color} />;
-  if (kind === "chair") return <PlasticChair color={color} />;
+  if (kind === "chair" || kind === "throne") return <PlasticChair color={color} />;
   if (kind === "sofa") return <Sofa color={color} seats={size.startsWith("3") ? 3 : 2} />;
   if (kind === "bed") return <Bed color={color} />;
-  if (kind === "table") return <Table color={color} />;
+  if (kind === "table" || kind === "desk") return <Table color={color} />;
   if (kind === "fan") return <Fan />;
   if (kind === "ac") return <AirCon />;
   if (kind === "food") return <Bowl color={color} />;
   if (kind === "lamp") return <Bulb color={color} />;
-  if (id === "pan") return <Pot color={color} />;
+  if (kind === "fridge") return <Crate color={color} />;
+  if (kind === "stove") return <Pot color={item.accent ?? color} />;
+  if (kind === "sink") return <Crate color={color} />;
+  if (kind === "toilet") return <Crate color={color} />;
+  if (kind === "shower") return <Crate color="#d5e7f2" />;
+  if (kind === "tv") return <Screen color={color} wide={size.startsWith("2")} />;
+  if (kind === "guitar") return <Guitar color={color} />;
+  if (kind === "weights") return <Crate color={color} />;
+  if (kind === "plant") return <Plant color={color} />;
+  if (kind === "rug") return <FloorCard a={color} b={item.accent ?? "#1f8a70"} />;
+  if (kind === "curtain" || kind === "painting") return <Cloth />;
+  if (kind === "tank") return <Crate color={color} />;
+  if (kind === "statue" || kind === "vault") return <Crate color={color} />;
+  if (kind === "dog" || kind === "cat") return <Pet color={color} />;
+  if (kind === "bird") return <Bird color={color} />;
+  if (kind === "jet") return <Jet color={color} />;
+  if (id === "pan" || id === "kerosene") return <Pot color={color} />;
   if (id === "pillow") return <Pillow color={color} />;
   if (id === "kente") return <Cloth />;
-  if (id === "bucket") return <Bucket color={color} />;
-  if (id === "speaker") return <Speaker color={color} />;
+  if (id === "bucket" || id === "bowl-set") return <Bucket color={color} />;
+  if (id === "speaker" || id === "transistor") return <Speaker color={color} />;
   if (id === "book") return <Books color={color} />;
-  if (id === "generator") return <Generator color={color} />;
+  if (id === "generator" || id === "yellow-gen" || id === "solar") return <Generator color={color} />;
   return <Crate color={color} />;
+}
+
+function FloorCard({ a, b }: { a: string; b: string }) {
+  const tiles: Block[] = [];
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      tiles.push({ x: -18 + col * 12, y: 0, z: -12 + row * 10, w: 11, h: 1.2, d: 9, color: (col + row) % 2 === 0 ? a : b });
+    }
+  }
+  return <Blocks items={tiles} />;
+}
+
+function Screen({ color, wide }: { color: string; wide: boolean }) {
+  return (
+    <Blocks
+      items={[
+        { x: wide ? -24 : -16, y: 0, z: -4, w: wide ? 48 : 32, h: 8, d: 10, color: "#cbbba6" },
+        { x: wide ? -22 : -14, y: 8, z: -2, w: wide ? 44 : 28, h: 22, d: 3, color },
+      ]}
+    />
+  );
+}
+
+function Guitar({ color }: { color: string }) {
+  return (
+    <g>
+      <path d="M58 18 L66 18 L62 48 L58 48 Z" fill="#5c4030" />
+      <ellipse cx="60" cy="58" rx="16" ry="18" fill={color} />
+      <circle cx="60" cy="58" r="4" fill="#5c4030" />
+    </g>
+  );
+}
+
+function Plant({ color }: { color: string }) {
+  return (
+    <g>
+      <path d="M48 70 h24 l-4 -16 h-16 Z" fill="#cbbba6" />
+      <path d="M60 54 L48 28 L58 40 Z" fill={color} />
+      <path d="M60 50 L74 24 L66 42 Z" fill={color} />
+    </g>
+  );
+}
+
+function Pet({ color }: { color: string }) {
+  return (
+    <g>
+      <ellipse cx="58" cy="58" rx="22" ry="12" fill={color} />
+      <circle cx="78" cy="50" r="10" fill={color} />
+      <circle cx="82" cy="48" r="4" fill="#f4efe6" />
+    </g>
+  );
+}
+
+function Bird({ color }: { color: string }) {
+  return (
+    <g>
+      <path d="M58 72 v-28" stroke="#5c4030" strokeWidth="4" />
+      <circle cx="58" cy="38" r="10" fill={color} />
+      <path d="M66 36 h10" stroke="#e7c85a" strokeWidth="2" />
+    </g>
+  );
+}
+
+function Jet({ color }: { color: string }) {
+  return (
+    <g>
+      <path d="M18 48 H92 L104 54 H28 Z" fill={color} />
+      <path d="M48 48 L40 28 H58 L70 48 Z" fill={shade(color, 0.8)} />
+      <path d="M70 46 L96 34 L100 40 L74 50 Z" fill={shade(color, 0.7)} />
+    </g>
+  );
 }
 
 type Block = { x: number; y: number; z: number; w: number; h: number; d: number; color: string };

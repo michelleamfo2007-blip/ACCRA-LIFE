@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { cedis, hourOf, sellValue, SHOP, type Life, type Placed } from "@/lib/game/world";
+import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
 
@@ -40,8 +40,8 @@ export function RoomView({
   onSell?: (id: string) => void;
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
-  const dark = life.dumsor && !life.inventory.includes("generator");
-  const mattress = life.inventory.includes("mattress");
+  const dark = life.dumsor && !hasCurrent(life.inventory);
+  const bedItem = SHOP.filter((item) => item.kind === "bed" && life.inventory.includes(item.id)).sort((a, b) => b.price - a.price)[0];
   const [pos, setPos] = useState({ x: 0.2, z: 1.1 });
   const [pose, setPose] = useState<"idle" | "walk" | "act">("idle");
   const [heading, setHeading] = useState(0);
@@ -147,7 +147,8 @@ export function RoomView({
   }
 
   const owns = (id: string) => life.inventory.includes(id);
-  const sofaColor = owns("gold") ? "#8b1e3f" : owns("leather") ? "#1c1c1c" : owns("family") ? "#c4844a" : "#2f8f6b";
+  const look = homeLook(life.homeId);
+  const sofaColor = owns("gold") ? "#8b1e3f" : owns("leather") ? "#1c1c1c" : owns("family") ? "#c4844a" : look.sofa;
 
   return (
     <div className="absolute inset-0 touch-none" style={{ background: dark ? "#10131a" : night ? "#1b2744" : "#c5d7ea" }}>
@@ -157,7 +158,7 @@ export function RoomView({
         pose={pose}
         heading={heading}
         dark={dark}
-        bedColor={mattress ? "#3f4f86" : "#243056"}
+        bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
         onAsk={onAsk}
         onGo={(id) => walkTo(SPOTS[id as keyof typeof SPOTS], SPOTS[id as keyof typeof SPOTS].action)}
