@@ -20,7 +20,7 @@ export function wait(minutes: number) {
 
 export function Screen({ title, life, color = "#121212", onBack, children }: { title: string; life: Life; color?: string; onBack: () => void; children: ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <div className="flex items-center gap-2 px-2 py-2 text-white" style={{ background: color }}>
         <button type="button" onClick={onBack} className="grid h-9 w-9 place-items-center rounded-full text-lg" aria-label="Back">
           ‹
@@ -28,7 +28,7 @@ export function Screen({ title, life, color = "#121212", onBack, children }: { t
         <p className="font-semibold">{title}</p>
         <span className="ml-auto pr-2 text-sm font-semibold text-[#FCD116]">{cedis(life.cash)}</span>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">{children}</div>
+      <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 py-4">{children}</div>
     </div>
   );
 }

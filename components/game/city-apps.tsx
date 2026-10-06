@@ -89,9 +89,9 @@ export function TripsApp({ life, onBack, onGo }: { life: Life; onBack: () => voi
       {markets.map((spot) => {
         const goods = GOODS.filter((good) => buyPrice(good, spot.id, day) != null);
         return (
-          <button key={spot.id} type="button" onClick={() => onGo(spot.id)} className="flex w-full items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-left shadow-sm">
+          <button key={spot.id} type="button" onClick={() => onGo(spot.id)} className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-white px-3 py-2.5 text-left shadow-sm">
             <span className="text-2xl">{spot.emoji}</span>
-            <span className="min-w-0 flex-1">
+            <span className="min-w-0 overflow-hidden">
               <span className="block text-sm font-semibold">{spot.name}</span>
               <span className="block truncate text-[11px] text-[#5c6b82]">{goods.map((good) => `${good.emoji} ${good.label}`).join(" · ")}</span>
             </span>

@@ -240,11 +240,11 @@ export function Handset({
   }
 
   return (
-    <div className="absolute inset-0 z-40 grid place-items-center bg-[#0c1220]/55 px-4 backdrop-blur-[2px]">
+    <div className="absolute inset-0 z-40 grid grid-cols-[minmax(0,1fr)] place-items-center overflow-hidden bg-[#0c1220]/55 px-4 backdrop-blur-[2px]">
       <button type="button" onClick={onClose} className="absolute right-4 top-4 z-50 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#121212] shadow">
         × Close
       </button>
-      <div className="relative h-[min(760px,86dvh)] w-[min(390px,100%)]">
+      <div className="relative h-[min(760px,86dvh)] w-full min-w-0 max-w-[390px]">
         <span className="absolute -left-[3px] top-[22%] h-7 w-[3px] rounded-l-sm bg-[#2c3038]" />
         <span className="absolute -left-[3px] top-[30%] h-12 w-[3px] rounded-l-sm bg-[#2c3038]" />
         <span className="absolute -left-[3px] top-[40%] h-12 w-[3px] rounded-l-sm bg-[#2c3038]" />
