@@ -242,9 +242,13 @@ function seed(): Store {
 
 function remember(store: Store) {
   if (!Array.isArray(store.library)) store.library = [];
-  mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(store, null, 2));
   cache = store;
+  try {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(store, null, 2));
+  } catch {
+    // The live host keeps this process read-only. The copy in memory still serves the request.
+  }
   return store;
 }
 
