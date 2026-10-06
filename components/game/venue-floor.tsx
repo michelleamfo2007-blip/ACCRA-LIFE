@@ -24,7 +24,7 @@ function startSpot(seed: string) {
   return { left: 24 + (hash % 40), top: 56 + (Math.floor(hash / 40) % 20) };
 }
 
-type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables";
+type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables" | "airport";
 type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
 
 export function VenueFloor({
@@ -472,18 +472,31 @@ function payVerb(verb: Verb, offer: Offer): Verb {
 function staffFor(spot: Spot) {
   const shore = BEACHES.has(spot.id);
   const club = CLUB_IDS.has(spot.id);
+  const air = spot.id === "kotoka";
   return [
     {
-      role: shore ? "Beach usher" : club ? "Door" : "Manager",
-      line: shore ? "The chairs are this way. The grill is already hot." : club ? "List is at the door. The night is inside." : `I run ${spot.name}. Tell me what you came for.`,
+      role: air ? "Check-in" : shore ? "Beach usher" : club ? "Door" : "Manager",
+      line: air
+        ? "Accra to Kumasi boards at gate B. Boarding pass ready?"
+        : shore
+          ? "The chairs are this way. The grill is already hot."
+          : club
+            ? "List is at the door. The night is inside."
+            : `I run ${spot.name}. Tell me what you came for.`,
       style: { left: "18%", top: "42%" },
       skin: "#8d5a3b",
       shirt: "#006B3F",
       hair: "Bun",
     },
     {
-      role: shore || club ? "Floor" : "Cashier",
-      line: shore ? "Feet in the water is free. Kelewele is not." : club ? "The floor is open. Drinks are at the bar." : "I take the money. The price is on the menu.",
+      role: air ? "Security" : shore || club ? "Floor" : "Cashier",
+      line: air
+        ? "Laptops out. Liquids in the tray. The queue moves if you listen."
+        : shore
+          ? "Feet in the water is free. Kelewele is not."
+          : club
+            ? "The floor is open. Drinks are at the bar."
+            : "I take the money. The price is on the menu.",
       style: { left: "72%", top: "36%" },
       skin: "#c68a62",
       shirt: "#FCD116",
@@ -493,6 +506,7 @@ function staffFor(spot: Spot) {
 }
 
 function sceneKind(spot: Spot): Kind {
+  if (spot.id === "kotoka") return "airport";
   if (HOTELS.has(spot.id)) return "hotel";
   if (CLUB_IDS.has(spot.id)) return "club";
   if (BEACHES.has(spot.id)) return "shore";
@@ -522,7 +536,7 @@ function youSay(talk: TalkKind, place: string) {
 
 function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
   const indoor = kind === "hotel" || kind === "club" || kind === "tables" || kind === "hall" || kind === "gym";
-  const floor = kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
+  const floor = kind === "airport" ? "#b9d48a" : kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
   const wall = night ? "#3d4658" : "#f7f4ef";
   const wallSide = night ? "#2c3444" : "#e4e0d8";
   const items = furniture(kind, night);
@@ -551,7 +565,10 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
       {kind === "shore" ? <ShoreDress /> : null}
       {kind === "garden" ? <GardenDress /> : null}
       {kind === "hotel" ? <Pool /> : null}
-      {indoor ? (
+      {kind === "airport" ? <AirportDress night={night} /> : null}
+      {kind === "airport" ? (
+        <FaceSign axis="x" x={-54} y={22} z={-18} length={108} tall={12} text="KOTOKA INTERNATIONAL" fill="#006B3F" ink="white" />
+      ) : indoor ? (
         <>
           <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
           <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill={kind === "club" ? "#f5c542" : "#1f4d3a"} ink={kind === "club" ? "#121212" : "white"} />
@@ -615,7 +632,73 @@ function furniture(kind: Kind, night: boolean): Block[] {
       ...cafeSet(36, 36, "#8d5a32"),
     ];
   }
+  if (kind === "airport") {
+    return [
+      // Runway strip at the back
+      { x: -110, y: 0, z: -58, w: 220, h: 2, d: 28, color: "#4a5564" },
+      // Taxiway
+      { x: -100, y: 0, z: -28, w: 200, h: 1.5, d: 10, color: "#6b7280" },
+      // Terminal
+      { x: -56, y: 0, z: -18, w: 112, h: 22, d: 36, color: "#d9dde3" },
+      { x: -52, y: 22, z: -14, w: 104, h: 4, d: 28, color: "#9aa3b2" },
+      // Glass front
+      { x: -48, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
+      { x: -12, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
+      { x: 24, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
+      // Control tower
+      { x: 72, y: 0, z: -8, w: 14, h: 48, d: 14, color: "#f4f7fb" },
+      { x: 68, y: 48, z: -12, w: 22, h: 10, d: 22, color: "#006B3F" },
+      { x: 74, y: 58, z: -6, w: 10, h: 6, d: 10, color: "#121212" },
+      // Helipads pad
+      { x: -108, y: 0, z: 8, w: 36, h: 1.5, d: 36, color: "#6b7280" },
+      // Parking lots
+      { x: -70, y: 0, z: 36, w: 48, h: 1, d: 32, color: "#8b93a1" },
+      { x: 10, y: 0, z: 36, w: 48, h: 1, d: 32, color: "#8b93a1" },
+      // Fountain plaza
+      { x: -10, y: 0, z: 48, w: 16, h: 2, d: 16, color: "#94a3b8" },
+      { x: -6, y: 2, z: 52, w: 8, h: 3, d: 8, color: "#38bdf8" },
+      // Gate jets (white + green Ghana tails)
+      ...plane(-78, -42, "#f8fafc", "#006B3F"),
+      ...plane(-40, -42, "#f8fafc", "#006B3F"),
+      ...plane(-2, -42, "#f8fafc", "#006B3F"),
+      ...plane(36, -42, "#f8fafc", "#CE1126"),
+      // Private apron
+      ...smallJet(78, 8, "#1c1917"),
+      ...smallJet(92, 22, "#1c1917"),
+      ...smallJet(84, 38, "#243044"),
+      // Parked cars
+      { x: -62, y: 1, z: 42, w: 5, h: 3, d: 3, color: "#CE1126" },
+      { x: -52, y: 1, z: 46, w: 5, h: 3, d: 3, color: "#FCD116" },
+      { x: -42, y: 1, z: 40, w: 5, h: 3, d: 3, color: "#006B3F" },
+      { x: -32, y: 1, z: 48, w: 5, h: 3, d: 3, color: "#1d4ed8" },
+      { x: 18, y: 1, z: 42, w: 5, h: 3, d: 3, color: "#f97316" },
+      { x: 28, y: 1, z: 48, w: 5, h: 3, d: 3, color: "#121212" },
+      { x: 38, y: 1, z: 40, w: 5, h: 3, d: 3, color: "#ec4899" },
+      // Billboards
+      { x: -112, y: 0, z: 52, w: 3, h: 28, d: 3, color: "#6b6256" },
+      { x: -118, y: 18, z: 48, w: 18, h: 14, d: 2, color: "#CE1126" },
+      { x: 98, y: 0, z: 52, w: 3, h: 28, d: 3, color: "#6b6256" },
+      { x: 92, y: 18, z: 48, w: 18, h: 14, d: 2, color: "#FCD116" },
+    ];
+  }
   return [...benchTable(-36, 12), ...benchTable(22, 40), { x: -20, y: 0, z: -28, w: 70, h: 16, d: 14, color: "#c9842a" }, ...chair(48, 8, "#d64545")];
+}
+
+function plane(x: number, z: number, body: string, tail: string): Block[] {
+  return [
+    { x, y: 4, z, w: 28, h: 6, d: 6, color: body },
+    { x: x + 6, y: 5, z: z - 10, w: 14, h: 2, d: 26, color: body },
+    { x: x + 22, y: 6, z: z - 1, w: 4, h: 10, d: 8, color: tail },
+    { x: x + 2, y: 8, z: z + 1, w: 6, h: 4, d: 4, color: "#7ec8ea" },
+  ];
+}
+
+function smallJet(x: number, z: number, color: string): Block[] {
+  return [
+    { x, y: 3, z, w: 14, h: 4, d: 4, color },
+    { x: x + 2, y: 4, z: z - 5, w: 8, h: 1.5, d: 14, color },
+    { x: x + 11, y: 5, z: z - 1, w: 3, h: 6, d: 5, color },
+  ];
 }
 
 function benchTable(x: number, z: number, wood = "#c9842a"): Block[] {
@@ -650,7 +733,51 @@ function bannerLine(kind: Kind) {
   if (kind === "club") return "HIGHLIFE LIVE";
   if (kind === "gym") return "THE FLOOR";
   if (kind === "hall") return "THE COUNTER";
+  if (kind === "airport") return "DEPARTURES";
   return "TABLES OPEN";
+}
+
+function AirportDress({ night }: { night: boolean }) {
+  const marks = [-90, -50, -10, 30, 70].map((x) => {
+    const a = pt(x, 2.5, -48);
+    const b = pt(x + 14, 2.5, -48);
+    return [a, b] as const;
+  });
+  const h1 = pt(-90, 2, 26);
+  const h2 = pt(-90, 2, 42);
+  return (
+    <g>
+      {marks.map(([a, b], index) => (
+        <line key={index} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="white" strokeWidth="3" strokeLinecap="round" opacity={night ? 0.95 : 0.85} />
+      ))}
+      <text x={pt(-100, 3, -44)[0]} y={pt(-100, 3, -44)[1]} fill="white" fontSize="11" fontWeight="700" opacity="0.9">
+        21
+      </text>
+      <text x={pt(88, 3, -44)[0]} y={pt(88, 3, -44)[1]} fill="white" fontSize="11" fontWeight="700" opacity="0.9">
+        03
+      </text>
+      <circle cx={h1[0]} cy={h1[1]} r="10" fill="#121212" stroke="#FCD116" strokeWidth="2" />
+      <text x={h1[0]} y={h1[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="10" fontWeight="700">
+        H
+      </text>
+      <circle cx={h2[0]} cy={h2[1]} r="10" fill="#121212" stroke="#FCD116" strokeWidth="2" />
+      <text x={h2[0]} y={h2[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="10" fontWeight="700">
+        H
+      </text>
+      <Palm x={-100} z={58} />
+      <Palm x={-78} z={62} />
+      <Palm x={56} z={58} />
+      <Palm x={86} z={62} />
+      <Palm x={104} z={20} />
+      {night ? (
+        <g>
+          <circle cx={pt(78, 62, -2)[0]} cy={pt(78, 62, -2)[1]} r="5" fill="#FCD116" opacity="0.85" />
+          <circle cx={pt(-40, 24, -10)[0]} cy={pt(-40, 24, -10)[1]} r="3" fill="#fff4c2" opacity="0.7" />
+          <circle cx={pt(10, 24, -10)[0]} cy={pt(10, 24, -10)[1]} r="3" fill="#fff4c2" opacity="0.7" />
+        </g>
+      ) : null}
+    </g>
+  );
 }
 
 function ShoreDress() {

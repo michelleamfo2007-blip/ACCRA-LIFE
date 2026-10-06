@@ -121,12 +121,12 @@ const NEIGHBOURHOODS: Spot[] = [
 const GATEWAYS: Spot[] = [
   {
     id: "kotoka",
-    name: "Kotoka Airport",
+    name: "Kotoka International",
     emoji: "✈️",
     x: 180,
     y: 520,
     group: "work",
-    blurb: "Airport. Arrivals hall hugs, departure tears, and planes low over Airport Residential.",
+    blurb: "Airport. Runway 03/21, Ghana green tails on the gates, and the Accra–Kumasi board always lit.",
     actions: [
       stroll("kotoka-planes", "Watch the planes land", "Wheels down, engines roaring, kids pointing at the fence."),
       act({ id: "kotoka-arrivals", label: "Meet arrivals", detail: "A cousin from abroad, two suitcases and a hug that lasts a minute.", minutes: 40, effects: { social: 22, fun: 10 }, social: true, emoji: "🤗" }),
