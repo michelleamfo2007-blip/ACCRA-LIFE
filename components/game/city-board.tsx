@@ -53,6 +53,7 @@ export function CityBoard({
   boards = true,
   night = false,
   ads = {},
+  active = null,
   onSelect,
   onBoard,
 }: {
@@ -60,6 +61,7 @@ export function CityBoard({
   boards?: boolean;
   night?: boolean;
   ads?: Record<string, string>;
+  active?: string | null;
   onSelect: (id: string) => void;
   onBoard?: (id: string) => void;
 }) {
@@ -272,22 +274,31 @@ export function CityBoard({
         </svg>
         {SPOTS.map((spot) => {
           const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
-          const showName = view.z >= 0.92 || spot.soon || (spot.far && view.z >= 0.5);
+          const open = active === spot.id;
+          const tag = spot.soon ? `${spot.name} · Coming soon` : spot.far ? `${spot.name} · ${Math.round(spot.far / 60)}h` : spot.name;
           return (
             <button
               key={spot.id}
               type="button"
               onClick={() => onSelect(spot.id)}
               title={spot.name}
-              className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${faded ? "opacity-30" : ""}`}
+              aria-label={spot.name}
+              aria-pressed={open}
+              className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${faded ? "opacity-30" : ""} ${open ? "z-20" : ""}`}
               style={{ left: spot.x, top: spot.y }}
             >
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)]">{spot.emoji}</span>
-              {showName ? (
-                <span className={`mt-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow ${spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : "bg-white text-[#121212]"}`}>
-                  {spot.soon ? `${spot.name} · Coming soon` : spot.far ? `${spot.name} · ${Math.round(spot.far / 60)}h` : spot.name}
+              {open ? (
+                <span
+                  className={`flex max-w-[12rem] items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold shadow-[0_8px_20px_rgba(22,32,60,.22)] ${
+                    spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : "bg-white text-[#121212]"
+                  }`}
+                >
+                  <span className="text-base leading-none">{spot.emoji}</span>
+                  <span className="truncate">{tag}</span>
                 </span>
-              ) : null}
+              ) : (
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ring-white/80">{spot.emoji}</span>
+              )}
             </button>
           );
         })}

@@ -444,6 +444,7 @@ function Guest({
       <CityBoard
         filter={filter}
         boards={boards}
+        active={spotId}
         onSelect={(id) => {
           const next = spotById(id);
           if (next.soon) {
@@ -1075,6 +1076,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           filter={filter}
           boards={boards}
           ads={ads}
+          active={placeId}
           onBoard={setBoardId}
           onSelect={(id) => {
             const spot = spotById(id);
