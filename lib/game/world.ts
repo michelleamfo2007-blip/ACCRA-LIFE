@@ -1224,6 +1224,7 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
     gemDay: -1,
     furniture: [],
     stored: [],
+    tour: false,
   };
   return life;
 }

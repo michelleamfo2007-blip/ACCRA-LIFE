@@ -11,6 +11,7 @@ import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
 import { Payday, ShiftFloor, StreetRide, FlightRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
+import { TourCoach } from "@/components/game/tour-coach";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
 import { TradeSheet } from "@/components/game/trade-sheet";
@@ -27,6 +28,7 @@ import { chopSign } from "@/lib/game/kitchen";
 import { checkIn } from "@/lib/game/weekly";
 import { CABINS, bookFlight, routeOf } from "@/lib/game/flights";
 import type { Cabin } from "@/lib/game/flights";
+import { TOUR, finishTour, skipTour, type TourId } from "@/lib/game/tour";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -914,6 +916,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [ping, setPing] = useState<InboxPing | null>(null);
   const playerEvents = usePlayerEvents(Boolean(account.cloud));
   const [phoneApp, setPhoneApp] = useState<string | null>(null);
+  const [tourStep, setTourStep] = useState<TourId>("welcome");
   useAlertPings(life, flash);
   useTurnPings(account.username, Boolean(account.cloud), flash);
   useChopSign(Boolean(account.cloud), life);
@@ -955,6 +958,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const extraHints = [showGem, showCity, life.dumsor, showGuide, Boolean(sick)].filter(Boolean).length;
   const phoneHint = hintsOpen ? "" : "hidden sm:block";
   const homeRide = farRide(car && (life.car?.fuel ?? 0) >= 6 ? car : rideIn(RIDES[1], city.weather), life.where, "home");
+  const touring = !life.tour && !trip && !flight && !shiftId && !payday;
+  const tourCard = TOUR.find((item) => item.id === tourStep) ?? TOUR[0];
 
   function apply(result: StepResult) {
     if (result.error) {
@@ -1284,7 +1289,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               </LayerChip>
             </div>
           ) : null}
-          <button type="button" className="absolute bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] left-2 z-20 flex items-center gap-2 rounded-full bg-white p-1 shadow-lg sm:bottom-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:left-3 sm:p-1.5" onClick={() => setNeedsOpen(true)} aria-label="Open needs">
+          <button
+            type="button"
+            className={`absolute bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] left-2 z-20 flex items-center gap-2 rounded-full bg-white p-1 shadow-lg sm:bottom-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:left-3 sm:p-1.5 ${touring && tourStep === "needs" ? "ring-2 ring-[#FCD116] ring-offset-2 animate-pulse" : ""}`}
+            onClick={() => setNeedsOpen(true)}
+            aria-label="Open needs"
+          >
             <span className="grid h-10 w-10 place-items-center rounded-full text-lg sm:h-12 sm:w-12 sm:text-xl" style={{ background: life.look.skin }} aria-hidden>
               🙂
             </span>
@@ -1306,7 +1316,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 ["phone", "Phone"],
               ] as const
             ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setTab(id)} className={`relative rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""}`}>
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`relative rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""} ${touring && tourCard.pulse === id ? "ring-2 ring-[#FCD116] ring-offset-2 animate-pulse" : ""}`}
+              >
                 {label}
                 {id === "phone" && inbox.total + inbox.asks > 0 ? (
                   <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white" aria-label={`${inbox.total + inbox.asks} new`}>
@@ -1316,6 +1331,23 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               </button>
             ))}
           </nav>
+          {touring ? (
+            <TourCoach
+              step={tourStep}
+              onSkip={() => apply(skipTour(life))}
+              onNext={() => {
+                if (tourStep === "done") {
+                  apply(finishTour(life));
+                  return;
+                }
+                const at = TOUR.findIndex((item) => item.id === tourStep);
+                const next = TOUR[Math.min(at + 1, TOUR.length - 1)];
+                if (next.tab) setTab(next.tab);
+                if (next.id === "phone") setPhoneApp(null);
+                setTourStep(next.id);
+              }}
+            />
+          ) : null}
         </>
       )}
       {needsOpen ? (
