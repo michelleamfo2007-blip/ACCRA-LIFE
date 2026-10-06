@@ -927,8 +927,7 @@ body {
   bottom: 4%;
 }
 .street-side .street-road,
-.street-selfie .street-road,
-.street-on-foot .street-road {
+.street-selfie .street-road {
   transform: none;
   height: 30%;
   bottom: 24%;
