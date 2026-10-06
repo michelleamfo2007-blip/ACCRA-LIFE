@@ -446,7 +446,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
   return (
     <div className="flex h-dvh flex-col bg-[#fff6df] lg:flex-row">
       <div
-        className="relative z-0 flex min-h-[46vh] flex-1 items-end justify-center overflow-hidden pb-7 pt-16"
+        className="relative z-0 flex h-[56vh] shrink-0 items-center justify-center overflow-hidden pt-16 lg:h-dvh lg:flex-1"
         onPointerDown={(event) => {
           const start = event.clientX;
           const base = spin;
@@ -480,7 +480,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             </button>
           </div>
         </div>
-        <div className="h-[min(36vh,280px)] w-[min(64vw,240px)]">
+        <div className="h-[min(44vh,340px)] w-[min(72vw,260px)]">
           <LowPolyHuman
             skin={look.skin}
             shirt={look.cloth}
@@ -495,7 +495,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
         </div>
         <p className="absolute bottom-1 text-xs text-[#8b97ab]">Drag to spin</p>
       </div>
-      <div className="relative z-10 max-h-[50vh] shrink-0 overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
+      <div className="relative z-10 min-h-0 flex-1 overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:flex-none lg:rounded-[28px]">
         {step === 0 ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-full bg-[#fff1c9] px-4 py-3">
