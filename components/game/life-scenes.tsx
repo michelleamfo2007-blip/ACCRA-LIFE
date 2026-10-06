@@ -1,20 +1,63 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import type { FlightPhase } from "@/components/game/flight-outside";
-import { cedis, type Life, type Ride } from "@/lib/game/world";
+import { accraHour, cedis, type Life, type Ride } from "@/lib/game/world";
 
 const FlightOutside = dynamic(() => import("@/components/game/flight-outside").then((mod) => mod.FlightOutside), { ssr: false });
 
 const LINES = [
-  "The beach road is bright. Palms on one side, the Gulf on the other.",
-  "Oxford Street is already loud.",
-  "Independence Square sits back from the traffic.",
+  "Liberation Road is thick. A trotro cuts in without asking.",
+  "Oxford Street is already loud. Someone is selling pure water at the light.",
+  "Independence Avenue opens up and the city breathes.",
+  "A taxi with yellow fenders honks twice and keeps going.",
   "Cantonments is quieter once you leave the main road.",
-  "A trotro taps the horn and keeps moving.",
+  "An okada filters between the bumpers and vanishes ahead.",
+  "Almost there — you can smell the place before you see the gate.",
 ];
+
+type TrafficKind = "taxi" | "trotro" | "private" | "okada" | "suv" | "truck";
+
+type TrafficBit = {
+  id: string;
+  kind: TrafficKind;
+  lane: "near" | "far" | "opposite";
+  color: string;
+  dur: number;
+  delay: number;
+  slogan?: string;
+};
+
+const TRAFFIC_POOL: Omit<TrafficBit, "id" | "dur" | "delay">[] = [
+  { kind: "taxi", lane: "near", color: "#FCD116" },
+  { kind: "trotro", lane: "near", color: "#f4efe6", slogan: "GOD IS ABLE" },
+  { kind: "private", lane: "near", color: "#CE1126" },
+  { kind: "okada", lane: "near", color: "#1c1917" },
+  { kind: "suv", lane: "far", color: "#1e3a5f" },
+  { kind: "taxi", lane: "far", color: "#f5c542" },
+  { kind: "truck", lane: "far", color: "#5c5348" },
+  { kind: "private", lane: "opposite", color: "#006B3F" },
+  { kind: "trotro", lane: "opposite", color: "#fff6df", slogan: "NO RUSH" },
+  { kind: "okada", lane: "opposite", color: "#334155" },
+  { kind: "taxi", lane: "opposite", color: "#eab308" },
+  { kind: "suv", lane: "near", color: "#0f172a" },
+];
+
+function makeRideTraffic(seed: string): TrafficBit[] {
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) % 9973;
+  return TRAFFIC_POOL.map((bit, index) => {
+    hash = (hash * 17 + index * 43) % 997;
+    return {
+      ...bit,
+      id: `${bit.kind}-${index}`,
+      dur: 4.2 + (hash % 40) / 10,
+      delay: -((hash % 80) / 10),
+    };
+  });
+}
 
 export function StreetRide({
   life,
@@ -32,9 +75,12 @@ export function StreetRide({
   const [camera, setCamera] = useState<"chase" | "side" | "selfie">("chase");
   const [left, setLeft] = useState<number>(ride.minutes);
   const [line, setLine] = useState(0);
+  const [progress, setProgress] = useState(0);
   const fare = ride.cost ? `${cedis(ride.cost)}.` : "Free ride: your own two legs.";
   const arriveRef = useRef(onArrive);
   const finished = useRef(false);
+  const night = accraHour() >= 19 || accraHour() < 5;
+  const traffic = useMemo(() => makeRideTraffic(`${ride.id}:${place}`), [ride.id, place]);
   arriveRef.current = onArrive;
   function finish() {
     if (finished.current) return;
@@ -44,9 +90,10 @@ export function StreetRide({
 
   useEffect(() => {
     const started = Date.now();
-    const span = 8000;
+    const span = 9000;
     const id = window.setInterval(() => {
       const gone = Math.min(1, (Date.now() - started) / span);
+      setProgress(gone);
       setLeft(Math.max(0, Math.ceil(ride.minutes * (1 - gone))));
       setLine(Math.min(LINES.length - 1, Math.floor(gone * LINES.length)));
       if (gone >= 1) {
@@ -62,47 +109,61 @@ export function StreetRide({
 
   const facing = camera === "selfie" ? -1 : 1;
   const walking = ride.id === "trek";
+  const onRails = ride.id === "train";
 
   return (
-    <div className="absolute inset-0 z-40 overflow-hidden bg-[#c5e4f7]">
-      <div className={`street-world street-${camera} ${walking ? "" : `street-on-${ride.id}`}`}>
+    <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0c1220]" : "bg-[#c5e4f7]"}`}>
+      <div className={`street-world street-${camera} ${walking ? "street-on-foot" : `street-on-${ride.id}`} ${night ? "street-night" : ""}`}>
         <div className="street-sky" />
+        <div className="street-skyline" aria-hidden />
         <div className="street-road">
-          {ride.id === "train" ? <span className="street-rails" /> : null}
-          {walking || ride.id === "train" ? null : (
-            <>
-              <span className="street-car street-car-a" />
-              <span className="street-car street-car-b" />
-              <span className="street-car street-car-c" />
-            </>
-          )}
+          <span className="street-gutter street-gutter-l" />
+          <span className="street-gutter street-gutter-r" />
+          <span className="street-lane" />
+          <span className="street-pothole street-pothole-a" />
+          <span className="street-pothole street-pothole-b" />
+          <span className="street-bump" />
+          <span className="street-stain" />
+          {onRails ? <span className="street-rails" /> : null}
         </div>
-        <div className="street-walk" />
+        {!onRails ? (
+          <div className="street-traffic" aria-hidden>
+            {traffic.map((bit) => (
+              <RoadCar key={bit.id} bit={bit} night={night} />
+            ))}
+            <span className="street-hawker street-hawker-a" />
+            <span className="street-hawker street-hawker-b" />
+          </div>
+        ) : null}
+        <div className="street-walk">
+          <span className="street-kiosk" />
+          <span className="street-stall" />
+          <span className="street-pole" />
+        </div>
+        {night ? <div className="street-glow" aria-hidden /> : null}
         {walking ? (
           <div className={`street-sim street-sim-${camera}`}>
             <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={facing} className="h-full" />
           </div>
         ) : (
-          <div className={`street-vehicle street-vehicle-${ride.id}`}>
-            <Vehicle ride={ride.id} life={life} face={facing} />
+          <div className={`street-vehicle street-vehicle-${ride.id} ${progress > 0.82 ? "street-vehicle-brake" : ""}`}>
+            <Vehicle ride={ride.id} life={life} face={facing} night={night} />
           </div>
         )}
       </div>
-      <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(280px,70vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
+      <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(300px,74vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
         <p className="text-sm font-semibold">
           {ride.label} · {place}
         </p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
-          <div className="h-full rounded-full bg-[#FCD116]" style={{ width: `${((ride.minutes - left) / ride.minutes) * 100}%` }} />
+          <div className="h-full rounded-full bg-[#FCD116]" style={{ width: `${progress * 100}%` }} />
         </div>
-        <p className="mt-2 text-xs text-white/80">
-          {left}:00 to the gate
-        </p>
-        <div className="mt-2 flex gap-2 text-[11px] font-semibold">
-          <span className="rounded-full bg-[#006B3F] px-2 py-0.5">Moving</span>
-          <span className="rounded-full bg-white/15 px-2 py-0.5">{life.dumsor ? "Dumsor" : "Sunny"}</span>
+        <p className="mt-2 text-xs text-white/80">{left}:00 on the road</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+          <span className="rounded-full bg-[#006B3F] px-2 py-0.5">{walking ? "On foot" : "In traffic"}</span>
+          <span className="rounded-full bg-white/15 px-2 py-0.5">{night ? "Night road" : life.dumsor ? "Dumsor" : "Day traffic"}</span>
         </div>
-        <p className="mt-2 text-xs leading-5 text-white/85">{line === LINES.length - 1 ? `Almost there. ${place} is just ahead.` : LINES[line]}</p>
+        <p className="mt-2 text-xs leading-5 text-white/85">{progress > 0.9 ? `${place} is just ahead.` : walking ? (progress > 0.5 ? "Cars keep rolling past. Keep walking." : LINES[line]) : LINES[line]}</p>
         <p className="mt-1 text-xs text-white/70">{fare}</p>
         <div className="mt-3 flex gap-2">
           <button type="button" onClick={finish} className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#121212]">
@@ -130,17 +191,43 @@ export function StreetRide({
   );
 }
 
-function Vehicle({ ride, life, face }: { ride: Ride["id"]; life: Life; face: 1 | -1 }) {
+function RoadCar({ bit, night }: { bit: TrafficBit; night: boolean }) {
+  return (
+    <div
+      className={`road-car road-car-${bit.kind} road-lane-${bit.lane} ${night ? "road-car-night" : ""}`}
+      style={{
+        ["--car-color" as string]: bit.color,
+        animationDuration: `${bit.dur}s`,
+        animationDelay: `${bit.delay}s`,
+      }}
+    >
+      <span className="road-car-shadow" />
+      <span className="road-car-body">
+        <span className="road-car-cabin" />
+        <span className="road-car-glass" />
+        {bit.kind === "taxi" ? <span className="road-car-lamp">TAXI</span> : null}
+        {bit.kind === "trotro" ? <span className="road-car-slogan">{bit.slogan ?? "TROTRO"}</span> : null}
+        <span className="road-car-light road-car-head" />
+        <span className="road-car-light road-car-tail" />
+      </span>
+      <span className="road-car-wheel road-car-wheel-b" />
+      <span className="road-car-wheel road-car-wheel-f" />
+    </div>
+  );
+}
+
+function Vehicle({ ride, life, face, night }: { ride: Ride["id"]; life: Life; face: 1 | -1; night?: boolean }) {
   const rider = <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="idle" face={face} className="h-full" />;
   if (ride === "trotro") {
     return (
-      <div className="van">
+      <div className={`van ${night ? "ride-lit" : ""}`}>
         <span className="van-stripe" />
         <span className="van-cab" />
         <span className="van-glass">{rider}</span>
         <span className="van-glass" />
         <span className="van-glass" />
-        <span className="van-board">TROTRO</span>
+        <span className="van-board">NO CONDITION IS PERMANENT</span>
+        <span className="ride-brake" />
         <span className="wheel wheel-back" />
         <span className="wheel wheel-front" />
       </div>
@@ -162,8 +249,9 @@ function Vehicle({ ride, life, face }: { ride: Ride["id"]; life: Life; face: 1 |
   }
   if (ride === "car") {
     return (
-      <div className="cab" style={{ background: "#2f3a4a" }}>
+      <div className={`cab ${night ? "ride-lit" : ""}`} style={{ background: "#2f3a4a" }}>
         <span className="cab-glass">{rider}</span>
+        <span className="ride-brake" />
         <span className="wheel wheel-back" />
         <span className="wheel wheel-front" />
       </div>
@@ -171,16 +259,17 @@ function Vehicle({ ride, life, face }: { ride: Ride["id"]; life: Life; face: 1 |
   }
   if (ride === "taxi") {
     return (
-      <div className="cab">
+      <div className={`cab ${night ? "ride-lit" : ""}`}>
         <span className="cab-lamp">TAXI</span>
         <span className="cab-glass">{rider}</span>
+        <span className="ride-brake" />
         <span className="wheel wheel-back" />
         <span className="wheel wheel-front" />
       </div>
     );
   }
   return (
-    <div className="bike">
+    <div className={`bike ${night ? "ride-lit" : ""}`}>
       <span className="bike-rider">{rider}</span>
       <span className="bike-body" />
       <span className="wheel wheel-back" />
