@@ -62,7 +62,41 @@ export type Life = {
   soldToday?: { day: number; spots: Record<string, number> };
   pantry?: number;
   cool?: Record<string, number>;
+  plots?: Plot[];
+  kids?: Kid[];
+  expecting?: number | null;
+  music?: Music;
+  school?: Schooling;
+  car?: CarState | null;
+  farm?: (FarmBed | null)[];
+  health?: Health;
+  tailor?: Tailor;
+  badges?: string[];
+  streak?: { day: number; count: number };
+  stats?: Record<string, number>;
+  generation?: number;
+  playDay?: { day: number; bets: number };
 };
+
+export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number };
+export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
+export type Song = { id: string; title: string; at: number; quality: number; paid: number };
+export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number };
+export type Schooling = { certs: string[]; course?: string | null; done?: number; lastClass?: number };
+export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number };
+export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
+export type SickKind = "malaria" | "flu" | "tummy" | "burnout";
+export type Health = { sick?: { kind: SickKind; since: number } | null; nhisUntil?: number; day?: number };
+export type Outfit = { style: string; color: string };
+export type Tailor = { orders: { id: string; style: string; color: string; readyAt: number }[]; wardrobe: Outfit[] };
+
+export const SICK_LABEL: Record<SickKind, string> = { malaria: "Malaria", flu: "Flu", tummy: "Running stomach", burnout: "Burnout" };
+
+const CERT_PAY: Record<string, number> = { wassce: 0.15, catering: 0.1, electrical: 0.1, bootcamp: 0.15, degree: 0.3, masters: 0.2 };
+
+export function jobBoost(life: Life) {
+  return 1 + (life.school?.certs ?? []).reduce((sum, cert) => sum + (CERT_PAY[cert] ?? 0), 0);
+}
 
 export const PANTRY_MAX = 12;
 
@@ -765,6 +799,7 @@ export const SHOP: ShopItem[] = [
   { id: "kente", name: "Kente throw", price: 80, detail: "A cloth for the wall. The room looks like somebody lives here.", category: "design", size: "wall", stars: 2, color: "#c4563a", kind: "box" },
   { id: "mattress", name: "Thicker mattress", price: 480, detail: "Sleep gives more of you back.", category: "sleep", size: "2×1", stars: 3, color: "#6d4aff", kind: "bed" },
   { id: "pillow", name: "Extra pillow", price: 40, detail: "One more place to put your head.", category: "sleep", size: "1×1", stars: 1, color: "#f4efe6", kind: "box" },
+  { id: "net", name: "Mosquito net", price: 35, detail: "Treated net. Malaria season hits you far less.", category: "sleep", size: "1×1", stars: 1, color: "#e8f1ea", kind: "box" },
   { id: "pan", name: "Good cooking pot", price: 150, detail: "Home jollof fills the plate properly.", category: "kitchen", size: "1×1", stars: 2, color: "#8d5a32", kind: "box" },
   { id: "kenkey", name: "Kenkey and fish", price: 20, detail: "Eat it now. Pepper included.", consume: true, category: "kitchen", size: "1×1", stars: 2, color: "#e7c85a", kind: "food" },
   { id: "bucket", name: "Bath bucket", price: 35, detail: "For the mornings the shower is a rumour.", category: "bath", size: "1×1", stars: 1, color: "#3d7ea6", kind: "box" },
@@ -960,7 +995,27 @@ function clone(life: Life): Life {
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
+    plots: (life.plots ?? []).map((plot) => ({ ...plot })),
+    kids: (life.kids ?? []).map((kid) => ({ ...kid })),
+    music: life.music ? { ...life.music, songs: life.music.songs.map((song) => ({ ...song })) } : undefined,
+    school: life.school ? { ...life.school, certs: [...life.school.certs] } : undefined,
+    car: life.car ? { ...life.car } : life.car,
+    farm: (life.farm ?? []).map((bed) => (bed ? { ...bed } : null)),
+    health: life.health ? { ...life.health, sick: life.health.sick ? { ...life.health.sick } : life.health.sick } : undefined,
+    tailor: life.tailor ? { orders: life.tailor.orders.map((order) => ({ ...order })), wardrobe: life.tailor.wardrobe.map((fit) => ({ ...fit })) } : undefined,
+    badges: [...(life.badges ?? [])],
+    streak: life.streak ? { ...life.streak } : undefined,
+    stats: { ...(life.stats ?? {}) },
+    playDay: life.playDay ? { ...life.playDay } : undefined,
   };
+}
+
+export function cloneLife(life: Life) {
+  return clone(life);
+}
+
+export function logLine(life: Life, line: string) {
+  pushLog(life, line);
 }
 
 export function mergeMoney(stored: Life, incoming: Life): Life {
@@ -1046,6 +1101,10 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     next.needs.social = clampNeed(next.needs.social - 2 * hours);
     next.needs.hygiene = clampNeed(next.needs.hygiene - (next.traits.includes("fresh") ? 1.4 : 3) * hours);
     next.needs.bladder = clampNeed(next.needs.bladder - 6.5 * hours);
+    if (next.health?.sick) {
+      next.needs.energy = clampNeed(next.needs.energy - 2 * hours);
+      next.needs.fun = clampNeed(next.needs.fun - 1 * hours);
+    }
   } else {
     next.needs.hunger = clampNeed(next.needs.hunger - 2.4 * hours);
     next.needs.hygiene = clampNeed(next.needs.hygiene - 1.1 * hours);
@@ -1063,7 +1122,33 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     next.dumsor = !hasCurrent(next.inventory) && day % 2 === 1;
     if (next.dumsor) notes.push("Dumsor. The meter just sighed.");
   }
+  checkHealth(next, clockTo, notes);
   return { life: next, notes };
+}
+
+function checkHealth(life: Life, now: number, notes: string[]) {
+  const health: Health = { ...(life.health ?? {}) };
+  if (health.sick && now - health.sick.since >= 4320) {
+    health.sick = null;
+    notes.push("You feel like yourself again.");
+  }
+  const day = dayIndex(now);
+  if (health.day === undefined) health.day = day;
+  else if (health.day !== day) {
+    health.day = day;
+    if (!health.sick) {
+      const month = new Date(now * 60000).getUTCMonth();
+      const rainy = (month >= 3 && month <= 6) || month === 8 || month === 9;
+      const netted = life.inventory.includes("net");
+      const chance = 0.03 + (life.needs.hygiene < 25 ? 0.1 : 0) + (life.needs.energy < 15 ? 0.08 : 0) + (life.needs.hunger < 20 ? 0.06 : 0) + (rainy && !netted ? 0.12 : 0) - life.skills.fitness * 0.006;
+      if (Math.random() < chance) {
+        const kind: SickKind = rainy && !netted && Math.random() < 0.6 ? "malaria" : life.needs.hunger < 20 ? "tummy" : life.needs.energy < 15 ? "burnout" : "flu";
+        health.sick = { kind, since: now };
+        notes.push(kind === "malaria" ? "Malaria. Your head is pounding. See the clinic." : `${SICK_LABEL[kind]}. Rest, or see the clinic.`);
+      }
+    }
+  }
+  life.health = health;
 }
 
 function settleBills(life: Life, from: number, to: number) {
@@ -1077,13 +1162,14 @@ function settleBills(life: Life, from: number, to: number) {
     const loanPay = Math.min(life.loan, life.weeklyLoan);
     const upkeep = SHOP.reduce((sum, item) => sum + (item.upkeep && life.inventory.includes(item.id) ? item.upkeep : 0), 0);
     const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level), 0);
-    life.cash -= rent + loanPay + upkeep + wages;
+    const fees = (life.kids ?? []).filter((kid) => kid.school).length * 40;
+    life.cash -= rent + loanPay + upkeep + wages + fees;
     life.loan -= loanPay;
     if (life.loan <= 0) {
       life.loan = 0;
       life.weeklyLoan = 0;
     }
-    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}.`);
+    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
     if (life.cash < 0) notes.push("The wallet is in the red. Rent still left.");
   }
   return notes;
@@ -1106,7 +1192,9 @@ export function careerLevel(life: Life) {
   return Math.min(5, 1 + Math.floor(life.skills.career / 3));
 }
 
-export type RideId = "trek" | "trotro" | "train" | "okada" | "taxi";
+export type RideId = "trek" | "trotro" | "train" | "okada" | "taxi" | "car";
+
+export const FUEL_PER_TRIP = 6;
 
 export type Ride = { id: RideId; label: string; cost: number; minutes: number };
 
@@ -1121,10 +1209,24 @@ export const RIDES: Ride[] = [
 export function goTo(life: Life, placeId: string, ride: Ride = RIDES[1]): StepResult {
   if (life.where === placeId) return { life, notes: [] };
   if (ride.cost > 0 && life.cash < ride.cost) return { life, notes: [], error: `You need ${cedis(ride.cost)} for ${ride.label.toLowerCase()}.` };
+  if (ride.id === "car") {
+    if (!life.car) return { life, notes: [], error: "You do not have a car yet." };
+    if (life.car.fuel < FUEL_PER_TRIP) return { life, notes: [], error: "The tank is nearly empty. Fill up in the Garage app." };
+  }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
   timed.life.where = placeId;
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}`);
+  if (ride.id === "car" && timed.life.car) {
+    timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - FUEL_PER_TRIP };
+    if (Math.random() < 0.15) {
+      if (timed.life.car.insuredUntil > timed.life.minutes) timed.notes.push("Police checkpoint. Papers in order, waved through.");
+      else {
+        timed.life.cash -= 80;
+        timed.notes.push("Police checkpoint. No insurance sticker: ₵80 fine.");
+      }
+    }
+  }
   return timed;
 }
 
@@ -1156,6 +1258,11 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
     earn *= careerLevel(after);
     if (after.traits.includes("hustler")) earn = Math.round(earn * 1.15);
     if (after.traits.includes("lazy")) earn = Math.round(earn * 0.85);
+    earn = Math.round(earn * jobBoost(after));
+  }
+  if (earn > 0 && after.health?.sick) {
+    earn = Math.round(earn * 0.5);
+    notes.push("Working sick. Half the pay.");
   }
   after.cash += earn;
   const boost = actionBoost(after, verb);

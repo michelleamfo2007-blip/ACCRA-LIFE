@@ -81,7 +81,7 @@ export function sellBusiness(life: Life, shopId: string): StepResult {
   return { life: next, notes: [line] };
 }
 
-export type Good = { id: string; label: string; emoji: string; base: number; food?: boolean };
+export type Good = { id: string; label: string; emoji: string; base: number; food?: boolean; farm?: boolean };
 
 export const GOODS: Good[] = [
   { id: "tomatoes", label: "Crate of tomatoes", emoji: "🍅", base: 60, food: true },
@@ -90,6 +90,10 @@ export const GOODS: Good[] = [
   { id: "cases", label: "Phone cases", emoji: "📱", base: 40 },
   { id: "ankara", label: "Ankara bundle", emoji: "🧵", base: 120 },
   { id: "kente", label: "Kente strip", emoji: "🟨", base: 300 },
+  { id: "pepper", label: "Basket of pepper", emoji: "🌶️", base: 30, food: true, farm: true },
+  { id: "okro", label: "Bag of okro", emoji: "🌿", base: 22, food: true, farm: true },
+  { id: "garden-eggs", label: "Garden eggs", emoji: "🍆", base: 26, food: true, farm: true },
+  { id: "plantain", label: "Bunch of plantain", emoji: "🍌", base: 45, food: true, farm: true },
 ];
 
 export const BAG_LIMIT = 10;
@@ -115,7 +119,7 @@ export function isSupply(spotId: string) {
 }
 
 export function buyPrice(good: Good, spotId: string, day: number) {
-  if (!SUPPLY.has(spotId) || (spotId !== "makola" && !good.food)) return null;
+  if (good.farm || !SUPPLY.has(spotId) || (spotId !== "makola" && !good.food)) return null;
   const factor = (spotId === "makola" ? 0.68 : 0.82) + seed(`buy-${good.id}-${spotId}-${day}`) * 0.14;
   return Math.max(1, Math.round(good.base * factor));
 }

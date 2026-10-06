@@ -70,6 +70,10 @@ const BY_ID: Record<string, Verb[]> = {
     act({ id: "pillow-rest", label: "Rest your head", detail: "Ten minutes that turn into forty.", minutes: 40, effects: { energy: 14 }, sleep: true }),
     act({ id: "pillow-fight", label: "Pillow fight", detail: "Nobody wins. Everybody laughs.", minutes: 10, effects: { fun: 14, energy: -4 } }),
   ],
+  net: [
+    act({ id: "net-tuck", label: "Tuck in the net", detail: "Every edge under the mattress. Sleep sound.", minutes: 10, effects: { energy: 4, hygiene: 4 } }),
+    act({ id: "net-hunt", label: "Hunt the mosquito", detail: "One got in. You will not rest until it is done.", minutes: 15, effects: { fun: 8, energy: -3 } }),
+  ],
   pan: [
     act({ id: "pan-lightsoup", label: "Cook light soup", detail: "Goat, garden eggs, and pepper that clears the sinuses.", minutes: 60, effects: { hunger: 46, fun: 6 }, skill: "cooking", pantry: 1, tag: "food" }),
     act({ id: "pan-kelewele", label: "Fry kelewele", detail: "Ginger, pepper, ripe plantain. The corridor follows the smell.", minutes: 25, effects: { hunger: 24, fun: 10 }, skill: "cooking", pantry: 1, tag: "food" }),

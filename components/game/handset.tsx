@@ -4,7 +4,10 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { IsoHuman } from "@/components/game/iso-human";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
+import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
+import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
+import { streakState } from "@/lib/game/badges";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
 import {
   CLOTHES,
@@ -30,7 +33,34 @@ import {
   type StepResult,
 } from "@/lib/game/world";
 
-type AppId = "home" | "messages" | "work" | "goals" | "momo" | "contacts" | "radio" | "news" | "games" | "boutique" | "light" | "settings" | "biz" | "susu" | "people";
+type AppId =
+  | "home"
+  | "messages"
+  | "work"
+  | "goals"
+  | "momo"
+  | "contacts"
+  | "radio"
+  | "news"
+  | "games"
+  | "boutique"
+  | "light"
+  | "settings"
+  | "biz"
+  | "susu"
+  | "people"
+  | "land"
+  | "family"
+  | "studio"
+  | "school"
+  | "garage"
+  | "farm"
+  | "health"
+  | "tailor"
+  | "badges"
+  | "crew"
+  | "events"
+  | "leader";
 
 export function Handset({
   life,
@@ -59,7 +89,13 @@ export function Handset({
   onNet,
   onVisit,
   friends,
+  married,
+  raining,
+  onGo,
 }: {
+  married: boolean;
+  raining: boolean;
+  onGo: (spot: string) => void;
   friends: { username: string; name: string }[];
   life: Life;
   username: string;
@@ -196,7 +232,7 @@ export function Handset({
             <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
               {app === "home" && !thread ? (
-                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
+                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} daily={now != null && !streakState(life, now).claimed} sick={Boolean(life.health?.sick)} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
               ) : null}
               {app === "messages" ? (
                 <MessagesApp
@@ -308,7 +344,19 @@ export function Handset({
               {app === "contacts" ? <ContactsScreen life={life} onBack={() => setApp("home")} onOpen={openThread} /> : null}
               {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy FM is on.", "Highlife, a gospel hour, and whoever just walked into the studio."]} /> : null}
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
-              {app === "games" ? <NoteScreen title="Oware" onBack={() => setApp("home")} lines={["The board is on the stoop.", "A full game lands later. For now, the seeds are just sitting there, waiting on you."]} /> : null}
+              {app === "games" ? <GamesApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
+              {app === "land" ? <LandApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "family" ? <FamilyApp life={life} married={married} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "studio" ? <StudioApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "school" ? <SchoolApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "garage" ? <GarageApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "farm" ? <FarmApp life={life} raining={raining} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "health" ? <HealthApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "tailor" ? <TailorApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "badges" ? <BadgesApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "crew" ? <CrewApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} onVisit={onVisit} /> : null}
+              {app === "events" ? <EventsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} onGo={onGo} /> : null}
+              {app === "leader" ? <LeaderApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -374,6 +422,8 @@ function HomeScreen({
   time,
   inbox,
   asks,
+  daily,
+  sick,
   onOpen,
   onRide,
   onMarket,
@@ -382,6 +432,8 @@ function HomeScreen({
   time: string;
   inbox: number;
   asks: number;
+  daily: boolean;
+  sick: boolean;
   onOpen: (app: AppId) => void;
   onRide: () => void;
   onMarket: () => void;
@@ -418,7 +470,7 @@ function HomeScreen({
         <AppIcon label="City desk" color="#243044" onClick={() => onOpen("news")}>
           <Paper />
         </AppIcon>
-        <AppIcon label="Oware" color="#f4efe6" onClick={() => onOpen("games")}>
+        <AppIcon label="Games" color="#f4efe6" onClick={() => onOpen("games")}>
           <Seeds />
         </AppIcon>
         <AppIcon label="Boutique" color="#c45c9a" onClick={() => onOpen("boutique")}>
@@ -435,6 +487,42 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="People" color="#c45c9a" badge={asks} onClick={() => onOpen("people")}>
           <span className="text-2xl">💞</span>
+        </AppIcon>
+        <AppIcon label="Family" color="#e88bbf" onClick={() => onOpen("family")}>
+          <span className="text-2xl">👨🏾‍👩🏾‍👧🏾</span>
+        </AppIcon>
+        <AppIcon label="Land" color="#6b4423" onClick={() => onOpen("land")}>
+          <span className="text-2xl">🏗️</span>
+        </AppIcon>
+        <AppIcon label="Farm" color="#3f7d20" onClick={() => onOpen("farm")}>
+          <span className="text-2xl">🌶️</span>
+        </AppIcon>
+        <AppIcon label="Garage" color="#243044" onClick={() => onOpen("garage")}>
+          <span className="text-2xl">🚗</span>
+        </AppIcon>
+        <AppIcon label="Studio" color="#3b1f5c" onClick={() => onOpen("studio")}>
+          <span className="text-2xl">🎙️</span>
+        </AppIcon>
+        <AppIcon label="School" color="#1f4e8c" onClick={() => onOpen("school")}>
+          <span className="text-2xl">🎓</span>
+        </AppIcon>
+        <AppIcon label="Health" color="#0e7c6b" badge={sick ? 1 : 0} onClick={() => onOpen("health")}>
+          <span className="text-2xl">🩺</span>
+        </AppIcon>
+        <AppIcon label="Seamstress" color="#8a2f6a" onClick={() => onOpen("tailor")}>
+          <span className="text-2xl">🧵</span>
+        </AppIcon>
+        <AppIcon label="Crew" color="#121212" onClick={() => onOpen("crew")}>
+          <span className="text-2xl">🛡️</span>
+        </AppIcon>
+        <AppIcon label="Events" color="#4a1d1d" onClick={() => onOpen("events")}>
+          <span className="text-2xl">🎉</span>
+        </AppIcon>
+        <AppIcon label="Badges" color="#b8860b" badge={daily ? 1 : 0} onClick={() => onOpen("badges")}>
+          <span className="text-2xl">🏅</span>
+        </AppIcon>
+        <AppIcon label="Top 10" color="#FCD116" onClick={() => onOpen("leader")}>
+          <span className="text-2xl">🏆</span>
         </AppIcon>
         <AppIcon label="Settings" color="#e7edf5" onClick={() => onOpen("settings")}>
           <Gear />

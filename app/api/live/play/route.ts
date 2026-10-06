@@ -1,0 +1,131 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import type { Move } from "@/lib/game/boards";
+import type { NetRef } from "@/lib/game/net";
+import type { Life } from "@/lib/game/world";
+import {
+  answerChallenge,
+  attendEvent,
+  challenge,
+  chipCrew,
+  claimIdle,
+  createCrew,
+  crewView,
+  declineCrew,
+  gamesView,
+  giftEvent,
+  hostEvent,
+  inviteCrew,
+  joinCrew,
+  leaderboard,
+  leaveCrew,
+  listEvents,
+  playMove,
+  sendCrew,
+  shareCrewBank,
+} from "@/lib/server/play";
+import { CLOUD_COOKIE, readSessionToken } from "@/lib/server/session";
+
+const HANDLE = /^[a-z0-9_]{3,16}$/;
+
+async function me() {
+  return readSessionToken((await cookies()).get(CLOUD_COOKIE)?.value)?.uid ?? null;
+}
+
+function handle(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().replace(/^@/, "");
+}
+
+function refOf(body: Record<string, unknown> | null): NetRef | null {
+  const owner = handle(body?.owner);
+  const id = String(body?.id ?? "").trim();
+  if (!HANDLE.test(owner) || !/^[a-z0-9]{4,20}$/.test(id)) return null;
+  return { owner, id };
+}
+
+function lifeOf(body: Record<string, unknown> | null) {
+  const life = body?.life as Life | undefined;
+  return life && typeof life === "object" && typeof life.cash === "number" ? life : null;
+}
+
+function moveOf(value: unknown): Move {
+  const raw = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const move: Move = {};
+  for (const key of ["pit", "from", "to", "token", "roll"] as const) {
+    const n = Number(raw[key]);
+    if (raw[key] !== undefined && Number.isInteger(n)) move[key] = n;
+  }
+  return move;
+}
+
+function reply(error: string | null, extra: Record<string, unknown> = {}) {
+  if (error) return NextResponse.json({ error }, { status: 400 });
+  return NextResponse.json({ ok: true, ...extra });
+}
+
+function done(result: { error: string } | { life?: Life; note: string }) {
+  return "error" in result ? reply(result.error) : reply(null, { life: result.life, note: result.note });
+}
+
+export async function GET(request: Request) {
+  const username = await me();
+  if (!username) return NextResponse.json({ error: "Log in again." }, { status: 401 });
+  const view = new URL(request.url).searchParams.get("view");
+  if (view === "crew") {
+    const crew = await crewView(username);
+    return crew ? NextResponse.json(crew) : NextResponse.json({ error: "Log in again." }, { status: 401 });
+  }
+  if (view === "events") return NextResponse.json({ events: await listEvents() });
+  if (view === "games") return NextResponse.json({ games: (await gamesView(username)) ?? [] });
+  if (view === "board") return NextResponse.json(await leaderboard());
+  return reply("Unknown view.");
+}
+
+export async function POST(request: Request) {
+  const username = await me();
+  if (!username) return NextResponse.json({ error: "Log in again." }, { status: 401 });
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const action = String(body?.action ?? "");
+  const ref = refOf(body);
+  const life = lifeOf(body);
+  switch (action) {
+    case "crew-create":
+      return reply(await createCrew(username, String(body?.name ?? ""), String(body?.tag ?? "")));
+    case "crew-invite":
+      return reply(await inviteCrew(username, handle(body?.to)));
+    case "crew-join":
+      return reply(ref ? await joinCrew(username, ref) : "That invite is gone.");
+    case "crew-decline":
+      return reply(ref ? await declineCrew(username, ref) : null);
+    case "crew-leave":
+      return reply(await leaveCrew(username));
+    case "crew-chip":
+      return life ? done(await chipCrew(username, Number(body?.amount), life)) : reply("Log in again.");
+    case "crew-share":
+      return reply(await shareCrewBank(username));
+    case "crew-send":
+      return reply(await sendCrew(username, String(body?.text ?? "")));
+    case "event-host":
+      return life ? done(await hostEvent(username, String(body?.kind ?? ""), String(body?.title ?? ""), String(body?.spot ?? ""), Number(body?.hours), life)) : reply("Log in again.");
+    case "event-attend": {
+      if (!ref) return reply("That event is over.");
+      const result = await attendEvent(username, ref);
+      return "error" in result ? reply(result.error) : reply(null, { event: result.event });
+    }
+    case "event-gift":
+      return ref && life ? done(await giftEvent(username, ref, Number(body?.amount), life)) : reply("That event is over.");
+    case "game-challenge":
+      return life ? done(await challenge(username, handle(body?.to), String(body?.game ?? ""), Number(body?.stake), life)) : reply("Log in again.");
+    case "game-answer":
+      return ref && life ? done(await answerChallenge(username, ref, Boolean(body?.yes), life)) : reply("That challenge is gone.");
+    case "game-move": {
+      if (!ref) return reply("That game is not running.");
+      const result = await playMove(username, ref, moveOf(body?.move));
+      return "error" in result ? reply(result.error) : reply(null, { match: result.match });
+    }
+    case "game-claim":
+      return reply(ref ? await claimIdle(username, ref) : "That game is not running.");
+    default:
+      return reply("Unknown action.");
+  }
+}

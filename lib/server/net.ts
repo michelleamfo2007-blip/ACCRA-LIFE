@@ -8,19 +8,19 @@ const HANDLE = /^[a-z0-9_]{3,16}$/;
 
 type Done = { error: string } | { life?: Life; note: string };
 
-function netOf(life: Life | null | undefined): Net {
+export function netOf(life: Life | null | undefined): Net {
   return life?.net && typeof life.net === "object" ? life.net : {};
 }
 
-function withNet(life: Life, change: (net: Net) => Net): Life {
+export function withNet(life: Life, change: (net: Net) => Net): Life {
   return { ...life, net: change({ ...netOf(life) }) };
 }
 
-function newId() {
+export function newId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function accraTime() {
+export function accraTime() {
   return new Intl.DateTimeFormat("en-GH", { timeZone: "Africa/Accra", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date());
 }
 
@@ -266,9 +266,12 @@ export async function hostHome(username: string, host: string): Promise<HostHome
   const me = await readPlayer(username);
   const invited = (netOf(me?.life).invites ?? []).some((item) => item.from === host && Date.now() - Date.parse(item.at) < 86400000);
   const partner = netOf(me?.life).bond?.with === host;
-  if (!invited && !partner) return null;
   const owner = await readPlayer(host);
   if (!owner?.life) return null;
+  const crewRef = netOf(me?.life).crew ? { owner: username, id: netOf(me?.life).crew!.id } : netOf(me?.life).crewIn;
+  const crewOwner = crewRef ? (crewRef.owner === username ? me : await readPlayer(crewRef.owner)) : null;
+  const crewmate = Boolean(crewRef && netOf(crewOwner?.life).crew?.id === crewRef.id && netOf(crewOwner?.life).crew?.members.includes(host));
+  if (!invited && !partner && !crewmate) return null;
   return {
     username: owner.username,
     name: owner.name,

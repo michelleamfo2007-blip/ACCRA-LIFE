@@ -156,6 +156,15 @@ function Vehicle({ ride, life, face }: { ride: Ride["id"]; life: Life; face: 1 |
       </div>
     );
   }
+  if (ride === "car") {
+    return (
+      <div className="cab" style={{ background: "#2f3a4a" }}>
+        <span className="cab-glass">{rider}</span>
+        <span className="wheel wheel-back" />
+        <span className="wheel wheel-front" />
+      </div>
+    );
+  }
   if (ride === "taxi") {
     return (
       <div className="cab">

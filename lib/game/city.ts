@@ -240,6 +240,6 @@ export function rideIn(ride: Ride, sky: Weather): Ride & { blocked?: string; not
   if (sky.flood && ride.id === "okada") return { ...ride, blocked: "Okada riders have parked for the flood." };
   if (ride.id === "trek") return { ...ride, minutes: ride.minutes + (sky.flood ? 25 : 15), note: "Wet walk" };
   const slow = sky.flood ? 2 : 1.5;
-  const extra = ride.id === "taxi" ? (sky.flood ? 15 : 8) : sky.flood ? 4 : 2;
+  const extra = ride.id === "car" ? 0 : ride.id === "taxi" ? (sky.flood ? 15 : 8) : sky.flood ? 4 : 2;
   return { ...ride, minutes: Math.round(ride.minutes * slow), cost: ride.cost + extra, note: sky.flood ? "Flood fare" : "Rain fare" };
 }
