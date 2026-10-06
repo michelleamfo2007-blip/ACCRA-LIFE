@@ -11,7 +11,8 @@ const Apartment = dynamic(() => import("@/components/game/apartment").then((mod)
 const SPOTS = {
   door: { x: -4.7, z: 0.15, action: "map" },
   bed: { x: 1.15, z: -1.85, action: "sleep" },
-  chair: { x: -0.7, z: 0.45, action: "gist" },
+  /** On the sofa seat (Sofa mesh is at -1.55, -0.15). */
+  chair: { x: -1.55, z: 0.02, action: "gist" },
   radio: { x: 0.35, z: 0.7, action: "radio" },
   cooler: { x: 3.7, z: 1.7, action: "cooler" },
   stove: { x: 3.5, z: 2.6, action: "cook" },
@@ -22,7 +23,12 @@ const SPOTS = {
   roamC: { x: -1.1, z: 1.6, action: null },
 };
 
-type Pose = "idle" | "walk" | "act" | "sleep";
+type Pose = "idle" | "walk" | "act" | "sleep" | "sit";
+
+function sitVerb(verb: Verb) {
+  if (verb.sleep) return false;
+  return /sit|rest|doze|sofa|chair|street|arm-|throne|watch|gist|scroll|chill|tea|papers/i.test(`${verb.id} ${verb.label}`);
+}
 
 export function RoomView({
   life,
@@ -53,6 +59,7 @@ export function RoomView({
   const [heading, setHeading] = useState(0);
   const posRef = useRef(pos);
   const busy = useRef(false);
+  const seated = useRef(false);
   const frame = useRef(0);
   const onActRef = useRef(onAct);
   const onRunRef = useRef(onRun);
@@ -60,6 +67,10 @@ export function RoomView({
   const [picked, setPicked] = useState<string | null>(null);
   const [fixture, setFixture] = useState<FixtureId | null>(null);
   const [draft, setDraft] = useState<Placed | null>(null);
+
+  function canInterrupt() {
+    return !busy.current || seated.current;
+  }
 
   useEffect(() => {
     onActRef.current = onAct;
@@ -69,6 +80,16 @@ export function RoomView({
 
   function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean) {
     walkTo(target, null, () => {
+      const sitting = !inBed && sitVerb(verb);
+      if (sitting) {
+        seated.current = true;
+        setHeading(0);
+        setPose("sit");
+        onRunRef.current?.(verb);
+        busy.current = false;
+        return;
+      }
+      seated.current = false;
       setPose(inBed && (verb.sleep || verb.id === "sleep") ? "sleep" : "act");
       onRunRef.current?.(verb);
       window.setTimeout(
@@ -79,6 +100,17 @@ export function RoomView({
         inBed && (verb.sleep || verb.id === "sleep") ? 2800 : 1500,
       );
     });
+  }
+
+  function sitOnChair() {
+    if (seated.current && pose === "sit") return;
+    const card = fixtureCard("chair", life);
+    const verb =
+      card.verbs.find((item) => item.id === "home-lounge") ??
+      card.verbs.find((item) => /lounge|sit|rest|gist/i.test(`${item.id} ${item.label}`)) ??
+      card.verbs[0];
+    if (!verb) return;
+    runAt(SPOTS.chair, verb, false);
   }
 
   function pickVerb(verb: Verb) {
@@ -96,6 +128,7 @@ export function RoomView({
 
   function walkTo(target: { x: number; z: number }, action: string | null, arrive?: () => void) {
     cancelAnimationFrame(frame.current);
+    seated.current = false;
     busy.current = true;
     const start = { ...posRef.current };
     const dx = target.x - start.x;
@@ -142,7 +175,7 @@ export function RoomView({
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (busy.current) return;
+      if (busy.current || seated.current) return;
       if (localStorage.getItem("accralife-freewill") === "0") return;
       const roam = ["roamA", "roamB", "roamC"][Math.floor(Math.random() * 3)] as keyof typeof SPOTS;
       walkTo(SPOTS[roam], null);
@@ -203,7 +236,7 @@ export function RoomView({
         sofaColor={sofaColor}
         onAsk={onAsk}
         onWalk={(x, z) => {
-          if (draft || busy.current) return;
+          if (draft || !canInterrupt()) return;
           walkTo({ x: clampRoom(x, -4.6, 4.6), z: clampRoom(z, -3.4, 3.6) }, null);
         }}
         onGo={(id) => {
@@ -211,8 +244,12 @@ export function RoomView({
             walkTo(SPOTS.door, "map");
             return;
           }
-          if (draft) return;
+          if (draft || (!canInterrupt() && id !== "chair")) return;
           setPicked(null);
+          if (id === "chair") {
+            sitOnChair();
+            return;
+          }
           setFixture(id as FixtureId);
         }}
         pieces={shownPieces(life, draft)}
@@ -230,17 +267,40 @@ export function RoomView({
           💤 Sleeping…
         </div>
       ) : null}
+      {pose === "sit" ? (
+        <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#121212] shadow-lg">
+          🪑 Sitting · tap floor to get up
+        </div>
+      ) : null}
       {!draft && !fixture && !picked ? (
         <>
           <p className="pointer-events-none absolute bottom-[max(5.6rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
-            Tap floor to walk · drag to look · pinch zoom
+            Tap chair to sit · pinch zoom · Buy to place
           </p>
+          <div className="absolute bottom-[max(7.4rem,calc(env(safe-area-inset-bottom)+6.6rem))] right-2 z-30 flex flex-col gap-1.5">
+            <button
+              type="button"
+              aria-label="Zoom in"
+              className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg font-bold shadow-lg"
+              onClick={() => window.dispatchEvent(new CustomEvent("accralife-home-zoom", { detail: 0.85 }))}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom out"
+              className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg font-bold shadow-lg"
+              onClick={() => window.dispatchEvent(new CustomEvent("accralife-home-zoom", { detail: 1.18 }))}
+            >
+              −
+            </button>
+          </div>
           <div className="absolute bottom-[max(5.8rem,calc(env(safe-area-inset-bottom)+5rem))] right-2 z-30 grid grid-cols-3 gap-1 sm:hidden">
             <span />
             <WalkPadBtn
               label="Up"
               onClick={() => {
-                if (busy.current) return;
+                if (!canInterrupt()) return;
                 const next = { x: posRef.current.x, z: clampRoom(posRef.current.z - 0.85, -3.4, 3.6) };
                 walkTo(next, null);
               }}
@@ -251,7 +311,7 @@ export function RoomView({
             <WalkPadBtn
               label="Left"
               onClick={() => {
-                if (busy.current) return;
+                if (!canInterrupt()) return;
                 const next = { x: clampRoom(posRef.current.x - 0.85, -4.6, 4.6), z: posRef.current.z };
                 walkTo(next, null);
               }}
@@ -262,7 +322,7 @@ export function RoomView({
             <WalkPadBtn
               label="Right"
               onClick={() => {
-                if (busy.current) return;
+                if (!canInterrupt()) return;
                 const next = { x: clampRoom(posRef.current.x + 0.85, -4.6, 4.6), z: posRef.current.z };
                 walkTo(next, null);
               }}
@@ -273,7 +333,7 @@ export function RoomView({
             <WalkPadBtn
               label="Down"
               onClick={() => {
-                if (busy.current) return;
+                if (!canInterrupt()) return;
                 const next = { x: posRef.current.x, z: clampRoom(posRef.current.z + 0.85, -3.4, 3.6) };
                 walkTo(next, null);
               }}

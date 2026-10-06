@@ -72,7 +72,8 @@ export function VenueFloor({
   const moveRef = useRef(onMove);
   const [stride, setStride] = useState<{ ms: number; face: 1 | -1; moving: boolean }>({ ms: 700, face: 1, moving: false });
   const [panel, setPanel] = useState(true);
-  const [doing, setDoing] = useState<{ label: string; dance: boolean } | null>(null);
+  const [doing, setDoing] = useState<{ label: string; dance: boolean; sit?: boolean } | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [drift, setDrift] = useState<[number, number][]>([
     [0, 0],
     [0, 0],
@@ -169,10 +170,12 @@ export function VenueFloor({
     const paid = payVerb(verb, offer);
     const target = zoneForVerb(paid, zones);
     const dance = paid.tag === "party" || /dance|drum|party|highlife/i.test(`${paid.id} ${paid.label}`);
+    const text = `${paid.id} ${paid.label}`;
+    const sitting = /sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table/i.test(text) && !dance && !/stroll|step outside|walk the/i.test(text);
     busy.current = true;
     setPanel(false);
     setWho(null);
-    setDoing({ label: paid.label, dance });
+    setDoing({ label: paid.label, dance, sit: sitting });
     const ms = walkTo(target.left + (Math.random() * 6 - 3), target.top + (Math.random() * 4 - 2));
     if (actTimer.current) window.clearTimeout(actTimer.current);
     actTimer.current = window.setTimeout(() => {
@@ -218,7 +221,12 @@ export function VenueFloor({
       }}
     >
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
-        <div ref={stage} onClick={tapFloor} className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer">
+        <div
+          ref={stage}
+          onClick={tapFloor}
+          className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer origin-center transition-transform duration-200"
+          style={{ transform: `scale(${zoom})` }}
+        >
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
           {staff.map((person) => (
             <PersonTag
@@ -288,7 +296,7 @@ export function VenueFloor({
             tone="pink"
             style={youAt}
             walk={stride.ms}
-            pose={stride.moving ? "walk" : doing ? "act" : "idle"}
+            pose={stride.moving ? "walk" : doing?.sit ? "sit" : doing ? "act" : "idle"}
             dance={Boolean(doing?.dance)}
             face={stride.face}
             skin={life.look.skin}
@@ -299,9 +307,27 @@ export function VenueFloor({
           />
         </div>
       </div>
+      <div className="absolute bottom-[max(9.2rem,calc(env(safe-area-inset-bottom)+8.4rem))] right-2 z-30 flex flex-col gap-1.5">
+        <button
+          type="button"
+          aria-label="Zoom in"
+          className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg font-bold shadow-lg"
+          onClick={() => setZoom((value) => Math.min(1.55, Math.round((value + 0.12) * 100) / 100))}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom out"
+          className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg font-bold shadow-lg"
+          onClick={() => setZoom((value) => Math.max(0.72, Math.round((value - 0.12) * 100) / 100))}
+        >
+          −
+        </button>
+      </div>
       {doing ? (
         <p className="pointer-events-none absolute left-1/2 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.6rem))] z-20 -translate-x-1/2 rounded-full bg-[#006B3F] px-4 py-1.5 text-xs font-bold text-white shadow-lg">
-          {stride.moving ? `Heading over · ${doing.label}` : `${doing.label}…`}
+          {stride.moving ? `Heading over · ${doing.label}` : doing.sit ? `Sitting · ${doing.label}` : `${doing.label}…`}
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
@@ -483,7 +509,7 @@ function PersonTag({
   hair?: string;
   pants?: string;
   walk?: number;
-  pose?: "idle" | "walk" | "act";
+  pose?: "idle" | "walk" | "act" | "sit";
   face?: 1 | -1;
   dance?: boolean;
   glide?: boolean | "live";
@@ -657,11 +683,13 @@ function zoneForVerb(verb: Verb, zones: { id: string; label: string; emoji: stri
   const text = `${verb.id} ${verb.label} ${verb.detail} ${verb.tag ?? ""}`.toLowerCase();
   const pick = (...ids: string[]) => zones.find((zone) => ids.some((id) => zone.id === id || zone.label.toLowerCase().includes(id)));
   if (/water|shore|swim|sea|feet|tide|canoe/.test(text)) return pick("shore", "water", "arrivals") ?? zones[0];
+  if (/sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table/.test(text) && !/stroll|step outside/.test(text))
+    return pick("chairs", "tables", "cafe", "booth", "sofa", "lounge", "departures") ?? zones[0];
   if (/food|eat|kelewele|grill|chop|plate|waakye|buy|coconut|drink|sip|bar/.test(text) || verb.tag === "food") return pick("grill", "bar", "counter", "tables", "chairs") ?? zones[0];
   if (/dance|drum|party|floor|band|highlife/.test(text) || verb.tag === "party") return pick("floor", "drums", "mats") ?? zones[0];
-  if (/pool|swim|lounge|sofa|vip|booth/.test(text)) return pick("pool", "booth", "sofa", "lounge", "chairs") ?? zones[0];
+  if (/pool|vip/.test(text)) return pick("pool", "booth", "sofa", "lounge") ?? zones[0];
   if (/desk|check|lobby|work|office/.test(text)) return pick("desk", "checkin", "lobby", "counter") ?? zones[0];
-  if (/take it in|walk|stroll|watch|chill|shade|sit|morning|haze/.test(text)) return pick("chairs", "shade", "mid", "green", "shore") ?? zones[0];
+  if (/walk|stroll|watch|morning|haze/.test(text)) return pick("shade", "mid", "green", "shore", "street") ?? zones[0];
   return pick("mid", "hang") ?? zones[Math.floor(zones.length / 2)] ?? zones[0];
 }
 
@@ -723,10 +751,12 @@ function zonesFor(spotId: string): { id: string; label: string; emoji: string; l
     ];
   }
   return [
+    { id: "chairs", label: "A chair", emoji: "🪑", left: 25, top: 48 },
+    { id: "tables", label: "Long table", emoji: "🍽️", left: 34, top: 50 },
+    { id: "cafe", label: "Cafe seat", emoji: "☕", left: 56, top: 64 },
+    { id: "bar", label: "The bar", emoji: "🍹", left: 48, top: 38 },
     { id: "mid", label: "Hang here", emoji: "✨", left: 50, top: 50 },
-    { id: "left", label: "Left side", emoji: "👈", left: 28, top: 52 },
-    { id: "right", label: "Right side", emoji: "👉", left: 72, top: 52 },
-    { id: "back", label: "Back corner", emoji: "📷", left: 50, top: 36 },
+    { id: "street", label: "Street edge", emoji: "🛣️", left: 72, top: 58 },
   ];
 }
 

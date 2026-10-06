@@ -29,7 +29,7 @@ export function LowPolyHuman({
   outfit?: string;
   body?: "woman" | "man";
   crown?: boolean;
-  pose?: "idle" | "walk" | "act";
+  pose?: "idle" | "walk" | "act" | "sit";
   face?: 1 | -1;
   yaw?: number;
   passive?: boolean;
@@ -100,7 +100,7 @@ export function Figure({
   outfit: string;
   body: "woman" | "man";
   crown?: boolean;
-  pose: "idle" | "walk" | "act";
+  pose: "idle" | "walk" | "act" | "sit";
   turn: number;
 }) {
   const woman = body === "woman";
@@ -110,19 +110,29 @@ export function Figure({
   const right = useRef<Group>(null);
   const armL = useRef<Group>(null);
   const armR = useRef<Group>(null);
+  const root = useRef<Group>(null);
+  const torso = useRef<Group>(null);
 
   useFrame(({ clock }) => {
+    const sitting = pose === "sit";
     const swing = pose === "walk" ? Math.sin(clock.elapsedTime * 7) * 0.42 : 0;
-    if (left.current) left.current.rotation.x = swing;
-    if (right.current) right.current.rotation.x = -swing;
-    if (armL.current) armL.current.rotation.x = -swing * 0.65;
-    if (armR.current) armR.current.rotation.x = swing * 0.65;
+    const bob = pose === "act" ? Math.sin(clock.elapsedTime * 5) * 0.08 : 0;
+    if (root.current) root.current.position.y = sitting ? 0.42 : 0;
+    if (torso.current) {
+      torso.current.position.y = sitting ? 0.08 : 0;
+      torso.current.position.z = sitting ? 0.08 : 0;
+      torso.current.rotation.x = sitting ? 0.18 : bob;
+    }
+    if (left.current) left.current.rotation.x = sitting ? -1.45 : swing;
+    if (right.current) right.current.rotation.x = sitting ? -1.45 : -swing;
+    if (armL.current) armL.current.rotation.x = sitting ? -0.55 : pose === "act" ? -0.55 + bob : -swing * 0.65;
+    if (armR.current) armR.current.rotation.x = sitting ? -0.4 : pose === "act" ? -0.35 - bob : swing * 0.65;
   });
 
   const shoulder = woman ? 0.22 : 0.26;
   const legColor = clothes.skirt ? skin : clothes.bottom;
   return (
-    <group rotation={[0, (turn * Math.PI) / 180, 0]}>
+    <group ref={root} rotation={[0, (turn * Math.PI) / 180, 0]}>
       <group ref={left} position={[-0.09, 0.74, 0]}>
         <Limb color={legColor} length={0.66} radius={0.07} />
         <Shoe woman={woman} />
@@ -131,6 +141,7 @@ export function Figure({
         <Limb color={legColor} length={0.66} radius={0.07} />
         <Shoe woman={woman} />
       </group>
+      <group ref={torso}>
       {clothes.skirt ? (
         <mesh position={[0, 0.86, 0]}>
           <cylinderGeometry args={[0.2, 0.28, 0.34, 6]} />
@@ -179,6 +190,7 @@ export function Figure({
         <Face skin={skin} />
         <Hair hair={hair} cloth={cloth} />
         {crown ? <Crown /> : null}
+      </group>
       </group>
     </group>
   );

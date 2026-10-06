@@ -17,7 +17,7 @@ export function IsoHuman({
   hair?: string;
   cloth?: string;
   crown?: boolean;
-  pose?: "idle" | "walk" | "act";
+  pose?: "idle" | "walk" | "act" | "sit";
   face?: 1 | -1;
   className?: string;
 }) {

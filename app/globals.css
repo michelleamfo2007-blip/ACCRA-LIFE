@@ -109,7 +109,8 @@ body {
 
 .sim-tall.sim-idle .sim-bob,
 .sim-tall.sim-walk .sim-bob,
-.sim-tall.sim-act .sim-bob {
+.sim-tall.sim-act .sim-bob,
+.sim-tall.sim-sit .sim-bob {
   transform-origin: 50px 156px;
 }
 
@@ -117,6 +118,34 @@ body {
 .sim-idle .arm,
 .sim-idle .arm-back {
   animation: none;
+}
+
+.sim-sit .sim-bob {
+  animation: none;
+  transform: translateY(18px);
+}
+
+.sim-sit .leg {
+  transform-box: fill-box;
+  transform-origin: top center;
+  transform: rotate(-82deg);
+}
+
+.sim-sit .shin {
+  transform-box: fill-box;
+  transform-origin: top center;
+  transform: rotate(78deg);
+}
+
+.sim-sit .arm,
+.sim-sit .arm-back {
+  transform-box: fill-box;
+  transform-origin: top center;
+  transform: rotate(-28deg);
+}
+
+.sim-sit .torso {
+  transform: translateY(4px);
 }
 
 .sim-walk .sim-bob {

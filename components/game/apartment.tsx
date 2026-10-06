@@ -25,7 +25,7 @@ export function Apartment({
 }: {
   life: Life;
   pos: { x: number; z: number };
-  pose: "idle" | "walk" | "act" | "sleep";
+  pose: "idle" | "walk" | "act" | "sleep" | "sit";
   heading: number;
   dark: boolean;
   bedColor: string;
@@ -169,7 +169,7 @@ function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.65, 1.15);
+        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.42, 1.85);
         pinch = dist;
         return;
       }
@@ -193,19 +193,26 @@ function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z
     const wheel = (event: WheelEvent) => {
       if (frozenRef.current) return;
       event.preventDefault();
-      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.65, 1.15);
+      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.42, 1.85);
+    };
+    const bump = (event: Event) => {
+      const factor = Number((event as CustomEvent).detail ?? 1);
+      if (!Number.isFinite(factor) || factor <= 0) return;
+      zoom.current = clamp(zoom.current * factor, 0.42, 1.85);
     };
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up, true);
     el.addEventListener("pointercancel", up, true);
     el.addEventListener("wheel", wheel, { passive: false });
+    window.addEventListener("accralife-home-zoom", bump);
     return () => {
       el.removeEventListener("pointerdown", down);
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up, true);
       el.removeEventListener("pointercancel", up, true);
       el.removeEventListener("wheel", wheel);
+      window.removeEventListener("accralife-home-zoom", bump);
     };
   }, [gl, size.width]);
   useFrame((_, dt) => {
