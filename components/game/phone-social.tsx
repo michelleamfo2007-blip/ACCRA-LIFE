@@ -108,13 +108,18 @@ function Inbox({
   const [notice, setNotice] = useState("");
   const [found, setFound] = useState<{ username: string; name: string }[]>([]);
   const [previews, setPreviews] = useState<Record<string, ChatMsg>>({});
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     let stop = false;
     const load = () => {
       fetch("/api/live/chat")
         .then((response) => response.json())
         .then((payload: { threads?: { username: string; name: string; last?: string; time?: string; mine?: boolean }[] }) => {
-          if (stop || !Array.isArray(payload.threads)) return;
+          if (stop) return;
+          if (!Array.isArray(payload.threads)) {
+            setReady(true);
+            return;
+          }
           const threads = payload.threads;
           setFound((current) => {
             const known = new Set(threads.map((thread) => thread.username));
@@ -125,8 +130,11 @@ function Inbox({
               threads.filter((thread) => thread.last).map((thread) => [`user:${thread.username}`, { who: thread.mine ? "me" : "them", text: thread.last ?? "", time: thread.time ?? "" } as ChatMsg]),
             ),
           );
+          setReady(true);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!stop) setReady(true);
+        });
     };
     load();
     const id = window.setInterval(load, 5000);
@@ -141,6 +149,7 @@ function Inbox({
     const hay = `${person.name} ${person.handle}`.toLowerCase();
     return hay.includes(query.trim().toLowerCase());
   });
+  const hasInbox = groups.length > 0 || people.length > 0 || Object.keys(chats).length > 0;
 
   async function findPerson() {
     const typed = lookup.trim().toLowerCase().replace(/^@/, "");
@@ -287,24 +296,41 @@ function Inbox({
             <p className="mt-4 text-[11px] font-bold tracking-wide text-[#8b97ab]">CHATS</p>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your chats" className="mt-2 h-10 w-full rounded-2xl bg-[#f4f7fb] px-4 text-sm outline-none" />
             <div className="mt-2">
-              {shown.length ? null : <p className="mt-3 text-sm text-[#8b97ab]">Search a username. Only real accounts show up.</p>}
-              {shown.map((person) => {
-                const last = [...(chats[person.id] ?? [])].reverse()[0] ?? previews[person.id];
-                const fresh = (unread[person.id] ?? 0) > 0;
-                return (
-                  <button key={person.id} type="button" onClick={() => onOpen(person.id)} className="flex w-full items-center gap-3 border-b border-black/5 py-3 text-left">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#d7c4a3] text-sm font-bold">{person.name.slice(0, 1).toUpperCase()}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate font-semibold">{person.handle}</span>
-                        <span className="shrink-0 text-[11px] text-[#6b7c93]">{last?.time ?? ""}</span>
+              {!ready ? (
+                <div className="mt-3 space-y-3" aria-busy="true" aria-label="Loading chats">
+                  {[0, 1, 2].map((row) => (
+                    <div key={row} className="flex items-center gap-3 py-2">
+                      <span className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-[#e8edf5]" />
+                      <span className="min-w-0 flex-1 space-y-2">
+                        <span className="block h-3 w-28 animate-pulse rounded-full bg-[#e8edf5]" />
+                        <span className="block h-3 w-44 animate-pulse rounded-full bg-[#f2f4f8]" />
                       </span>
-                      <span className={`mt-0.5 block truncate text-sm ${fresh ? "font-semibold text-[#121212]" : "text-[#5c6b82]"}`}>{last ? `${last.who === "me" ? "You: " : ""}${last.text}` : "No messages yet"}</span>
-                    </span>
-                    {(unread[person.id] ?? 0) > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white">{unread[person.id]}</span> : null}
-                  </button>
-                );
-              })}
+                    </div>
+                  ))}
+                  <p className="pt-1 text-sm text-[#8b97ab]">Loading your chats…</p>
+                </div>
+              ) : shown.length ? null : (
+                <p className="mt-3 text-sm text-[#8b97ab]">{hasInbox ? "No chats match that search." : "Search a username. Only real accounts show up."}</p>
+              )}
+              {ready
+                ? shown.map((person) => {
+                    const last = [...(chats[person.id] ?? [])].reverse()[0] ?? previews[person.id];
+                    const fresh = (unread[person.id] ?? 0) > 0;
+                    return (
+                      <button key={person.id} type="button" onClick={() => onOpen(person.id)} className="flex w-full items-center gap-3 border-b border-black/5 py-3 text-left">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#d7c4a3] text-sm font-bold">{person.name.slice(0, 1).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="truncate font-semibold">{person.handle}</span>
+                            <span className="shrink-0 text-[11px] text-[#6b7c93]">{last?.time ?? ""}</span>
+                          </span>
+                          <span className={`mt-0.5 block truncate text-sm ${fresh ? "font-semibold text-[#121212]" : "text-[#5c6b82]"}`}>{last ? `${last.who === "me" ? "You: " : ""}${last.text}` : "No messages yet"}</span>
+                        </span>
+                        {(unread[person.id] ?? 0) > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white">{unread[person.id]}</span> : null}
+                      </button>
+                    );
+                  })
+                : null}
             </div>
           </>
         )}

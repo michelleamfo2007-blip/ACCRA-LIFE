@@ -61,7 +61,7 @@ export function VenueFloor({
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
-  const darkStage = kind === "airport" || kind === "hotel" || kind === "club" || kind === "hall" || kind === "gym" || kind === "tables";
+  const darkStage = true;
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);
   const [shout, setShout] = useState("");
@@ -420,7 +420,7 @@ function LivePeer({ style, live, onClick, ...look }: { name: string; style: { le
       window.clearTimeout(stop);
     };
   }, [left, top, live]);
-  return <PersonTag {...look} tone="blue" style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
+  return <PersonTag {...look} tone="blue" online style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
 }
 
 function PersonTag({
@@ -436,6 +436,7 @@ function PersonTag({
   face = 1,
   dance = false,
   glide = false,
+  online = false,
   onClick,
 }: {
   name: string;
@@ -450,11 +451,15 @@ function PersonTag({
   face?: 1 | -1;
   dance?: boolean;
   glide?: boolean | "live";
+  online?: boolean;
   onClick?: () => void;
 }) {
   const body = (
     <>
-      <span className={`mb-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
+      <span className="relative mb-1 flex flex-col items-center">
+        {online || tone === "blue" ? <span className="mb-0.5 h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
+      </span>
       <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
     </>
   );
@@ -619,7 +624,60 @@ function zonesFor(spotId: string): { id: string; label: string; emoji: string; l
       { id: "arrivals", label: "Arrivals window", emoji: "🪟", left: 44, top: 68 },
     ];
   }
-  return [];
+  if (spotId === "golf") {
+    return [
+      { id: "bar", label: "Clubhouse bar", emoji: "🍸", left: 24, top: 48 },
+      { id: "green", label: "Putting green", emoji: "⛳", left: 58, top: 40 },
+      { id: "cart", label: "Golf carts", emoji: "🛺", left: 48, top: 58 },
+      { id: "sofa", label: "Lounge sofa", emoji: "🛋️", left: 76, top: 52 },
+    ];
+  }
+  if (CLUB_IDS.has(spotId) || spotId === "plus233" || spotId === "republic" || spotId === "still" || spotId === "monsoon") {
+    return [
+      { id: "bar", label: "The bar", emoji: "🍹", left: 24, top: 46 },
+      { id: "floor", label: "Dance floor", emoji: "🪩", left: 52, top: 48 },
+      { id: "booth", label: "VIP booth", emoji: "👑", left: 74, top: 54 },
+      { id: "door", label: "Entrance", emoji: "🚪", left: 40, top: 68 },
+    ];
+  }
+  if (spotId === "beach" || spotId === "bojo" || spotId === "kokrobite") {
+    return [
+      { id: "shore", label: "Waterline", emoji: "🌊", left: 50, top: 38 },
+      { id: "grill", label: "Grill", emoji: "🔥", left: 30, top: 55 },
+      { id: "chairs", label: "Shade chairs", emoji: "🪑", left: 68, top: 52 },
+      { id: "drums", label: "Drum circle", emoji: "🥁", left: 48, top: 64 },
+    ];
+  }
+  if (spotId === "hotel" || spotId === "kempinski" || spotId === "movenpick") {
+    return [
+      { id: "lobby", label: "Lobby", emoji: "🛎️", left: 40, top: 48 },
+      { id: "pool", label: "Poolside", emoji: "🏊", left: 68, top: 52 },
+      { id: "bar", label: "Hotel bar", emoji: "🥂", left: 24, top: 44 },
+      { id: "desk", label: "Front desk", emoji: "🪪", left: 52, top: 36 },
+    ];
+  }
+  if (spotId === "buka" || spotId === "viewing") {
+    return [
+      { id: "counter", label: "Counter", emoji: "🍲", left: 48, top: 40 },
+      { id: "tables", label: "Tables", emoji: "🪑", left: 36, top: 58 },
+      { id: "tv", label: "Screen", emoji: "📺", left: 70, top: 46 },
+      { id: "street", label: "Street edge", emoji: "🛣️", left: 22, top: 68 },
+    ];
+  }
+  if (spotId === "gym" || spotId === "stadium") {
+    return [
+      { id: "mats", label: "Mat floor", emoji: "🧘", left: 42, top: 50 },
+      { id: "weights", label: "Weights", emoji: "🏋️", left: 64, top: 46 },
+      { id: "mirror", label: "Mirror wall", emoji: "🪞", left: 28, top: 40 },
+      { id: "locker", label: "Lockers", emoji: "🔐", left: 74, top: 60 },
+    ];
+  }
+  return [
+    { id: "mid", label: "Hang here", emoji: "✨", left: 50, top: 50 },
+    { id: "left", label: "Left side", emoji: "👈", left: 28, top: 52 },
+    { id: "right", label: "Right side", emoji: "👉", left: 72, top: 52 },
+    { id: "back", label: "Back corner", emoji: "📷", left: 50, top: 36 },
+  ];
 }
 
 function spotFlavor(spot: Spot) {
@@ -661,18 +719,28 @@ function youSay(talk: TalkKind, place: string) {
 }
 
 function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
-  const indoor = kind === "hotel" || kind === "club" || kind === "tables" || kind === "hall" || kind === "gym" || kind === "airport";
-  const floor = kind === "airport" ? "#b7c98a" : kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
-  const wall = night || kind === "airport" ? "#3d4658" : "#f7f4ef";
-  const wallSide = night || kind === "airport" ? "#2c3444" : "#e4e0d8";
-  const items = furniture(kind, night);
+  const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables";
+  const floor =
+    spot.id === "golf" || kind === "garden" || kind === "club" || kind === "gym"
+      ? "#3f5a2a"
+      : kind === "airport"
+        ? "#b7c98a"
+        : kind === "shore"
+          ? "#c4a574"
+          : night
+            ? "#2f3540"
+            : "#d9d2c4";
+  const wall = night || kind === "airport" || kind === "club" ? "#2a3140" : "#f7f4ef";
+  const wallSide = night || kind === "airport" || kind === "club" ? "#1c2230" : "#e4e0d8";
+  const items = furniture(kind, night, spot.id);
   const title = spot.name.toUpperCase();
+  const lights = lightPools(kind, spot.id);
   return (
     <svg viewBox="0 0 760 480" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
       <Blocks
         items={[
           { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },
-          ...(indoor
+          ...(boxed
             ? [
                 { x: -118, y: 0, z: -62, w: 10, h: 86, d: 168, color: wallSide },
                 { x: -118, y: 0, z: -62, w: 236, h: 86, d: 10, color: wall },
@@ -681,6 +749,7 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
           ...items,
         ]}
       />
+      <SpotLights pools={lights} />
       {party ? (
         <g>
           <circle cx="180" cy="90" r="10" fill="#CE1126" opacity="0.85" />
@@ -689,19 +758,24 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
         </g>
       ) : null}
       {kind === "shore" ? <ShoreDress /> : null}
-      {kind === "garden" ? <GardenDress /> : null}
+      {kind === "garden" || spot.id === "golf" ? <GardenDress golf={spot.id === "golf"} /> : null}
       {kind === "hotel" ? <Pool /> : null}
       {kind === "airport" ? <AirportDress night={night} /> : null}
+      {kind === "club" || spot.id === "golf" ? <ClubGlow /> : null}
       {kind === "airport" ? (
         <>
           <FaceSign axis="x" x={-102} y={48} z={-51} length={88} tall={14} text="CHECK-IN · ACCRA LIFE AIR" fill="#1d4ed8" ink="white" />
           <FaceSign axis="z" x={-107} y={46} z={20} length={52} tall={13} text="DEPARTURES" fill="#006B3F" ink="white" />
         </>
-      ) : indoor ? (
+      ) : spot.id === "golf" ? (
+        <StandingBoard x={-20} z={-40} text="ACCRA GOLF CLUB" />
+      ) : boxed ? (
         <>
           <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
-          <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill={kind === "club" ? "#f5c542" : "#1f4d3a"} ink={kind === "club" ? "#121212" : "white"} />
+          <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill="#1f4d3a" ink="white" />
         </>
+      ) : kind === "club" ? (
+        <StandingBoard x={-70} z={-36} text="CLUBHOUSE" />
       ) : (
         <StandingBoard x={-72} z={6} text={title} />
       )}
@@ -709,113 +783,203 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
   );
 }
 
-function furniture(kind: Kind, night: boolean): Block[] {
+function lightPools(kind: Kind, spotId: string): { x: number; z: number; r: number }[] {
+  if (spotId === "golf") return [{ x: -60, z: 20, r: 54 }, { x: 20, z: -10, r: 48 }, { x: 70, z: 30, r: 50 }, { x: 10, z: 40, r: 40 }];
+  if (kind === "club") return [{ x: -50, z: 20, r: 50 }, { x: 10, z: -10, r: 56 }, { x: 60, z: 30, r: 46 }];
+  if (kind === "airport") return [{ x: -60, z: -10, r: 48 }, { x: 10, z: 20, r: 44 }, { x: 70, z: 20, r: 42 }];
+  if (kind === "shore") return [{ x: -20, z: 10, r: 52 }, { x: 40, z: 30, r: 48 }, { x: -70, z: 40, r: 40 }];
+  if (kind === "hotel") return [{ x: -50, z: 20, r: 46 }, { x: 40, z: 20, r: 52 }, { x: 10, z: -20, r: 40 }];
+  if (kind === "gym") return [{ x: -20, z: 10, r: 50 }, { x: 40, z: 10, r: 46 }];
+  return [{ x: -40, z: 10, r: 48 }, { x: 30, z: 20, r: 50 }, { x: 70, z: 0, r: 40 }];
+}
+
+function SpotLights({ pools }: { pools: { x: number; z: number; r: number }[] }) {
+  return (
+    <g pointerEvents="none">
+      {pools.map((pool, index) => {
+        const [cx, cy] = pt(pool.x, 1.5, pool.z);
+        return <ellipse key={index} cx={cx} cy={cy} rx={pool.r} ry={pool.r * 0.42} fill="#fff6d8" opacity="0.16" />;
+      })}
+    </g>
+  );
+}
+
+function ClubGlow() {
+  const neon = pt(-62, 28, 18);
+  return (
+    <g>
+      <ellipse cx={neon[0]} cy={neon[1]} rx="28" ry="8" fill="#FCD116" opacity="0.35" />
+      <text x={neon[0]} y={neon[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="11" fontWeight="800" letterSpacing="1.5">
+        CLUBHOUSE
+      </text>
+    </g>
+  );
+}
+
+function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
+  if (spotId === "golf") {
+    return [
+      // Clubhouse bar
+      { x: -92, y: 0, z: 8, w: 44, h: 14, d: 18, color: "#1c1917" },
+      { x: -88, y: 14, z: 12, w: 36, h: 3, d: 12, color: "#c9a227" },
+      { x: -84, y: 17, z: 10, w: 5, h: 10, d: 5, color: "#22d3ee" },
+      { x: -76, y: 17, z: 12, w: 5, h: 12, d: 5, color: "#FCD116" },
+      { x: -68, y: 17, z: 10, w: 5, h: 9, d: 5, color: "#CE1126" },
+      { x: -60, y: 17, z: 12, w: 5, h: 11, d: 5, color: "#3b82f6" },
+      // Palm pot
+      { x: -100, y: 0, z: 36, w: 8, h: 5, d: 8, color: "#6b4428" },
+      // Putting green
+      { x: 8, y: 0, z: -28, w: 42, h: 1.5, d: 42, color: "#4ade80" },
+      { x: 24, y: 1.5, z: -12, w: 2, h: 18, d: 2, color: "#f8fafc" },
+      { x: 22, y: 18, z: -14, w: 8, h: 1.5, d: 6, color: "#CE1126" },
+      // Golf carts
+      { x: -8, y: 0, z: 28, w: 22, h: 10, d: 12, color: "#f8fafc" },
+      { x: -4, y: 10, z: 30, w: 14, h: 6, d: 8, color: "#e2e8f0" },
+      { x: 20, y: 0, z: 36, w: 22, h: 10, d: 12, color: "#f8fafc" },
+      { x: 24, y: 10, z: 38, w: 14, h: 6, d: 8, color: "#e2e8f0" },
+      // Purple lounge sofa
+      { x: 58, y: 0, z: 16, w: 40, h: 10, d: 16, color: "#7c3aed" },
+      { x: 58, y: 10, z: 16, w: 40, h: 12, d: 4, color: "#6d28d9" },
+      // Conical tree
+      { x: 88, y: 0, z: 28, w: 8, h: 6, d: 8, color: "#5b4636" },
+      { x: 84, y: 6, z: 24, w: 16, h: 10, d: 16, color: "#166534" },
+      { x: 86, y: 16, z: 26, w: 12, h: 10, d: 12, color: "#15803d" },
+      { x: 88, y: 26, z: 28, w: 8, h: 10, d: 8, color: "#22c55e" },
+      // Sign post base
+      { x: -6, y: 0, z: -48, w: 6, h: 28, d: 6, color: "#1c1917" },
+      { x: -22, y: 20, z: -52, w: 40, h: 14, d: 4, color: "#121212" },
+    ];
+  }
   if (kind === "hotel") {
     return [
-      { x: -78, y: 0, z: 20, w: 36, h: 14, d: 22, color: "#6d4aff" },
-      { x: -76, y: 14, z: 22, w: 32, h: 4, d: 16, color: "#efe8ff" },
-      { x: -70, y: 18, z: 18, w: 10, h: 3, d: 6, color: "#ffffff" },
-      { x: -16, y: 0, z: -28, w: 42, h: 18, d: 16, color: "#f7f4ef" },
-      { x: -4, y: 18, z: -24, w: 10, h: 6, d: 4, color: "#7eb6e8" },
-      { x: 28, y: 0, z: 36, w: 16, h: 4, d: 28, color: "#f4efe6" },
-      { x: 52, y: 0, z: 40, w: 16, h: 4, d: 28, color: "#d7e7f4" },
-      { x: 78, y: 0, z: -20, w: 8, h: 12, d: 8, color: "#c47a4a" },
+      { x: -88, y: 0, z: 8, w: 40, h: 16, d: 22, color: "#6d4aff" },
+      { x: -84, y: 16, z: 12, w: 32, h: 4, d: 14, color: "#efe8ff" },
+      { x: -76, y: 20, z: 10, w: 10, h: 4, d: 6, color: "#ffffff" },
+      { x: -20, y: 0, z: -32, w: 52, h: 20, d: 18, color: "#f7f4ef" },
+      { x: -8, y: 20, z: -28, w: 14, h: 8, d: 6, color: "#7eb6e8" },
+      { x: 24, y: 0, z: 28, w: 18, h: 4, d: 34, color: "#f4efe6" },
+      { x: 48, y: 0, z: 32, w: 18, h: 4, d: 34, color: "#d7e7f4" },
+      { x: 72, y: 0, z: 36, w: 18, h: 4, d: 28, color: "#f4efe6" },
+      { x: 78, y: 0, z: -20, w: 10, h: 16, d: 10, color: "#c47a4a" },
+      { x: -100, y: 0, z: 40, w: 8, h: 18, d: 8, color: "#166534" },
+      { x: 90, y: 0, z: 10, w: 8, h: 18, d: 8, color: "#166534" },
+      ...chair(-50, 40, "#c9a227"),
+      ...chair(-30, 48, "#c9a227"),
     ];
   }
   if (kind === "club") {
     return [
-      { x: -16, y: 0, z: -28, w: 58, h: 10, d: 32, color: "#141018" },
-      { x: 8, y: 10, z: -22, w: 8, h: 22, d: 8, color: "#1c1917" },
-      { x: -70, y: 0, z: 24, w: 36, h: 16, d: 14, color: night ? "#2a2018" : "#6b4a30" },
-      { x: 62, y: 0, z: 8, w: 14, h: 22, d: 12, color: "#1c1917" },
-      { x: -90, y: 0, z: 48, w: 18, h: 8, d: 18, color: "#ec4899" },
-      { x: 24, y: 0, z: 48, w: 18, h: 8, d: 18, color: "#f5c542" },
+      // DJ / stage
+      { x: -20, y: 0, z: -32, w: 64, h: 12, d: 34, color: "#141018" },
+      { x: 4, y: 12, z: -24, w: 10, h: 24, d: 10, color: "#1c1917" },
+      // Bar
+      { x: -92, y: 0, z: 16, w: 42, h: 16, d: 18, color: night ? "#1a1410" : "#3a2a1c" },
+      { x: -88, y: 16, z: 20, w: 34, h: 3, d: 12, color: "#c9a227" },
+      { x: -84, y: 19, z: 18, w: 5, h: 10, d: 5, color: "#22d3ee" },
+      { x: -76, y: 19, z: 20, w: 5, h: 12, d: 5, color: "#FCD116" },
+      { x: -68, y: 19, z: 18, w: 5, h: 9, d: 5, color: "#ec4899" },
+      // Speakers / booth
+      { x: 62, y: 0, z: 0, w: 16, h: 26, d: 14, color: "#1c1917" },
+      { x: 70, y: 0, z: 28, w: 28, h: 10, d: 20, color: "#121212" },
+      { x: 74, y: 10, z: 32, w: 20, h: 3, d: 12, color: "#c9a227" },
+      // Dance pads
+      { x: -90, y: 0, z: 48, w: 22, h: 2, d: 22, color: "#ec4899" },
+      { x: -50, y: 0, z: 52, w: 22, h: 2, d: 22, color: "#FCD116" },
+      { x: -10, y: 0, z: 48, w: 22, h: 2, d: 22, color: "#006B3F" },
+      { x: 30, y: 0, z: 52, w: 22, h: 2, d: 22, color: "#3b82f6" },
     ];
   }
   if (kind === "shore") {
     return [
-      { x: -118, y: 0, z: -62, w: 236, h: 3, d: 34, color: "#8fd0ea" },
-      ...benchTable(-20, 18),
-      ...cafeSet(36, 28, "#d64545"),
-      { x: 70, y: 0, z: 48, w: 22, h: 4, d: 10, color: "#f7fbfe" },
-      { x: -78, y: 0, z: 40, w: 16, h: 8, d: 10, color: "#2a2420" },
+      { x: -118, y: 0, z: -62, w: 236, h: 3, d: 40, color: "#5ec4e8" },
+      { x: -118, y: 0, z: -22, w: 236, h: 2, d: 16, color: "#8fd0ea" },
+      ...benchTable(-28, 22),
+      ...benchTable(24, 40),
+      ...cafeSet(56, 20, "#d64545"),
+      { x: 78, y: 0, z: 52, w: 24, h: 4, d: 12, color: "#f7fbfe" },
+      { x: -86, y: 0, z: 36, w: 18, h: 10, d: 12, color: "#1c1917" },
+      { x: -82, y: 10, z: 40, w: 10, h: 8, d: 6, color: "#FCD116" },
+      { x: -50, y: 0, z: 48, w: 14, h: 8, d: 10, color: "#CE1126" },
+      { x: 10, y: 0, z: 56, w: 16, h: 2, d: 16, color: "#f5c542" },
     ];
   }
   if (kind === "garden") {
-    return [...benchTable(-24, 16, "#8d5a32"), ...benchTable(28, 36, "#8d5a32"), { x: 72, y: 0, z: -8, w: 8, h: 14, d: 8, color: "#8a5a32" }, { x: -86, y: 0, z: 30, w: 8, h: 14, d: 8, color: "#6b4428" }];
+    return [
+      ...benchTable(-40, 8, "#8d5a32"),
+      ...benchTable(8, 36, "#8d5a32"),
+      ...benchTable(48, 12, "#8d5a32"),
+      { x: 78, y: 0, z: -12, w: 10, h: 18, d: 10, color: "#8a5a32" },
+      { x: -92, y: 0, z: 28, w: 10, h: 18, d: 10, color: "#6b4428" },
+      { x: -20, y: 0, z: -30, w: 36, h: 2, d: 36, color: "#5a8f3a" },
+      { x: 60, y: 0, z: 40, w: 8, h: 5, d: 8, color: "#5b4636" },
+      { x: 56, y: 5, z: 36, w: 16, h: 12, d: 16, color: "#166534" },
+      { x: 58, y: 17, z: 38, w: 12, h: 10, d: 12, color: "#22c55e" },
+    ];
   }
   if (kind === "gym") {
     return [
-      { x: -36, y: 0, z: 18, w: 46, h: 3, d: 28, color: "#CE1126" },
-      { x: 28, y: 0, z: 10, w: 34, h: 8, d: 10, color: "#1c1917" },
-      { x: 36, y: 8, z: 12, w: 18, h: 3, d: 3, color: "#9aa4b2" },
-      { x: 70, y: 0, z: -16, w: 12, h: 28, d: 10, color: "#3a4454" },
+      { x: -48, y: 0, z: 8, w: 56, h: 2, d: 36, color: "#CE1126" },
+      { x: 24, y: 0, z: 4, w: 40, h: 10, d: 14, color: "#1c1917" },
+      { x: 32, y: 10, z: 8, w: 22, h: 4, d: 4, color: "#9aa4b2" },
+      { x: 72, y: 0, z: -20, w: 14, h: 32, d: 12, color: "#3a4454" },
+      { x: -90, y: 0, z: -20, w: 28, h: 36, d: 6, color: "#94a3b8" },
+      { x: -80, y: 0, z: 40, w: 18, h: 16, d: 14, color: "#1e293b" },
+      { x: 50, y: 0, z: 40, w: 18, h: 16, d: 14, color: "#1e293b" },
+      ...chair(-20, 48, "#121212"),
     ];
   }
   if (kind === "hall") {
     return [
-      { x: -28, y: 0, z: -30, w: 96, h: 18, d: 16, color: "#f7f4ef" },
-      { x: 8, y: 18, z: -26, w: 22, h: 2, d: 8, color: "#fff6df" },
-      ...chair(-62, 28, "#CE1126"),
-      ...chair(-40, 40, "#CE1126"),
-      ...cafeSet(36, 36, "#8d5a32"),
+      { x: -36, y: 0, z: -32, w: 110, h: 18, d: 18, color: "#f7f4ef" },
+      { x: 4, y: 18, z: -28, w: 28, h: 3, d: 10, color: "#fff6df" },
+      ...chair(-70, 24, "#CE1126"),
+      ...chair(-48, 36, "#CE1126"),
+      ...chair(-26, 28, "#CE1126"),
+      ...cafeSet(40, 32, "#8d5a32"),
+      { x: 78, y: 0, z: -10, w: 12, h: 28, d: 10, color: "#334155" },
+      { x: -96, y: 0, z: 40, w: 10, h: 16, d: 10, color: "#166534" },
     ];
   }
   if (kind === "airport") {
     return [
-      // Soft rug / oval platform feel under the room
       { x: -70, y: 0, z: 8, w: 140, h: 1, d: 90, color: "#a8bc78" },
-      // Check-in desk (blue)
       { x: -88, y: 0, z: -28, w: 52, h: 16, d: 18, color: "#1d4ed8" },
       { x: -84, y: 16, z: -24, w: 44, h: 3, d: 12, color: "#93c5fd" },
       { x: -72, y: 19, z: -22, w: 10, h: 8, d: 4, color: "#121212" },
-      // Desk plants
       { x: -96, y: 0, z: -8, w: 6, h: 14, d: 6, color: "#166534" },
       { x: -34, y: 0, z: -10, w: 6, h: 14, d: 6, color: "#166534" },
-      // Departure seating rows
       { x: -18, y: 0, z: -24, w: 48, h: 8, d: 12, color: "#dbe3ef" },
       { x: -14, y: 8, z: -22, w: 40, h: 10, d: 3, color: "#94a3b8" },
       { x: -18, y: 0, z: -4, w: 48, h: 8, d: 12, color: "#dbe3ef" },
       { x: -14, y: 8, z: -2, w: 40, h: 10, d: 3, color: "#94a3b8" },
-      // Flight board
       { x: 36, y: 0, z: -40, w: 28, h: 36, d: 6, color: "#1e293b" },
       { x: 40, y: 8, z: -38, w: 20, h: 4, d: 2, color: "#22c55e" },
       { x: 40, y: 16, z: -38, w: 20, h: 4, d: 2, color: "#FCD116" },
       { x: 40, y: 24, z: -38, w: 20, h: 4, d: 2, color: "#f8fafc" },
-      // VIP / chopper lounge
       { x: 58, y: 0, z: 8, w: 42, h: 14, d: 28, color: "#121212" },
       { x: 62, y: 14, z: 12, w: 34, h: 3, d: 20, color: "#c9a227" },
       { x: 70, y: 0, z: 40, w: 14, h: 18, d: 10, color: "#1c1917" },
-      // Arrivals glass wall
       { x: -40, y: 0, z: 48, w: 70, h: 28, d: 4, color: "#7ec8ea" },
       { x: -36, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
       { x: -8, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
       { x: 20, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
-      // Center compass rug markers (blocks)
       { x: -8, y: 0.5, z: 22, w: 16, h: 1, d: 16, color: "#FCD116" },
       { x: -4, y: 1, z: 26, w: 8, h: 1, d: 8, color: "#006B3F" },
-      // Side palms pots
       { x: -100, y: 0, z: 36, w: 8, h: 6, d: 8, color: "#8a5a32" },
       { x: 88, y: 0, z: 52, w: 8, h: 6, d: 8, color: "#8a5a32" },
     ];
   }
-  return [...benchTable(-36, 12), ...benchTable(22, 40), { x: -20, y: 0, z: -28, w: 70, h: 16, d: 14, color: "#c9842a" }, ...chair(48, 8, "#d64545")];
-}
-
-function plane(x: number, z: number, body: string, tail: string): Block[] {
+  // tables / default hang spots — waakye counter energy
   return [
-    { x, y: 4, z, w: 28, h: 6, d: 6, color: body },
-    { x: x + 6, y: 5, z: z - 10, w: 14, h: 2, d: 26, color: body },
-    { x: x + 22, y: 6, z: z - 1, w: 4, h: 10, d: 8, color: tail },
-    { x: x + 2, y: 8, z: z + 1, w: 6, h: 4, d: 4, color: "#7ec8ea" },
-  ];
-}
-
-function smallJet(x: number, z: number, color: string): Block[] {
-  return [
-    { x, y: 3, z, w: 14, h: 4, d: 4, color },
-    { x: x + 2, y: 4, z: z - 5, w: 8, h: 1.5, d: 14, color },
-    { x: x + 11, y: 5, z: z - 1, w: 3, h: 6, d: 5, color },
+    { x: -28, y: 0, z: -30, w: 80, h: 16, d: 16, color: "#c9842a" },
+    { x: -20, y: 16, z: -26, w: 64, h: 3, d: 10, color: "#f3e6cf" },
+    ...benchTable(-48, 24),
+    ...benchTable(8, 40),
+    ...cafeSet(56, 18, "#d64545"),
+    { x: 78, y: 0, z: -20, w: 12, h: 28, d: 8, color: "#1e293b" },
+    { x: 82, y: 10, z: -18, w: 6, h: 10, d: 2, color: "#22c55e" },
+    { x: -96, y: 0, z: 36, w: 14, h: 12, d: 12, color: "#CE1126" },
+    { x: -90, y: 12, z: 40, w: 6, h: 8, d: 6, color: "#FCD116" },
   ];
 }
 
@@ -888,12 +1052,12 @@ function ShoreDress() {
   );
 }
 
-function GardenDress() {
+function GardenDress({ golf = false }: { golf?: boolean }) {
   return (
     <g>
       <Palm x={-96} z={4} />
       <Palm x={100} z={18} />
-      <Palm x={70} z={-16} />
+      {golf ? null : <Palm x={70} z={-16} />}
     </g>
   );
 }
