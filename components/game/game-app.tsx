@@ -1077,17 +1077,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     return null;
   }
 
+  const mapBeat = now != null ? Math.floor(now / 1_800_000) : 0;
+  const mapAt = useMemo(() => new Date(mapBeat * 1_800_000 || Date.now()), [mapBeat]);
+  const mapNight = now != null && (accraHour(new Date(now)) >= 19 || accraHour(new Date(now)) < 5);
+
   return (
     <div className="fixed inset-0 h-dvh w-full max-w-full overflow-clip overscroll-none touch-none">
       <Soundtrack tune={tuneFor(life.where, onAir)} />
       {tab === "map" ? (
         <CityBoard
-          night={now != null && (accraHour(new Date(now)) >= 19 || accraHour(new Date(now)) < 5)}
+          night={mapNight}
           filter={filter}
           boards={boards}
           ads={ads}
           active={placeId}
-          at={now ? new Date(now) : new Date()}
+          at={mapAt}
           onBoard={setBoardId}
           onSelect={(id) => {
             const spot = spotById(id);

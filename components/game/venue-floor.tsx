@@ -61,8 +61,10 @@ export function VenueFloor({
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
+  const darkStage = kind === "airport" || kind === "hotel" || kind === "club" || kind === "hall" || kind === "gym" || kind === "tables";
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);
+  const [shout, setShout] = useState("");
   const [youAt, setYouAt] = useState(() => {
     const first = startSpot(`${me}:${life.where}`);
     return { left: `${first.left}%`, top: `${first.top}%` };
@@ -154,8 +156,42 @@ export function VenueFloor({
     onAct(verb, person);
   }
 
+  const zones = zonesFor(spot.id);
+  const crowd = people.length;
+  const flavor = spotFlavor(spot);
+
+  function sendShout() {
+    const text = shout.trim();
+    if (!text) return;
+    setShout("");
+    if (open) {
+      setLines((prev) => [...prev, { from: "you", text }]);
+      onAct({ id: `say-${open.username}`, label: text, detail: text, minutes: 2, cost: 0, earn: 0, effects: { social: 4 }, social: true }, open.name);
+      return;
+    }
+    const first = people[0];
+    if (first) {
+      setWho(first.username);
+      setLines([{ from: "you", text }]);
+      onAct({ id: `say-${first.username}`, label: text, detail: text, minutes: 2, cost: 0, earn: 0, effects: { social: 4 }, social: true }, first.name);
+      return;
+    }
+    onAct({ id: `wave-${spot.id}`, label: text, detail: text, minutes: 2, cost: 0, earn: 0, effects: { social: 6, fun: 4 }, social: true });
+  }
+
   return (
-    <div className="relative h-full overflow-hidden" style={{ background: night ? "radial-gradient(circle at 50% 30%, #243044 0%, #12151c 70%)" : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)" }}>
+    <div
+      className="relative h-full overflow-hidden"
+      style={{
+        background: darkStage
+          ? night
+            ? "radial-gradient(ellipse at 50% 28%, #2a3348 0%, #0f1420 62%, #0a0d14 100%)"
+            : "radial-gradient(ellipse at 50% 28%, #3a455c 0%, #1a2233 58%, #121820 100%)"
+          : night
+            ? "radial-gradient(circle at 50% 30%, #243044 0%, #12151c 70%)"
+            : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)",
+      }}
+    >
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div ref={stage} onClick={tapFloor} className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer">
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
@@ -238,7 +274,7 @@ export function VenueFloor({
       </div>
       <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">Tap to walk · swipe to look around</p>
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
-        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-50 rounded-3xl bg-white p-4 shadow-xl">
+        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-50 rounded-[28px] bg-white p-4 shadow-[0_-12px_40px_rgba(15,20,40,.28)]">
           <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
           <p className="text-sm text-[#5c6b82]">{who.startsWith("party:") ? `Out at ${spot.name}. Not a player account.` : `Works at ${spot.name}. Not a player account.`}</p>
           <p className="mt-2 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-sm">{lines[0]?.text}</p>
@@ -261,26 +297,89 @@ export function VenueFloor({
         <button
           type="button"
           onClick={() => setPanel(true)}
-          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 flex items-center justify-between rounded-full bg-white px-4 py-3 text-left text-sm font-semibold shadow-xl sm:inset-x-3"
+          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 flex items-center justify-between rounded-[28px] bg-white px-4 py-3 text-left text-sm font-semibold shadow-[0_-10px_30px_rgba(15,20,40,.22)] sm:inset-x-3"
         >
           <span className="truncate">
             {spot.emoji} {spot.name}
+            {crowd ? <span className="ml-2 font-normal text-[#5c6b82]">· {crowd} here</span> : null}
           </span>
-          <span className="shrink-0 text-[#006B3F]">What to do ▲</span>
+          <span className="shrink-0 text-[#006B3F]">▲</span>
         </button>
       ) : (
-        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold">
-              {spot.emoji} {spot.name}
-            </p>
-            <button type="button" onClick={() => setPanel(false)} className="shrink-0 rounded-full bg-[#f4f7fb] px-3 py-1 text-xs font-semibold text-[#5c6b82]" aria-label="Hide panel">
-              Hide ▼
-            </button>
+        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 max-h-[min(46vh,26rem)] overflow-auto rounded-[28px] bg-white p-3.5 shadow-[0_-14px_44px_rgba(15,20,40,.28)] sm:inset-x-3 sm:p-4">
+          <div className="flex items-start gap-2">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f4f7fb] text-xl">{spot.emoji}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold leading-tight text-[#121212]">{spot.name}</span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-[#5c6b82]">{flavor}</span>
+            </span>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                aria-label="Share place"
+                className="grid h-8 w-8 place-items-center rounded-full bg-[#f4f7fb] text-[#5c6b82]"
+                onClick={() => {
+                  const url = `${window.location.origin}/?spot=${spot.id}`;
+                  void navigator.clipboard?.writeText(url);
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5" strokeLinecap="round" />
+                  <path d="M14 11a5 5 0 0 0-7.07 0L5.5 12.41a5 5 0 0 0 7.07 7.07L14 19" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button type="button" aria-label="Head home" onClick={onHome} className="grid h-8 w-8 place-items-center rounded-full bg-[#f4f7fb] text-[#5c6b82]">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button type="button" onClick={() => setPanel(false)} className="grid h-8 w-8 place-items-center rounded-full bg-[#f4f7fb] text-[#5c6b82]" aria-label="Hide panel">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                  <path d="M6 14l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <p className="text-sm text-[#5c6b82]">{spot.blurb}</p>
+
+          <form
+            className="mt-3 flex items-center gap-2 rounded-full bg-[#f4f7fb] px-3 py-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              sendShout();
+            }}
+          >
+            <input
+              value={shout}
+              onChange={(event) => setShout(event.target.value)}
+              maxLength={120}
+              placeholder={crowd ? `Say something to the ${crowd} player${crowd === 1 ? "" : "s"} here...` : "Say something to the room..."}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#8b97ab]"
+            />
+            <button type="submit" aria-label="Send" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#006B3F] text-white">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
+                <path d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z" />
+              </svg>
+            </button>
+          </form>
+
+          {zones.length ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {zones.map((zone) => (
+                <button
+                  key={zone.id}
+                  type="button"
+                  onClick={() => walkTo(zone.left, zone.top)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-left text-xs font-semibold text-[#243044]"
+                >
+                  <span className="text-base leading-none">{zone.emoji}</span>
+                  <span>{zone.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {party ? (
-            <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">
+            <p className="mt-3 rounded-full bg-[#121212] px-3 py-1.5 text-center text-xs font-semibold text-[#FCD116]">
               {lively && !(BEACHES.has(spot.id) || CLUB_IDS.has(spot.id)) ? "Packed right now. Accra showed up." : "Party on. Highlife, and the floor is already full."}
             </p>
           ) : null}
@@ -355,7 +454,7 @@ function PersonTag({
 }) {
   const body = (
     <>
-      <span className={`mb-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#CE1126]"}`}>{name}</span>
+      <span className={`mb-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
       <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
     </>
   );
@@ -489,9 +588,9 @@ function staffFor(spot: Spot) {
           : club
             ? "List is at the door. The night is inside."
             : `I run ${spot.name}. Tell me what you came for.`,
-      style: { left: "18%", top: "42%" },
+      style: air ? { left: "26%", top: "46%" } : { left: "18%", top: "42%" },
       skin: "#8d5a3b",
-      shirt: "#006B3F",
+      shirt: air ? "#1d4ed8" : "#006B3F",
       hair: "Bun",
     },
     {
@@ -503,12 +602,33 @@ function staffFor(spot: Spot) {
           : club
             ? "The floor is open. Drinks are at the bar."
             : "I take the money. The price is on the menu.",
-      style: { left: "72%", top: "36%" },
+      style: air ? { left: "68%", top: "40%" } : { left: "72%", top: "36%" },
       skin: "#c68a62",
-      shirt: "#FCD116",
+      shirt: air ? "#FCD116" : "#FCD116",
       hair: "Afro",
     },
   ];
+}
+
+function zonesFor(spotId: string): { id: string; label: string; emoji: string; left: number; top: number }[] {
+  if (spotId === "kotoka") {
+    return [
+      { id: "checkin", label: "Check-in desk", emoji: "🎫", left: 28, top: 48 },
+      { id: "departures", label: "Departure lounge", emoji: "🛋️", left: 58, top: 42 },
+      { id: "lounge", label: "VIP lounge", emoji: "🥂", left: 74, top: 56 },
+      { id: "arrivals", label: "Arrivals window", emoji: "🪟", left: 44, top: 68 },
+    ];
+  }
+  return [];
+}
+
+function spotFlavor(spot: Spot) {
+  if (spot.id === "kotoka") return "Taxi men calling out 'Osu! Madina! East Legon!'";
+  if (spot.blurb.includes(".")) {
+    const bit = spot.blurb.split(".")[1]?.trim();
+    if (bit) return bit;
+  }
+  return spot.blurb;
 }
 
 function sceneKind(spot: Spot): Kind {
@@ -541,10 +661,10 @@ function youSay(talk: TalkKind, place: string) {
 }
 
 function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
-  const indoor = kind === "hotel" || kind === "club" || kind === "tables" || kind === "hall" || kind === "gym";
-  const floor = kind === "airport" ? "#b9d48a" : kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
-  const wall = night ? "#3d4658" : "#f7f4ef";
-  const wallSide = night ? "#2c3444" : "#e4e0d8";
+  const indoor = kind === "hotel" || kind === "club" || kind === "tables" || kind === "hall" || kind === "gym" || kind === "airport";
+  const floor = kind === "airport" ? "#b7c98a" : kind === "shore" ? "#f6e7c8" : kind === "garden" ? "#cfe6a8" : kind === "club" ? (night ? "#1a1624" : "#2a2438") : night ? "#3a342c" : "#f3efe6";
+  const wall = night || kind === "airport" ? "#3d4658" : "#f7f4ef";
+  const wallSide = night || kind === "airport" ? "#2c3444" : "#e4e0d8";
   const items = furniture(kind, night);
   const title = spot.name.toUpperCase();
   return (
@@ -573,7 +693,10 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
       {kind === "hotel" ? <Pool /> : null}
       {kind === "airport" ? <AirportDress night={night} /> : null}
       {kind === "airport" ? (
-        <FaceSign axis="x" x={-54} y={22} z={-18} length={108} tall={12} text="KOTOKA INTERNATIONAL" fill="#006B3F" ink="white" />
+        <>
+          <FaceSign axis="x" x={-102} y={48} z={-51} length={88} tall={14} text="CHECK-IN · ACCRA LIFE AIR" fill="#1d4ed8" ink="white" />
+          <FaceSign axis="z" x={-107} y={46} z={20} length={52} tall={13} text="DEPARTURES" fill="#006B3F" ink="white" />
+        </>
       ) : indoor ? (
         <>
           <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
@@ -640,51 +763,40 @@ function furniture(kind: Kind, night: boolean): Block[] {
   }
   if (kind === "airport") {
     return [
-      // Runway strip at the back
-      { x: -110, y: 0, z: -58, w: 220, h: 2, d: 28, color: "#4a5564" },
-      // Taxiway
-      { x: -100, y: 0, z: -28, w: 200, h: 1.5, d: 10, color: "#6b7280" },
-      // Terminal
-      { x: -56, y: 0, z: -18, w: 112, h: 22, d: 36, color: "#d9dde3" },
-      { x: -52, y: 22, z: -14, w: 104, h: 4, d: 28, color: "#9aa3b2" },
-      // Glass front
-      { x: -48, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
-      { x: -12, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
-      { x: 24, y: 6, z: 16, w: 28, h: 12, d: 2, color: "#7ec8ea" },
-      // Control tower
-      { x: 72, y: 0, z: -8, w: 14, h: 48, d: 14, color: "#f4f7fb" },
-      { x: 68, y: 48, z: -12, w: 22, h: 10, d: 22, color: "#006B3F" },
-      { x: 74, y: 58, z: -6, w: 10, h: 6, d: 10, color: "#121212" },
-      // Helipads pad
-      { x: -108, y: 0, z: 8, w: 36, h: 1.5, d: 36, color: "#6b7280" },
-      // Parking lots
-      { x: -70, y: 0, z: 36, w: 48, h: 1, d: 32, color: "#8b93a1" },
-      { x: 10, y: 0, z: 36, w: 48, h: 1, d: 32, color: "#8b93a1" },
-      // Fountain plaza
-      { x: -10, y: 0, z: 48, w: 16, h: 2, d: 16, color: "#94a3b8" },
-      { x: -6, y: 2, z: 52, w: 8, h: 3, d: 8, color: "#38bdf8" },
-      // Gate jets (white + green Ghana tails)
-      ...plane(-78, -42, "#f8fafc", "#006B3F"),
-      ...plane(-40, -42, "#f8fafc", "#006B3F"),
-      ...plane(-2, -42, "#f8fafc", "#006B3F"),
-      ...plane(36, -42, "#f8fafc", "#CE1126"),
-      // Private apron
-      ...smallJet(78, 8, "#1c1917"),
-      ...smallJet(92, 22, "#1c1917"),
-      ...smallJet(84, 38, "#243044"),
-      // Parked cars
-      { x: -62, y: 1, z: 42, w: 5, h: 3, d: 3, color: "#CE1126" },
-      { x: -52, y: 1, z: 46, w: 5, h: 3, d: 3, color: "#FCD116" },
-      { x: -42, y: 1, z: 40, w: 5, h: 3, d: 3, color: "#006B3F" },
-      { x: -32, y: 1, z: 48, w: 5, h: 3, d: 3, color: "#1d4ed8" },
-      { x: 18, y: 1, z: 42, w: 5, h: 3, d: 3, color: "#f97316" },
-      { x: 28, y: 1, z: 48, w: 5, h: 3, d: 3, color: "#121212" },
-      { x: 38, y: 1, z: 40, w: 5, h: 3, d: 3, color: "#ec4899" },
-      // Billboards
-      { x: -112, y: 0, z: 52, w: 3, h: 28, d: 3, color: "#6b6256" },
-      { x: -118, y: 18, z: 48, w: 18, h: 14, d: 2, color: "#CE1126" },
-      { x: 98, y: 0, z: 52, w: 3, h: 28, d: 3, color: "#6b6256" },
-      { x: 92, y: 18, z: 48, w: 18, h: 14, d: 2, color: "#FCD116" },
+      // Soft rug / oval platform feel under the room
+      { x: -70, y: 0, z: 8, w: 140, h: 1, d: 90, color: "#a8bc78" },
+      // Check-in desk (blue)
+      { x: -88, y: 0, z: -28, w: 52, h: 16, d: 18, color: "#1d4ed8" },
+      { x: -84, y: 16, z: -24, w: 44, h: 3, d: 12, color: "#93c5fd" },
+      { x: -72, y: 19, z: -22, w: 10, h: 8, d: 4, color: "#121212" },
+      // Desk plants
+      { x: -96, y: 0, z: -8, w: 6, h: 14, d: 6, color: "#166534" },
+      { x: -34, y: 0, z: -10, w: 6, h: 14, d: 6, color: "#166534" },
+      // Departure seating rows
+      { x: -18, y: 0, z: -24, w: 48, h: 8, d: 12, color: "#dbe3ef" },
+      { x: -14, y: 8, z: -22, w: 40, h: 10, d: 3, color: "#94a3b8" },
+      { x: -18, y: 0, z: -4, w: 48, h: 8, d: 12, color: "#dbe3ef" },
+      { x: -14, y: 8, z: -2, w: 40, h: 10, d: 3, color: "#94a3b8" },
+      // Flight board
+      { x: 36, y: 0, z: -40, w: 28, h: 36, d: 6, color: "#1e293b" },
+      { x: 40, y: 8, z: -38, w: 20, h: 4, d: 2, color: "#22c55e" },
+      { x: 40, y: 16, z: -38, w: 20, h: 4, d: 2, color: "#FCD116" },
+      { x: 40, y: 24, z: -38, w: 20, h: 4, d: 2, color: "#f8fafc" },
+      // VIP / chopper lounge
+      { x: 58, y: 0, z: 8, w: 42, h: 14, d: 28, color: "#121212" },
+      { x: 62, y: 14, z: 12, w: 34, h: 3, d: 20, color: "#c9a227" },
+      { x: 70, y: 0, z: 40, w: 14, h: 18, d: 10, color: "#1c1917" },
+      // Arrivals glass wall
+      { x: -40, y: 0, z: 48, w: 70, h: 28, d: 4, color: "#7ec8ea" },
+      { x: -36, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
+      { x: -8, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
+      { x: 20, y: 6, z: 50, w: 18, h: 14, d: 2, color: "#bfdbfe" },
+      // Center compass rug markers (blocks)
+      { x: -8, y: 0.5, z: 22, w: 16, h: 1, d: 16, color: "#FCD116" },
+      { x: -4, y: 1, z: 26, w: 8, h: 1, d: 8, color: "#006B3F" },
+      // Side palms pots
+      { x: -100, y: 0, z: 36, w: 8, h: 6, d: 8, color: "#8a5a32" },
+      { x: 88, y: 0, z: 52, w: 8, h: 6, d: 8, color: "#8a5a32" },
     ];
   }
   return [...benchTable(-36, 12), ...benchTable(22, 40), { x: -20, y: 0, z: -28, w: 70, h: 16, d: 14, color: "#c9842a" }, ...chair(48, 8, "#d64545")];
@@ -744,42 +856,21 @@ function bannerLine(kind: Kind) {
 }
 
 function AirportDress({ night }: { night: boolean }) {
-  const marks = [-90, -50, -10, 30, 70].map((x) => {
-    const a = pt(x, 2.5, -48);
-    const b = pt(x + 14, 2.5, -48);
-    return [a, b] as const;
-  });
-  const h1 = pt(-90, 2, 26);
-  const h2 = pt(-90, 2, 42);
+  const center = pt(0, 2, 30);
   return (
     <g>
-      {marks.map(([a, b], index) => (
-        <line key={index} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="white" strokeWidth="3" strokeLinecap="round" opacity={night ? 0.95 : 0.85} />
-      ))}
-      <text x={pt(-100, 3, -44)[0]} y={pt(-100, 3, -44)[1]} fill="white" fontSize="11" fontWeight="700" opacity="0.9">
-        21
-      </text>
-      <text x={pt(88, 3, -44)[0]} y={pt(88, 3, -44)[1]} fill="white" fontSize="11" fontWeight="700" opacity="0.9">
-        03
-      </text>
-      <circle cx={h1[0]} cy={h1[1]} r="10" fill="#121212" stroke="#FCD116" strokeWidth="2" />
-      <text x={h1[0]} y={h1[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="10" fontWeight="700">
-        H
-      </text>
-      <circle cx={h2[0]} cy={h2[1]} r="10" fill="#121212" stroke="#FCD116" strokeWidth="2" />
-      <text x={h2[0]} y={h2[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="10" fontWeight="700">
-        H
-      </text>
-      <Palm x={-100} z={58} />
-      <Palm x={-78} z={62} />
-      <Palm x={56} z={58} />
-      <Palm x={86} z={62} />
-      <Palm x={104} z={20} />
+      <ellipse cx={center[0]} cy={center[1]} rx="34" ry="16" fill="#FCD116" opacity="0.95" />
+      <ellipse cx={center[0]} cy={center[1]} rx="18" ry="8" fill="#006B3F" />
+      <ellipse cx={center[0]} cy={center[1]} rx="7" ry="3.2" fill="#CE1126" />
+      <Palm x={-100} z={40} />
+      <Palm x={-86} z={52} />
+      <Palm x={92} z={48} />
+      <Palm x={104} z={28} />
       {night ? (
         <g>
-          <circle cx={pt(78, 62, -2)[0]} cy={pt(78, 62, -2)[1]} r="5" fill="#FCD116" opacity="0.85" />
-          <circle cx={pt(-40, 24, -10)[0]} cy={pt(-40, 24, -10)[1]} r="3" fill="#fff4c2" opacity="0.7" />
-          <circle cx={pt(10, 24, -10)[0]} cy={pt(10, 24, -10)[1]} r="3" fill="#fff4c2" opacity="0.7" />
+          <circle cx={pt(-60, 34, -20)[0]} cy={pt(-60, 34, -20)[1]} r="3.5" fill="#fff4c2" opacity="0.85" />
+          <circle cx={pt(48, 40, -34)[0]} cy={pt(48, 40, -34)[1]} r="3.5" fill="#22c55e" opacity="0.9" />
+          <circle cx={pt(72, 22, 20)[0]} cy={pt(72, 22, 20)[1]} r="3" fill="#FCD116" opacity="0.85" />
         </g>
       ) : null}
     </g>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, memo, type PointerEvent as ReactPointerEvent } from "react";
-import { happeningsAt, heatLabel } from "@/lib/game/happenings";
+import { useEffect, useMemo, useRef, useSyncExternalStore, memo, type PointerEvent as ReactPointerEvent } from "react";
+import { happeningsAt, heatLabel, type Heat } from "@/lib/game/happenings";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -18,6 +18,8 @@ type Bld = { x: number; y: number; kind: Kind; hue: number; w: number };
 
 const CITY = makeCity();
 const TREES = makeTrees();
+const CITY_LITE = CITY.filter((_, index) => index % 2 === 0);
+const TREES_LITE = TREES.filter((_, index) => index % 3 === 0);
 
 export const BOARDS: { id: string; x: number; y: number; fill: string; road: string; text: string; price: number; mega?: boolean }[] = [
   { id: "oxford", x: 200, y: 250, fill: "#1f7a4d", road: "Oxford Street", text: "Waakye open", price: 80 },
@@ -49,7 +51,11 @@ const AREAS = [
   [1600, 982, "SPINTEX"],
 ];
 
-export function CityBoard({
+function applyTransform(node: HTMLElement, view: View) {
+  node.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.z})`;
+}
+
+export const CityBoard = memo(function CityBoard({
   filter,
   boards = true,
   night = false,
@@ -78,19 +84,54 @@ export function CityBoard({
   const points = useRef(new Map<number, { x: number; y: number }>());
   const moved = useRef(false);
   const frame = useRef(0);
+  const pending = useRef<View | null>(null);
+  const rectCache = useRef({ left: 0, top: 0, w: 0, h: 0, at: 0 });
+  const lite = useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(max-width: 760px), (pointer: coarse)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(max-width: 760px), (pointer: coarse)").matches,
+    () => false,
+  );
+
+  const vibes = useMemo(() => {
+    const when = at ?? new Date();
+    const map = new Map<string, { emoji: string; line: string; heat: Heat }>();
+    for (const spot of SPOTS) {
+      if (spot.soon || spot.id === "home") continue;
+      const top = happeningsAt(spot.id, when)[0];
+      if (top) map.set(spot.id, { emoji: top.emoji, line: top.line, heat: top.heat });
+    }
+    return map;
+  }, [at]);
+
+  function boardRect() {
+    const now = performance.now();
+    if (now - rectCache.current.at < 120 && rectCache.current.w) return rectCache.current;
+    const node = boardRef.current;
+    if (!node) return rectCache.current;
+    const rect = node.getBoundingClientRect();
+    rectCache.current = { left: rect.left, top: rect.top, w: rect.width, h: rect.height, at: now };
+    return rectCache.current;
+  }
 
   function paint(next: View) {
     const clamped = clampView(next, size.current.w, size.current.h);
     viewRef.current = clamped;
     const node = worldRef.current;
-    if (node) node.style.transform = `translate(${clamped.x}px, ${clamped.y}px) scale(${clamped.z})`;
+    if (node) applyTransform(node, clamped);
   }
 
   function show(next: View) {
-    if (frame.current) cancelAnimationFrame(frame.current);
+    pending.current = next;
+    if (frame.current) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = 0;
-      paint(next);
+      const queued = pending.current;
+      pending.current = null;
+      if (queued) paint(queued);
     });
   }
 
@@ -102,6 +143,7 @@ export function CityBoard({
       const rect = node.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
       size.current = { w: rect.width, h: rect.height };
+      rectCache.current = { left: rect.left, top: rect.top, w: rect.width, h: rect.height, at: performance.now() };
       floorZ.current = fitZoom(rect.width, rect.height);
       if (first) {
         first = false;
@@ -117,7 +159,10 @@ export function CityBoard({
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame.current) cancelAnimationFrame(frame.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -125,8 +170,8 @@ export function CityBoard({
     if (!node) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const rect = node.getBoundingClientRect();
-      show(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current));
+      const box = boardRect();
+      show(zoomToward(viewRef.current, event.clientX - box.left, event.clientY - box.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current));
     };
     const stopGesture = (event: Event) => event.preventDefault();
     node.addEventListener("wheel", onWheel, { passive: false });
@@ -150,11 +195,19 @@ export function CityBoard({
     paint({ z, x: (w - WORLD.w * z) / 2, y: (h - WORLD.h * z) / 2 });
   }
 
+  function setDragging(on: boolean) {
+    const node = worldRef.current;
+    if (!node) return;
+    node.style.pointerEvents = on ? "none" : "";
+  }
+
   function release(event: ReactPointerEvent<HTMLDivElement>) {
     points.current.delete(event.pointerId);
     if (points.current.size < 2) pinch.current = null;
-    if (points.current.size === 0) drag.current = null;
-    else if (points.current.size === 1) {
+    if (points.current.size === 0) {
+      drag.current = null;
+      setDragging(false);
+    } else if (points.current.size === 1) {
       const left = [...points.current.values()][0];
       drag.current = { x: left.x, y: left.y, px: viewRef.current.x, py: viewRef.current.y };
     }
@@ -166,7 +219,7 @@ export function CityBoard({
     <div
       ref={boardRef}
       className="absolute inset-0 cursor-grab touch-none select-none overflow-clip bg-[#b7d48c] active:cursor-grabbing"
-      style={{ WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+      style={{ WebkitUserSelect: "none", WebkitTouchCallout: "none", touchAction: "none" }}
       onPointerDown={(event) => {
         if ((event.target as Element).closest("[data-zoom]")) return;
         points.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -177,6 +230,7 @@ export function CityBoard({
         } else {
           moved.current = true;
           drag.current = null;
+          setDragging(true);
           const pair = [...points.current.values()];
           pinch.current = { dist: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1, z: viewRef.current.z, view: viewRef.current };
           for (const id of points.current.keys()) {
@@ -189,13 +243,13 @@ export function CityBoard({
       onPointerMove={(event) => {
         if (!points.current.has(event.pointerId)) return;
         points.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        const rect = event.currentTarget.getBoundingClientRect();
         if (points.current.size >= 2 && pinch.current) {
+          const box = boardRect();
           const pair = [...points.current.values()];
           const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
-          const midX = (pair[0].x + pair[1].x) / 2 - rect.left;
-          const midY = (pair[0].y + pair[1].y) / 2 - rect.top;
-          paint(zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current));
+          const midX = (pair[0].x + pair[1].x) / 2 - box.left;
+          const midY = (pair[0].y + pair[1].y) / 2 - box.top;
+          show(zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current));
           return;
         }
         if (!drag.current) return;
@@ -204,11 +258,12 @@ export function CityBoard({
         if (!moved.current && Math.hypot(dx, dy) < 6) return;
         if (!moved.current) {
           moved.current = true;
+          setDragging(true);
           try {
             event.currentTarget.setPointerCapture(event.pointerId);
           } catch {}
         }
-        paint({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
+        show({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
       }}
       onPointerUp={release}
       onPointerCancel={release}
@@ -223,69 +278,21 @@ export function CityBoard({
       }}
       onDoubleClick={(event) => {
         if ((event.target as Element).closest("button, [data-board]")) return;
-        const rect = event.currentTarget.getBoundingClientRect();
-        paint(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current));
+        const box = boardRect();
+        paint(zoomToward(viewRef.current, event.clientX - box.left, event.clientY - box.top, viewRef.current.z * 1.35, floorZ.current));
       }}
     >
       <div
         ref={worldRef}
-        className="absolute left-0 top-0 origin-top-left will-change-transform"
-        style={{ width: WORLD.w, height: WORLD.h, transform: `translate(${start.x}px, ${start.y}px) scale(${start.z})` }}
+        className="absolute left-0 top-0 origin-top-left will-change-transform [contain:strict] [backface-visibility:hidden]"
+        style={{
+          width: WORLD.w,
+          height: WORLD.h,
+          transform: `translate3d(${start.x}px, ${start.y}px, 0) scale(${start.z})`,
+        }}
       >
-        <CityArt night={night} boards={boards} ads={ads} onBoard={onBoard} />
-        {SPOTS.map((spot) => {
-          const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
-          const open = active === spot.id;
-          const vibe = spot.soon || spot.id === "home" ? null : happeningsAt(spot.id, at)[0];
-          const tag = spot.soon
-            ? `${spot.name} · Coming soon`
-            : spot.far
-              ? `${spot.name} · ${Math.round(spot.far / 60)}h`
-              : vibe && vibe.heat !== "quiet"
-                ? `${spot.name} · ${heatLabel(vibe.heat)}`
-                : spot.name;
-          return (
-            <button
-              key={spot.id}
-              type="button"
-              onClick={() => onSelect(spot.id)}
-              title={vibe ? `${spot.name} — ${vibe.line}` : spot.name}
-              aria-label={spot.name}
-              aria-pressed={open}
-              className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${faded ? "opacity-30" : ""} ${open ? "z-20" : ""}`}
-              style={{ left: spot.x, top: spot.y }}
-            >
-              {open ? (
-                <span
-                  className={`flex max-w-[14rem] items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold shadow-[0_8px_20px_rgba(22,32,60,.22)] ${
-                    spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : vibe?.heat === "packed" ? "bg-[#121212] text-[#FCD116]" : "bg-white text-[#121212]"
-                  }`}
-                >
-                  <span className="text-base leading-none">{vibe?.emoji ?? spot.emoji}</span>
-                  <span className="truncate">{tag}</span>
-                </span>
-              ) : (
-                <>
-                  <span
-                    className={`grid h-8 w-8 place-items-center rounded-full text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ${
-                      vibe?.heat === "packed" ? "bg-[#121212] text-lg ring-[#FCD116]" : vibe?.heat === "busy" ? "bg-[#fff4c2] ring-[#f5c542]" : "bg-white ring-white/80"
-                    }`}
-                  >
-                    {spot.emoji}
-                  </span>
-                  <span className="mt-1 max-w-[6.5rem] truncate rounded-full bg-[#121212]/78 px-2 py-0.5 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
-                    {spot.name}
-                  </span>
-                  {vibe && vibe.heat !== "quiet" ? (
-                    <span className={`mt-0.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide ${vibe.heat === "packed" ? "bg-[#FCD116] text-[#121212]" : "bg-white/90 text-[#7a3b0c]"}`}>
-                      {heatLabel(vibe.heat)}
-                    </span>
-                  ) : null}
-                </>
-              )}
-            </button>
-          );
-        })}
+        <CityArt night={night} boards={boards} ads={ads} onBoard={onBoard} lite={lite} />
+        <SpotPins filter={filter} active={active} vibes={vibes} onSelect={onSelect} lite={lite} />
       </div>
       <div data-zoom className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
@@ -300,7 +307,79 @@ export function CityBoard({
       </div>
     </div>
   );
-}
+});
+
+const SpotPins = memo(function SpotPins({
+  filter,
+  active,
+  vibes,
+  onSelect,
+  lite,
+}: {
+  filter: Spot["group"] | "all";
+  active: string | null;
+  vibes: Map<string, { emoji: string; line: string; heat: Heat }>;
+  onSelect: (id: string) => void;
+  lite: boolean;
+}) {
+  return (
+    <>
+      {SPOTS.map((spot) => {
+        const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
+        const open = active === spot.id;
+        const vibe = vibes.get(spot.id) ?? null;
+        const tag = spot.soon
+          ? `${spot.name} · Coming soon`
+          : spot.far
+            ? `${spot.name} · ${Math.round(spot.far / 60)}h`
+            : vibe && vibe.heat !== "quiet"
+              ? `${spot.name} · ${heatLabel(vibe.heat)}`
+              : spot.name;
+        return (
+          <button
+            key={spot.id}
+            type="button"
+            onClick={() => onSelect(spot.id)}
+            title={vibe ? `${spot.name} — ${vibe.line}` : spot.name}
+            aria-label={spot.name}
+            aria-pressed={open}
+            className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${faded ? "opacity-30" : ""} ${open ? "z-20" : ""}`}
+            style={{ left: spot.x, top: spot.y }}
+          >
+            {open ? (
+              <span
+                className={`flex max-w-[14rem] items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold ${
+                  spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : vibe?.heat === "packed" ? "bg-[#121212] text-[#FCD116]" : "bg-white text-[#121212]"
+                }`}
+              >
+                <span className="text-base leading-none">{vibe?.emoji ?? spot.emoji}</span>
+                <span className="truncate">{tag}</span>
+              </span>
+            ) : (
+              <>
+                <span
+                  className={`grid h-8 w-8 place-items-center rounded-full text-base ring-2 ${
+                    vibe?.heat === "packed" ? "bg-[#121212] text-lg ring-[#FCD116]" : vibe?.heat === "busy" ? "bg-[#fff4c2] ring-[#f5c542]" : "bg-white ring-black/10"
+                  }`}
+                >
+                  {spot.emoji}
+                </span>
+                <span className="mt-1 max-w-[6.5rem] truncate rounded-full bg-[#121212]/78 px-2 py-0.5 text-center text-[10px] font-bold leading-tight text-white">
+                  {spot.name}
+                </span>
+                {!lite && vibe && vibe.heat !== "quiet" ? (
+                  <span className={`mt-0.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide ${vibe.heat === "packed" ? "bg-[#FCD116] text-[#121212]" : "bg-white/90 text-[#7a3b0c]"}`}>
+                    {heatLabel(vibe.heat)}
+                  </span>
+                ) : null}
+              </>
+            )}
+          </button>
+        );
+      })}
+    </>
+  );
+});
 
 function fitZoom(width: number, height: number) {
   return Math.min(MIN_Z, Math.max(0.18, Math.min(width / WORLD.w, height / WORLD.h)));
@@ -332,14 +411,18 @@ const CityArt = memo(function CityArt({
   boards,
   ads,
   onBoard,
+  lite = false,
 }: {
   night: boolean;
   boards: boolean;
   ads: Record<string, string>;
   onBoard?: (id: string) => void;
+  lite?: boolean;
 }) {
+  const buildings = lite ? CITY_LITE : CITY;
+  const trees = lite ? TREES_LITE : TREES;
   return (
-    <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="h-full w-full">
+    <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="h-full w-full" style={{ pointerEvents: boards ? "auto" : "none" }}>
       <rect width={WORLD.w} height={WORLD.h} fill="#d7ebbc" />
       <Hills />
       <path d="M0 1196 C 500 1172, 1000 1212, 1500 1180 C 1800 1164, 2000 1192, 2000 1192 V 1400 H 0 Z" fill="#f4e3c4" />
@@ -366,11 +449,11 @@ const CityArt = memo(function CityArt({
       <circle cx="780" cy="620" r="16" fill="#b7d48c" />
       <rect x="40" y="458" width="230" height="14" rx="2" fill="#d5dae3" />
       <line x1="52" y1="465" x2="258" y2="465" stroke="white" strokeDasharray="12 8" />
-      {CITY.map((building) => (
+      {buildings.map((building) => (
         <Building key={`${building.x}-${building.y}`} building={building} night={night} />
       ))}
-      {TREES.map((tree) => (
-        <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} />
+      {trees.map((tree) => (
+        <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} lite={lite} />
       ))}
       {boards
         ? BOARDS.map((board) => (
@@ -509,7 +592,10 @@ function Highway({ x, label }: { x: number; label: string }) {
   );
 }
 
-function Tree({ x, y, r }: { x: number; y: number; r: number }) {
+function Tree({ x, y, r, lite }: { x: number; y: number; r: number; lite?: boolean }) {
+  if (lite) {
+    return <circle cx={x} cy={y} r={r} fill="#67a83e" />;
+  }
   return (
     <g>
       <ellipse cx={x} cy={y + r * 0.45} rx={r * 0.75} ry={r * 0.28} fill="rgba(40,70,30,.14)" />

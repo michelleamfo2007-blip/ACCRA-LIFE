@@ -126,7 +126,7 @@ const GATEWAYS: Spot[] = [
     x: 180,
     y: 520,
     group: "work",
-    blurb: "Airport. Runway 03/21, Ghana green tails on the gates, and the Accra–Kumasi board always lit.",
+    blurb: "Airport City. Taxi men calling out 'Osu! Madina! East Legon!' Gates lit for Kumasi and London.",
     actions: [
       stroll("kotoka-planes", "Watch the planes land", "Wheels down, engines roaring, kids pointing at the fence."),
       act({ id: "kotoka-arrivals", label: "Meet arrivals", detail: "A cousin from abroad, two suitcases and a hug that lasts a minute.", minutes: 40, effects: { social: 22, fun: 10 }, social: true, emoji: "🤗" }),
