@@ -695,7 +695,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
   }
 
   function moveIn() {
-    const life = freshLife({ look, traits, dream, birthId: birth.id, homeId });
+    const life = freshLife({ look, traits, dream, birthId: birth.id, homeId, username: account.username });
     commitLife(account.username, life);
     flash(`Keys in hand. ${homeById(homeId).area} is home.`);
   }

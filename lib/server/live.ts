@@ -1,6 +1,6 @@
 import "server-only";
 import { timingSafeEqual } from "crypto";
-import { cedis, mergeMoney, SPOTS, type Life, type Spot } from "@/lib/game/world";
+import { cedis, joinCash, mergeMoney, SPOTS, type Life, type Spot } from "@/lib/game/world";
 import { supabase } from "@/lib/server/supabase";
 import type { SpotPos } from "@/lib/game/net";
 
@@ -150,9 +150,41 @@ export async function savePlayer(player: CloudPlayer) {
   return !error;
 }
 
+let lastWalletTopUp = 0;
+
+export async function topUpJoinWallets() {
+  const client = db();
+  if (!client) return { updated: 0, checked: 0 };
+  const { data, error } = await client.from("players").select("username, name, email, password_hash, birth_id, life, created_at");
+  if (error || !data) return { updated: 0, checked: 0 };
+  let updated = 0;
+  for (const row of data as PlayerRow[]) {
+    const player = toPlayer(row);
+    if (!player.life || typeof player.life.cash !== "number") continue;
+    const target = joinCash(player.username);
+    if (player.life.cash >= target) continue;
+    const life: Life = {
+      ...player.life,
+      cash: target,
+      log: [`City top-up: wallet filled to ${cedis(target)}.`, ...(player.life.log ?? [])].slice(0, 14),
+      inbox: [`Your wallet was topped up to ${cedis(target)}. Accra is open.`, ...(player.life.inbox ?? [])].slice(0, 20),
+    };
+    const saved = await savePlayer({ ...player, life });
+    if (saved) updated += 1;
+  }
+  return { updated, checked: data.length };
+}
+
+export async function maybeTopUpJoinWallets() {
+  if (Date.now() - lastWalletTopUp < 45_000) return null;
+  lastWalletTopUp = Date.now();
+  return topUpJoinWallets();
+}
+
 export async function crowdCounts() {
   const client = db();
   if (!client) return { players: 0, online: 0 };
+  void maybeTopUpJoinWallets();
   const { count: players } = await client.from("players").select("*", { count: "exact", head: true });
   const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
   const filtered = await client.from("players").select("*", { count: "exact", head: true }).filter("life->>seen", "gte", since);

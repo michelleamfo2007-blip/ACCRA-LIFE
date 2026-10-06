@@ -239,12 +239,12 @@ export const BIRTHS: Birth[] = [
     name: "Susu Baby!",
     line: "Self-made hits different.",
     perks: [
-      "₵600 susu loan to start — repay ₵120 every Saturday",
+      "₵50,000 to start — repay ₵120 every Saturday on the susu loan",
       "Hustle skill starts at 2",
       "You learn every skill a little faster",
       "East Legon is a dream until the money is real",
     ],
-    cash: 600,
+    cash: 50000,
     loan: 600,
     weeklyLoan: 120,
     learn: 1.25,
@@ -259,8 +259,8 @@ export const BIRTHS: Birth[] = [
     emoji: "🏡",
     name: "Cantonments Compound",
     line: "The gate already knows your name.",
-    perks: ["Start with ₵2,400", "Every home is open if you can make rent", "The compound already likes you"],
-    cash: 2400,
+    perks: ["Start with ₵50,000", "Every home is open if you can make rent", "The compound already likes you"],
+    cash: 50000,
     loan: 0,
     weeklyLoan: 0,
     learn: 1,
@@ -275,8 +275,8 @@ export const BIRTHS: Birth[] = [
     emoji: "🧺",
     name: "Makola Child",
     line: "You can price a tomato from across the lane.",
-    perks: ["Start with ₵380", "Cooking starts at 2", "Chop bars and Makola food cost less", "East Legon rent can wait"],
-    cash: 380,
+    perks: ["Start with ₵50,000", "Cooking starts at 2", "Chop bars and Makola food cost less", "East Legon rent can wait"],
+    cash: 50000,
     loan: 0,
     weeklyLoan: 0,
     learn: 1,
@@ -291,8 +291,8 @@ export const BIRTHS: Birth[] = [
     emoji: "⛪",
     name: "Pastor's Child",
     line: "Half of Ridge already knows your surname.",
-    perks: ["Start with ₵700", "Charm starts at 2", "Church lifts you higher than a normal Sunday"],
-    cash: 700,
+    perks: ["Start with ₵50,000", "Charm starts at 2", "Church lifts you higher than a normal Sunday"],
+    cash: 50000,
     loan: 0,
     weeklyLoan: 0,
     learn: 1,
@@ -307,8 +307,8 @@ export const BIRTHS: Birth[] = [
     emoji: "✈️",
     name: "Just Landed",
     line: "The accent arrives before the suitcase.",
-    perks: ["Start with ₵3,200", "People assume the wallet is heavier than it is", "East Legon is open, and the rent still bites"],
-    cash: 3200,
+    perks: ["Start with ₵50,000", "People assume the wallet is heavier than it is", "East Legon is open, and the rent still bites"],
+    cash: 50000,
     loan: 0,
     weeklyLoan: 0,
     learn: 1,
@@ -1036,6 +1036,16 @@ export function cedis(value: number) {
   return `${sign}₵${Math.abs(Math.round(value)).toLocaleString("en-GH")}`;
 }
 
+export const JOIN_CASH = 50_000;
+export const VIP_JOIN_CASH: Record<string, number> = {
+  idbee: 70_000,
+};
+
+export function joinCash(username = "") {
+  const key = username.trim().toLowerCase().replace(/^@/, "");
+  return VIP_JOIN_CASH[key] ?? JOIN_CASH;
+}
+
 export function dayIndex(minutes: number) {
   return Math.floor(minutes / 1440);
 }
@@ -1181,9 +1191,10 @@ function pushLog(life: Life, line: string) {
   life.inbox = [line, ...life.inbox].slice(0, 20);
 }
 
-export function freshLife(input: { look: Look; traits: string[]; dream: string; birthId: string; homeId: string }): Life {
+export function freshLife(input: { look: Look; traits: string[]; dream: string; birthId: string; homeId: string; username?: string }): Life {
   const birth = birthById(input.birthId);
   const home = homeById(input.homeId);
+  const wallet = joinCash(input.username);
   const life: Life = {
     look: input.look,
     traits: input.traits,
@@ -1198,7 +1209,7 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
       hygiene: 76,
       bladder: 80,
     },
-    cash: birth.cash + 40,
+    cash: wallet,
     loan: birth.loan,
     weeklyLoan: birth.weeklyLoan,
     learn: birth.learn,
@@ -1214,7 +1225,7 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
     },
     where: "home",
     inventory: ["bed", "cooler", "stove"],
-    log: [`You have the key to ${home.name} in ${home.area}.`, "Your cousin sent ₵40. Buy kenkey, don't starve."],
+    log: [`You have the key to ${home.name} in ${home.area}.`, `Your wallet opens with ${cedis(wallet)}.`],
     inbox: ["Welcome to Accra. The city is already moving — keep your needs up and your name clean."],
     relations: [{ name: home.neighbor, score: 16 }],
     funded: false,
