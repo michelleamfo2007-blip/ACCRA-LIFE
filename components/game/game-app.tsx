@@ -357,8 +357,7 @@ function Auth({
         ← Back to the city
       </button>
       <div className="mx-auto mt-6 w-full max-w-md text-center">
-        <p className="text-4xl">👑</p>
-        <h1 className="mt-2 font-display text-4xl tracking-tight">
+        <h1 className="font-display text-4xl tracking-tight">
           Accra Life <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#121212] align-middle text-xs font-bold text-white">18+</span>
         </h1>
         <p className="mt-2 text-[#5c6b82]">Live your Accra story with real neighbourhoods.</p>
@@ -447,7 +446,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
   return (
     <div className="flex h-dvh flex-col bg-[#fff6df] lg:flex-row">
       <div
-        className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+        className="relative z-0 flex min-h-[46vh] flex-1 items-end justify-center overflow-hidden pb-7 pt-16"
         onPointerDown={(event) => {
           const start = event.clientX;
           const base = spin;
@@ -481,7 +480,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             </button>
           </div>
         </div>
-        <div className="h-[min(40vh,320px)] w-[min(70vw,280px)]">
+        <div className="h-[min(36vh,280px)] w-[min(64vw,240px)]">
           <LowPolyHuman
             skin={look.skin}
             shirt={look.cloth}
@@ -494,9 +493,9 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             yaw={spin}
           />
         </div>
-        <p className="absolute bottom-4 text-xs text-[#8b97ab]">Drag to spin</p>
+        <p className="absolute bottom-1 text-xs text-[#8b97ab]">Drag to spin</p>
       </div>
-      <div className="relative z-10 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
+      <div className="relative z-10 max-h-[50vh] shrink-0 overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
         {step === 0 ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-full bg-[#fff1c9] px-4 py-3">
@@ -1254,7 +1253,6 @@ function tagsFor(verb: Verb) {
 function TopBrand({ crowd, onSignup, onLogin }: { crowd: { players: number; online: number }; onSignup: () => void; onLogin: () => void }) {
   return (
     <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg">
-      <span className="text-xl">👑</span>
       <span className="font-display text-lg tracking-tight">Accra Life</span>
       <span className="text-xs font-semibold text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
       <span className="text-xs font-semibold text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span>
