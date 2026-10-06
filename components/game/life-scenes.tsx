@@ -57,20 +57,32 @@ export function StreetRide({
   }, [ride.minutes]);
 
   const facing = camera === "selfie" ? -1 : 1;
+  const walking = ride.id === "trek";
 
   return (
     <div className="absolute inset-0 z-40 overflow-hidden bg-[#c5e4f7]">
-      <div className={`street-world street-${camera}`}>
+      <div className={`street-world street-${camera} ${walking ? "" : `street-on-${ride.id}`}`}>
         <div className="street-sky" />
         <div className="street-road">
-          <span className="street-car street-car-a" />
-          <span className="street-car street-car-b" />
-          <span className="street-car street-car-c" />
+          {ride.id === "train" ? <span className="street-rails" /> : null}
+          {walking || ride.id === "train" ? null : (
+            <>
+              <span className="street-car street-car-a" />
+              <span className="street-car street-car-b" />
+              <span className="street-car street-car-c" />
+            </>
+          )}
         </div>
         <div className="street-walk" />
-        <div className={`street-sim street-sim-${camera}`}>
-          <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={facing} className="h-full" />
-        </div>
+        {walking ? (
+          <div className={`street-sim street-sim-${camera}`}>
+            <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={facing} className="h-full" />
+          </div>
+        ) : (
+          <div className={`street-vehicle street-vehicle-${ride.id}`}>
+            <Vehicle ride={ride.id} life={life} face={facing} />
+          </div>
+        )}
       </div>
       <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(280px,70vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
         <p className="text-sm font-semibold">
@@ -110,6 +122,56 @@ export function StreetRide({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function Vehicle({ ride, life, face }: { ride: Ride["id"]; life: Life; face: 1 | -1 }) {
+  const rider = <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="idle" face={face} className="h-full" />;
+  if (ride === "trotro") {
+    return (
+      <div className="van">
+        <span className="van-stripe" />
+        <span className="van-cab" />
+        <span className="van-glass">{rider}</span>
+        <span className="van-glass" />
+        <span className="van-glass" />
+        <span className="van-board">TROTRO</span>
+        <span className="wheel wheel-back" />
+        <span className="wheel wheel-front" />
+      </div>
+    );
+  }
+  if (ride === "train") {
+    return (
+      <div className="coach">
+        <span className="coach-roof" />
+        <span className="coach-glass">{rider}</span>
+        <span className="coach-glass" />
+        <span className="coach-glass" />
+        <span className="coach-glass" />
+        <span className="wheel wheel-back" />
+        <span className="wheel wheel-mid" />
+        <span className="wheel wheel-front" />
+      </div>
+    );
+  }
+  if (ride === "taxi") {
+    return (
+      <div className="cab">
+        <span className="cab-lamp">TAXI</span>
+        <span className="cab-glass">{rider}</span>
+        <span className="wheel wheel-back" />
+        <span className="wheel wheel-front" />
+      </div>
+    );
+  }
+  return (
+    <div className="bike">
+      <span className="bike-rider">{rider}</span>
+      <span className="bike-body" />
+      <span className="wheel wheel-back" />
+      <span className="wheel wheel-front" />
     </div>
   );
 }

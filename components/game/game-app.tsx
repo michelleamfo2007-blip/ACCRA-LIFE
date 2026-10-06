@@ -11,6 +11,7 @@ import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
 import { Payday, ShiftFloor, StreetRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
+import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -747,6 +748,16 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [now, setNow] = useState<number | null>(null);
   const herePeople = usePlacePeople(account.life?.where ?? null);
   const sheetPeople = usePlacePeople(placeId);
+  const [ping, setPing] = useState<InboxPing | null>(null);
+  const inbox = useInbox(account.username, Boolean(account.cloud), (next) => {
+    setPing(next);
+    window.setTimeout(() => setPing((current) => (current?.at === next.at ? null : current)), 6000);
+    try {
+      if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+        new Notification(`@${next.username}`, { body: next.text, tag: `accralife-${next.username}` });
+      }
+    } catch {}
+  });
   useEffect(() => {
     try {
       const saved = localStorage.getItem("accralife-boards");
@@ -997,8 +1008,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 ["phone", "Phone"],
               ] as const
             ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""}`}>
+              <button key={id} type="button" onClick={() => setTab(id)} className={`relative rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""}`}>
                 {label}
+                {id === "phone" && inbox.total > 0 ? (
+                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white" aria-label={`${inbox.total} unread`}>
+                    {inbox.total > 9 ? "9+" : inbox.total}
+                  </span>
+                ) : null}
               </button>
             ))}
           </nav>
@@ -1184,10 +1200,34 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           </form>
         </div>
       ) : null}
+      {ping && !(tab === "phone") ? (
+        <button
+          type="button"
+          onClick={() => {
+            setChatLaunch({ id: `user:${ping.username}` });
+            setTab("phone");
+            setPing(null);
+          }}
+          className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-[60] flex w-[min(360px,calc(100%-1.5rem))] -translate-x-1/2 items-center gap-3 rounded-3xl bg-white/95 px-4 py-3 text-left shadow-[0_16px_40px_rgba(22,32,60,.25)] backdrop-blur"
+        >
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#006B3F] text-sm font-bold text-white">{ping.username.slice(0, 1).toUpperCase()}</span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-sm font-bold text-[#121212]">@{ping.username}</span>
+              <span className="shrink-0 text-[11px] text-[#8b97ab]">now</span>
+            </span>
+            <span className="block truncate text-sm text-[#5c6b82]">{ping.text}</span>
+          </span>
+        </button>
+      ) : null}
       {tab === "phone" ? (
         <Handset
           life={life}
           username={account.username}
+          unread={inbox.unread}
+          onRead={(id) => {
+            if (id.startsWith("user:")) inbox.markRead(id.slice(5));
+          }}
           launch={chatLaunch}
           onLaunchConsumed={() => setChatLaunch(null)}
           onAir={setOnAir}
@@ -1445,15 +1485,15 @@ function PlaceSheet({
         <p className="mt-4 rounded-full bg-[#fff4c2] py-3 text-center text-sm font-semibold text-[#1f8a4c]">You&apos;re already here.</p>
       ) : (
         <>
-          <div className="mt-4 grid grid-cols-4 gap-2">
+          <div className="mt-4 grid grid-cols-5 gap-1.5">
             {RIDES.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => onRide(item.id)}
-                className={`rounded-2xl px-2 py-3 text-center ${rideId === item.id ? "bg-[#fff4c2] ring-2 ring-[#CE1126]" : "bg-[#f4f7fb]"}`}
+                className={`rounded-2xl px-1 py-2.5 text-center ${rideId === item.id ? "bg-[#fff4c2] ring-2 ring-[#CE1126]" : "bg-[#f4f7fb]"}`}
               >
-                <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "okada" ? "🏍️" : "🚕"}</span>
+                <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "train" ? "🚆" : item.id === "okada" ? "🏍️" : "🚕"}</span>
                 <span className="mt-1 block text-sm font-semibold">{item.label}</span>
                 <span className="block text-xs text-[#5c6b82]">{item.cost ? cedis(item.cost) : "Free"}</span>
               </button>

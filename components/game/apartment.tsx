@@ -410,10 +410,39 @@ function Prop({ item }: { item: ShopItem }) {
     return <Box color={color} position={[0, 0.7, 0]} size={[0.7, 0.55, 0.06]} />;
   }
   if (item.kind === "jet") {
+    const heavy = item.id === "heavy-jet";
+    const body = heavy ? 1.55 : 1.25;
+    const span = heavy ? 1.55 : 1.25;
     return (
-      <group>
-        <Box color={color} position={[0, 0.28, 0]} size={[1.5, 0.18, 0.28]} />
-        <Box color={color} position={[0.05, 0.28, 0]} size={[0.55, 0.06, 1.05]} />
+      <group position={[0, 0.22, 0]}>
+        <mesh rotation={[0, 0, Math.PI / 2]}>
+          <capsuleGeometry args={[0.12, body, 4, 12]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+        <mesh position={[body / 2 + 0.1, 0, 0]} rotation={[0, 0, -Math.PI / 2]}>
+          <coneGeometry args={[0.12, 0.26, 12]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+        <mesh position={[0.28, 0.1, 0]}>
+          <sphereGeometry args={[0.08, 12, 8]} />
+          <meshLambertMaterial color="#8fb4d4" />
+        </mesh>
+        <mesh position={[0.02, -0.02, 0]}>
+          <boxGeometry args={[0.36, 0.03, span]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+        <mesh position={[-body / 2 + 0.08, 0.16, 0]}>
+          <boxGeometry args={[0.2, 0.26, 0.04]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+        <mesh position={[0.08, -0.1, span * 0.28]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.05, 0.06, 0.24, 10]} />
+          <meshLambertMaterial color="#3a3f46" />
+        </mesh>
+        <mesh position={[0.08, -0.1, -span * 0.28]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.05, 0.06, 0.24, 10]} />
+          <meshLambertMaterial color="#3a3f46" />
+        </mesh>
       </group>
     );
   }

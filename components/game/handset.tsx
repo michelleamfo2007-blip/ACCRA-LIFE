@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
-import { MessagesApp, SettingsApp, openingUnread, type ChatMsg } from "@/components/game/phone-social";
+import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import {
   CLOTHES,
   CLOTHS,
@@ -48,9 +48,13 @@ export function Handset({
   launch,
   onLaunchConsumed,
   onAir,
+  unread,
+  onRead,
 }: {
   life: Life;
   username: string;
+  unread: Record<string, number>;
+  onRead: (id: string) => void;
   onClose: () => void;
   onWork: (jobId: string) => void;
   onWear: (look: Look, cost?: number) => void;
@@ -72,7 +76,10 @@ export function Handset({
   const [thread, setThread] = useState<string | null>(launch?.id ?? null);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
   const [blocked, setBlocked] = useState<string[]>([]);
-  const [unread, setUnread] = useState<Record<string, number>>(() => openingUnread(life));
+  const readRef = useRef(onRead);
+  useEffect(() => {
+    readRef.current = onRead;
+  });
   const [groups, setGroups] = useState<string[]>([]);
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -88,7 +95,7 @@ export function Handset({
     if (!launch) return;
     setApp("messages");
     setThread(launch.id);
-    setUnread((current) => ({ ...current, [launch.id]: 0 }));
+    readRef.current(launch.id);
     onLaunchConsumed();
   }, [launch, onLaunchConsumed]);
   useEffect(() => {
@@ -104,6 +111,7 @@ export function Handset({
         .then((payload: { messages?: ChatMsg[] }) => {
           if (stop || !Array.isArray(payload.messages)) return;
           setChats((current) => ({ ...current, [thread]: payload.messages ?? [] }));
+          readRef.current(thread);
         })
         .catch(() => {});
     };
@@ -123,7 +131,7 @@ export function Handset({
   function openThread(id: string) {
     setThread(id);
     setApp("messages");
-    setUnread((current) => ({ ...current, [id]: 0 }));
+    onRead(id);
   }
 
   function pushChat(id: string, message: ChatMsg) {

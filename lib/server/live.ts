@@ -202,7 +202,11 @@ export async function listChats(username: string) {
     Object.keys(bag).map(async (id) => {
       const other = await readPlayer(id);
       const last = bag[id]?.[bag[id].length - 1];
-      return { username: id, name: other?.name ?? id, last: last?.text ?? "", time: last?.time ?? "" };
+      const incoming = (bag[id] ?? [])
+        .filter((mail) => mail.who === "them" && mail.at)
+        .slice(-30)
+        .map((mail) => ({ at: mail.at, text: mail.text }));
+      return { username: id, name: other?.name ?? id, last: last?.text ?? "", time: last?.time ?? "", mine: last?.who === "me", incoming };
     }),
   );
   return threads;

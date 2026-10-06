@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Canvas } from "@react-three/fiber";
 import { SHOP, SHOP_CATEGORIES, cedis, type ShopCategory, type ShopItem } from "@/lib/game/world";
 
 const MARKS: Record<ShopCategory, string> = {
@@ -94,11 +95,85 @@ export function Catalogue({
 }
 
 function ItemArt({ item }: { item: ShopItem }) {
+  if (item.kind === "jet") return <JetPreview color={item.color} heavy={item.id === "heavy-jet"} />;
   return (
     <svg viewBox="0 0 120 90" className="h-24 w-28" aria-hidden>
       <ellipse cx="60" cy="80" rx="36" ry="5.5" fill="#121212" opacity="0.08" />
       <Piece item={item} />
     </svg>
+  );
+}
+
+function JetPreview({ color, heavy }: { color: string; heavy: boolean }) {
+  return (
+    <Canvas
+      className="h-24 w-28"
+      camera={{ position: [2.1, 3.4, 2.1], fov: 26 }}
+      dpr={1}
+      frameloop="demand"
+      gl={{ antialias: true, alpha: true }}
+      onCreated={({ gl }) => gl.setClearColor("#ffffff", 0)}
+      style={{ width: "7rem", height: "6rem", pointerEvents: "none" }}
+    >
+      <ambientLight intensity={0.72} />
+      <directionalLight position={[4, 7, 3]} intensity={1.25} />
+      <directionalLight position={[-3, 2, -2]} intensity={0.35} />
+      <JetModel color={color} heavy={heavy} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <circleGeometry args={[1.35, 32]} />
+        <meshBasicMaterial color="#121212" transparent opacity={0.08} />
+      </mesh>
+    </Canvas>
+  );
+}
+
+function JetModel({ color, heavy }: { color: string; heavy: boolean }) {
+  const body = heavy ? 2.15 : 1.85;
+  const span = heavy ? 2.7 : 2.25;
+  return (
+    <group position={[0, 0.15, 0]} rotation={[0, 0.85, 0]}>
+      <mesh rotation={[0, 0, Math.PI / 2]}>
+        <capsuleGeometry args={[0.16, body, 6, 16]} />
+        <meshLambertMaterial color={color} />
+      </mesh>
+      <mesh position={[body / 2 + 0.16, 0.02, 0]} rotation={[0, 0, -Math.PI / 2]}>
+        <coneGeometry args={[0.16, 0.36, 16]} />
+        <meshLambertMaterial color={color} />
+      </mesh>
+      <mesh position={[0.38, 0.14, 0]}>
+        <sphereGeometry args={[0.11, 16, 12]} />
+        <meshLambertMaterial color="#8fb4d4" />
+      </mesh>
+      <mesh position={[0.05, -0.02, 0]}>
+        <boxGeometry args={[0.5, 0.035, span]} />
+        <meshLambertMaterial color={color} />
+      </mesh>
+      <mesh position={[-body / 2 + 0.12, 0.22, 0]}>
+        <boxGeometry args={[0.28, 0.34, 0.045]} />
+        <meshLambertMaterial color={color} />
+      </mesh>
+      <mesh position={[-body / 2 + 0.16, 0.08, 0]}>
+        <boxGeometry args={[0.22, 0.03, 0.62]} />
+        <meshLambertMaterial color={color} />
+      </mesh>
+      <Engine at={[0.05, -0.08, span * 0.32]} />
+      <Engine at={[0.05, -0.08, -span * 0.32]} />
+      {heavy ? (
+        <>
+          <Engine at={[0.38, -0.08, span * 0.32]} />
+          <Engine at={[0.38, -0.08, -span * 0.32]} />
+        </>
+      ) : null}
+    </group>
+  );
+}
+
+function Engine({ at }: { at: [number, number, number] }) {
+  return (
+    <mesh position={at} rotation={[0, 0, Math.PI / 2]}>
+      <cylinderGeometry args={[0.07, 0.085, 0.34, 12]} />
+      <meshLambertMaterial color="#3a3f46" />
+    </mesh>
   );
 }
 
@@ -129,7 +204,6 @@ function Piece({ item }: { item: ShopItem }) {
   if (kind === "statue" || kind === "vault") return <Crate color={color} />;
   if (kind === "dog" || kind === "cat") return <Pet color={color} />;
   if (kind === "bird") return <Bird color={color} />;
-  if (kind === "jet") return <Jet color={color} />;
   if (id === "pan" || id === "kerosene") return <Pot color={color} />;
   if (id === "pillow") return <Pillow color={color} />;
   if (id === "kente") return <Cloth />;
@@ -197,16 +271,6 @@ function Bird({ color }: { color: string }) {
       <path d="M58 72 v-28" stroke="#5c4030" strokeWidth="4" />
       <circle cx="58" cy="38" r="10" fill={color} />
       <path d="M66 36 h10" stroke="#e7c85a" strokeWidth="2" />
-    </g>
-  );
-}
-
-function Jet({ color }: { color: string }) {
-  return (
-    <g>
-      <path d="M18 48 H92 L104 54 H28 Z" fill={color} />
-      <path d="M48 48 L40 28 H58 L70 48 Z" fill={shade(color, 0.8)} />
-      <path d="M70 46 L96 34 L100 40 L74 50 Z" fill={shade(color, 0.7)} />
     </g>
   );
 }

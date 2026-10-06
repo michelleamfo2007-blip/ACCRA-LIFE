@@ -103,17 +103,32 @@ function Inbox({
   const [making, setMaking] = useState(false);
   const [notice, setNotice] = useState("");
   const [found, setFound] = useState<{ username: string; name: string }[]>([]);
+  const [previews, setPreviews] = useState<Record<string, ChatMsg>>({});
   useEffect(() => {
     let stop = false;
-    fetch("/api/live/chat")
-      .then((response) => response.json())
-      .then((payload: { threads?: { username: string; name: string }[] }) => {
-        if (stop || !Array.isArray(payload.threads)) return;
-        setFound(payload.threads.map((thread) => ({ username: thread.username, name: thread.name })));
-      })
-      .catch(() => {});
+    const load = () => {
+      fetch("/api/live/chat")
+        .then((response) => response.json())
+        .then((payload: { threads?: { username: string; name: string; last?: string; time?: string; mine?: boolean }[] }) => {
+          if (stop || !Array.isArray(payload.threads)) return;
+          const threads = payload.threads;
+          setFound((current) => {
+            const known = new Set(threads.map((thread) => thread.username));
+            return [...threads.map((thread) => ({ username: thread.username, name: thread.name })), ...current.filter((person) => !known.has(person.username))];
+          });
+          setPreviews(
+            Object.fromEntries(
+              threads.filter((thread) => thread.last).map((thread) => [`user:${thread.username}`, { who: thread.mine ? "me" : "them", text: thread.last ?? "", time: thread.time ?? "" } as ChatMsg]),
+            ),
+          );
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = window.setInterval(load, 5000);
     return () => {
       stop = true;
+      window.clearInterval(id);
     };
   }, []);
   const people = peopleBook([...players, ...found]).filter((person) => !blocked.includes(person.id));
@@ -179,7 +194,15 @@ function Inbox({
                     prefs = {};
                   }
                   localStorage.setItem("accralife-phone", JSON.stringify({ ...prefs, notifications: true }));
-                  setNotice("Notifications are on for this phone.");
+                  if (typeof Notification === "undefined") {
+                    setNotice("New messages will pop up at the top while you play.");
+                    return;
+                  }
+                  Notification.requestPermission()
+                    .then((permission) =>
+                      setNotice(permission === "granted" ? "Notifications are on. Messages pop up even when this tab is in the background." : "New messages will pop up at the top while you play. Allow notifications in your browser to get them in the background too."),
+                    )
+                    .catch(() => setNotice("New messages will pop up at the top while you play."));
                 }}
               >
                 Turn on
@@ -243,7 +266,8 @@ function Inbox({
             <div className="mt-2">
               {shown.length ? null : <p className="mt-3 text-sm text-[#8b97ab]">Search a username. Only real accounts show up.</p>}
               {shown.map((person) => {
-                const last = [...(chats[person.id] ?? [])].reverse()[0];
+                const last = [...(chats[person.id] ?? [])].reverse()[0] ?? previews[person.id];
+                const fresh = (unread[person.id] ?? 0) > 0;
                 return (
                   <button key={person.id} type="button" onClick={() => onOpen(person.id)} className="flex w-full items-center gap-3 border-b border-black/5 py-3 text-left">
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#d7c4a3] text-sm font-bold">{person.name.slice(0, 1).toUpperCase()}</span>
@@ -252,7 +276,7 @@ function Inbox({
                         <span className="truncate font-semibold">{person.handle}</span>
                         <span className="shrink-0 text-[11px] text-[#6b7c93]">{last?.time ?? ""}</span>
                       </span>
-                      <span className="mt-0.5 block truncate text-sm text-[#5c6b82]">{last ? `${last.who === "me" ? "You: " : ""}${last.text}` : "No messages yet"}</span>
+                      <span className={`mt-0.5 block truncate text-sm ${fresh ? "font-semibold text-[#121212]" : "text-[#5c6b82]"}`}>{last ? `${last.who === "me" ? "You: " : ""}${last.text}` : "No messages yet"}</span>
                     </span>
                     {(unread[person.id] ?? 0) > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white">{unread[person.id]}</span> : null}
                   </button>
@@ -559,8 +583,4 @@ function peopleBook(players: { username: string; name: string }[]) {
 function resolvePerson(id: string, players: { username: string; name: string }[]) {
   if (id.startsWith("group:")) return { id, name: id.slice(6), handle: id.slice(6) };
   return peopleBook(players).find((person) => person.id === id) ?? { id, name: id.startsWith("user:") ? id.slice(5) : id, handle: id.startsWith("user:") ? `@${id.slice(5)}` : handleOf(id) };
-}
-
-export function openingUnread(_life: Life) {
-  return {};
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
@@ -40,6 +40,17 @@ export function VenueFloor({
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);
   const [youAt, setYouAt] = useState({ left: "34%", top: "62%" });
+  const [stride, setStride] = useState<{ ms: number; face: 1 | -1; moving: boolean }>({ ms: 700, face: 1, moving: false });
+  const [panel, setPanel] = useState(true);
+  const [drift, setDrift] = useState<[number, number][]>([
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  const stopTimer = useRef<number | null>(null);
   const party = BEACHES.has(spot.id) || CLUB_IDS.has(spot.id);
   const staff = staffFor(spot);
   const stands = [
@@ -47,14 +58,59 @@ export function VenueFloor({
     { left: "62%", top: "70%" },
     { left: "40%", top: "38%" },
     { left: "30%", top: "55%" },
-  ];
+  ].map((style, index) => ({
+    left: `${Number.parseFloat(style.left) + (drift[index]?.[0] ?? 0)}%`,
+    top: `${Number.parseFloat(style.top) + (drift[index]?.[1] ?? 0)}%`,
+  }));
   const open = people.find((person) => person.username === who) ?? null;
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setDrift((current) => current.map(() => [Math.round((Math.random() - 0.5) * 10), Math.round((Math.random() - 0.5) * 8)] as [number, number]));
+    }, 3800);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    follow(34, "auto");
+    return () => {
+      if (stopTimer.current) window.clearTimeout(stopTimer.current);
+    };
+  }, []);
+
+  function follow(left: number, behavior: ScrollBehavior = "smooth") {
+    const box = scroller.current;
+    const floor = stage.current;
+    if (!box || !floor || floor.clientWidth <= box.clientWidth) return;
+    box.scrollTo({ left: (floor.clientWidth * left) / 100 - box.clientWidth / 2, behavior });
+  }
+
+  function walkTo(left: number, top: number) {
+    const fromLeft = Number.parseFloat(youAt.left);
+    const fromTop = Number.parseFloat(youAt.top);
+    const nextLeft = Math.max(10, Math.min(90, left));
+    const nextTop = Math.max(30, Math.min(84, top));
+    const ms = Math.round(Math.max(450, Math.min(1800, Math.hypot(nextLeft - fromLeft, nextTop - fromTop) * 30)));
+    setStride({ ms, face: nextLeft < fromLeft ? -1 : 1, moving: true });
+    setYouAt({ left: `${nextLeft}%`, top: `${nextTop}%` });
+    follow(nextLeft);
+    if (stopTimer.current) window.clearTimeout(stopTimer.current);
+    stopTimer.current = window.setTimeout(() => setStride((current) => ({ ...current, moving: false })), ms);
+    return ms;
+  }
 
   function approach(style: { left: string; top: string }, then: () => void) {
     const left = Number.parseFloat(style.left);
     const top = Number.parseFloat(style.top);
-    setYouAt({ left: `${Math.min(84, left + 9)}%`, top: `${Math.min(76, top + 12)}%` });
-    window.setTimeout(then, 680);
+    const ms = walkTo(left + 9, top + 12);
+    window.setTimeout(then, ms);
+  }
+
+  function tapFloor(event: MouseEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    walkTo(((event.clientX - box.left) / box.width) * 100, ((event.clientY - box.top) / box.height) * 100);
+    if (window.innerWidth < 640) setPanel(false);
   }
 
   function speak(person: string, talk: TalkKind) {
@@ -65,8 +121,8 @@ export function VenueFloor({
 
   return (
     <div className="relative h-full overflow-hidden" style={{ background: night ? "radial-gradient(circle at 50% 30%, #243044 0%, #12151c 70%)" : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)" }}>
-      <div className="absolute inset-x-1 top-[4.25rem] bottom-36">
-        <div className="relative mx-auto h-full max-w-3xl">
+      <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 overflow-x-auto overflow-y-hidden overscroll-x-contain">
+        <div ref={stage} onClick={tapFloor} className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer">
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
           {staff.map((person) => (
             <PersonTag
@@ -100,6 +156,7 @@ export function VenueFloor({
                   shirt={index ? "#FCD116" : "#CE1126"}
                   hair="Afro"
                   pants="#1c1917"
+                  dance
                   onClick={() =>
                     approach(style, () => {
                       setWho(`party:${index}`);
@@ -119,6 +176,7 @@ export function VenueFloor({
               shirt={SHIRTS[(index + 1) % SHIRTS.length]}
               hair={HAIR[index % HAIR.length]}
               pants={PANTS[index % PANTS.length]}
+              glide
               onClick={() =>
                 approach(stands[index], () => {
                   setWho(person.username);
@@ -127,9 +185,21 @@ export function VenueFloor({
               }
             />
           ))}
-          <PersonTag name="You" tone="pink" style={youAt} walk skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} pants={life.look.body === "woman" ? "#1c1917" : life.look.accent} />
+          <PersonTag
+            name="You"
+            tone="pink"
+            style={youAt}
+            walk={stride.ms}
+            pose={stride.moving ? "walk" : "idle"}
+            face={stride.face}
+            skin={life.look.skin}
+            shirt={life.look.cloth}
+            hair={life.look.hair}
+            pants={life.look.body === "woman" ? "#1c1917" : life.look.accent}
+          />
         </div>
       </div>
+      <p className="pointer-events-none absolute left-1/2 top-[4.6rem] z-20 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">Tap to walk · swipe to look around</p>
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
         <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-30 rounded-3xl bg-white p-4 shadow-xl">
           <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
@@ -150,11 +220,27 @@ export function VenueFloor({
           onPick={(talk) => speak(open.name, talk)}
           onPay={(amount) => onPay(open.name, amount, open.username)}
         />
+      ) : !panel ? (
+        <button
+          type="button"
+          onClick={() => setPanel(true)}
+          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 flex items-center justify-between rounded-full bg-white px-4 py-3 text-left text-sm font-semibold shadow-xl sm:inset-x-3"
+        >
+          <span className="truncate">
+            {spot.emoji} {spot.name}
+          </span>
+          <span className="shrink-0 text-[#006B3F]">What to do ▲</span>
+        </button>
       ) : (
         <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
-          <p className="font-semibold">
-            {spot.emoji} {spot.name}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold">
+              {spot.emoji} {spot.name}
+            </p>
+            <button type="button" onClick={() => setPanel(false)} className="shrink-0 rounded-full bg-[#f4f7fb] px-3 py-1 text-xs font-semibold text-[#5c6b82]" aria-label="Hide panel">
+              Hide ▼
+            </button>
+          </div>
           <p className="text-sm text-[#5c6b82]">{spot.blurb}</p>
           {party ? <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">Party on. Highlife, and the floor is already full.</p> : null}
           <ActionDeck verbs={spot.actions} here focus={focus} onPay={(verb, offer) => onAct(payVerb(verb, offer))} />
@@ -175,7 +261,11 @@ function PersonTag({
   shirt,
   hair = "Bob",
   pants = "#1c1917",
-  walk = false,
+  walk,
+  pose = "idle",
+  face = 1,
+  dance = false,
+  glide = false,
   onClick,
 }: {
   name: string;
@@ -185,24 +275,38 @@ function PersonTag({
   shirt: string;
   hair?: string;
   pants?: string;
-  walk?: boolean;
+  walk?: number;
+  pose?: "idle" | "walk" | "act";
+  face?: 1 | -1;
+  dance?: boolean;
+  glide?: boolean;
   onClick?: () => void;
 }) {
   const body = (
     <>
       <span className={`mb-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#CE1126]"}`}>{name}</span>
-      <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} className="h-20 w-fit" />
+      <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
     </>
   );
+  const layer = { ...style, zIndex: 10 + Math.round(Number.parseFloat(style.top)) };
   if (!onClick) {
     return (
-      <div className={`pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center ${walk ? "transition-[left,top] duration-700 ease-out" : ""}`} style={style}>
+      <div
+        className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ease-linear"
+        style={{ ...layer, transitionProperty: walk ? "left, top" : undefined, transitionDuration: walk ? `${walk}ms` : undefined }}
+      >
         {body}
       </div>
     );
   }
   return (
-    <button type="button" aria-label={`Talk to ${name}`} onClick={onClick} className="absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center" style={style}>
+    <button
+      type="button"
+      aria-label={`Talk to ${name}`}
+      onClick={onClick}
+      className={`absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ${glide ? "transition-[left,top] duration-[3000ms] ease-in-out" : ""}`}
+      style={layer}
+    >
       {body}
     </button>
   );

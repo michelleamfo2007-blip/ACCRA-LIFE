@@ -1084,6 +1084,7 @@ export function careerLevel(life: Life) {
 export const RIDES = [
   { id: "trek", label: "Trek", cost: 0, minutes: 40 },
   { id: "trotro", label: "Trotro", cost: 5, minutes: 25 },
+  { id: "train", label: "Train", cost: 8, minutes: 20 },
   { id: "okada", label: "Okada", cost: 12, minutes: 14 },
   { id: "taxi", label: "Taxi", cost: 28, minutes: 12 },
 ] as const;
