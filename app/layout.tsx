@@ -38,6 +38,8 @@ export const viewport: Viewport = {
   themeColor: "#fff6df",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -47,7 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className={`${jakarta.variable} ${fredoka.variable} h-full antialiased`}>
-      <body className={game ? "fixed inset-0 h-dvh w-full overflow-hidden overscroll-none bg-[#fff6df] text-[#121212]" : "min-h-full bg-paper text-ink"}>
+      <body className={game ? "fixed inset-0 h-dvh w-full max-w-full overflow-clip overscroll-none bg-[#fff6df] text-[#121212]" : "min-h-full bg-paper text-ink"}>
         {game ? null : <SiteHeader />}
         <main id="main" className={game ? "h-full overflow-hidden" : "pb-24 md:pb-0"}>
           {children}

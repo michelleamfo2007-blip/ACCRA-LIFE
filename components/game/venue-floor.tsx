@@ -358,7 +358,7 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
   const items = furniture(kind, night);
   const title = spot.name.toUpperCase();
   return (
-    <svg viewBox="0 0 760 480" className="h-full w-full" preserveAspectRatio="xMidYMid meet">
+    <svg viewBox="0 0 760 480" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
       <Blocks
         items={[
           { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },

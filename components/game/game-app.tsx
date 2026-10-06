@@ -791,7 +791,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   }
 
   return (
-    <div className="fixed inset-0 h-dvh w-full overflow-hidden overscroll-none touch-none">
+    <div className="fixed inset-0 h-dvh w-full max-w-full overflow-clip overscroll-none touch-none">
       <Soundtrack tune={tuneFor(life.where, onAir)} />
       {tab === "map" ? (
         <CityBoard
@@ -918,7 +918,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             </button>
           </div>
           {tab === "map" ? (
-            <div className="no-scrollbar absolute left-2 right-2 top-[max(3.6rem,calc(env(safe-area-inset-top)+3.1rem))] z-30 flex justify-start gap-2 overflow-x-auto px-1 pb-1 sm:left-3 sm:right-3 sm:justify-center">
+            <div className="no-scrollbar absolute left-2 right-2 top-[max(4.6rem,calc(env(safe-area-inset-top)+4.1rem))] z-30 flex justify-start gap-2 overflow-x-auto px-1 pb-1 sm:left-3 sm:right-3 sm:top-[max(4.15rem,calc(env(safe-area-inset-top)+3.4rem))] sm:justify-center">
               <LayerChip active={filter === "all"} onClick={() => setFilter("all")}>
                 Free road
               </LayerChip>

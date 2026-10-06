@@ -140,7 +140,7 @@ function CameraRig({ frozen }: { frozen: boolean }) {
       if (pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.62, 1.7);
+        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.72, 1.05);
         pinch = dist;
         return;
       }
@@ -159,7 +159,7 @@ function CameraRig({ frozen }: { frozen: boolean }) {
     const wheel = (event: WheelEvent) => {
       if (frozenRef.current) return;
       event.preventDefault();
-      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.62, 1.7);
+      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.72, 1.05);
     };
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
@@ -176,14 +176,13 @@ function CameraRig({ frozen }: { frozen: boolean }) {
   }, [gl]);
   useFrame(() => {
     const aspect = size.width / Math.max(1, size.height);
-    const phone = aspect < 0.8;
-    const distance = (phone ? 36 : aspect < 1.15 ? 26 : 22) * zoom.current;
+    const distance = (aspect < 0.85 ? 16 : aspect < 1.15 ? 22 : 20) * zoom.current;
     const lookX = pan.current.x;
-    const lookY = phone ? -1.8 : 0;
+    const lookY = 0;
     const lookZ = pan.current.z;
     const lens = camera as PerspectiveCamera;
     lens.position.set(lookX + distance * 0.42, lookY + distance * 0.72, lookZ + distance * 0.5);
-    lens.fov = phone ? 42 : 32;
+    lens.fov = 30;
     lens.lookAt(lookX, lookY, lookZ);
     lens.updateProjectionMatrix();
   });

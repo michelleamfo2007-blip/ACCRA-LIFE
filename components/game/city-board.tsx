@@ -57,7 +57,8 @@ export function CityBoard({
   onBoard?: (id: string) => void;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<View>({ x: -160, y: -40, z: 0.55 });
+  const floorZ = useRef(MIN_Z);
+  const [view, setView] = useState<View>({ x: -160, y: -40, z: 0.72 });
   const viewRef = useRef(view);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const pinch = useRef<{ dist: number; z: number; view: View } | null>(null);
@@ -67,10 +68,15 @@ export function CityBoard({
     const node = boardRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
+    const close = rect.width < 760;
+    floorZ.current = close ? 1 : MIN_Z;
+    const z = close ? 1.2 : 0.72;
+    const focusX = close ? 860 : 1000;
+    const focusY = close ? 560 : 680;
     const next = {
-      z: 0.55,
-      x: rect.width / 2 - 1000 * 0.55,
-      y: rect.height / 2 - 680 * 0.55,
+      z,
+      x: rect.width / 2 - focusX * z,
+      y: rect.height / 2 - focusY * z,
     };
     viewRef.current = next;
     setView(next);
@@ -82,7 +88,7 @@ export function CityBoard({
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const rect = node.getBoundingClientRect();
-      const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89));
+      const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current);
       viewRef.current = next;
       setView(next);
     };
@@ -94,7 +100,7 @@ export function CityBoard({
     const node = boardRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
-    const next = zoomToward(viewRef.current, rect.width / 2, rect.height / 2, viewRef.current.z * factor);
+    const next = zoomToward(viewRef.current, rect.width / 2, rect.height / 2, viewRef.current.z * factor, floorZ.current);
     viewRef.current = next;
     setView(next);
   }
@@ -102,7 +108,7 @@ export function CityBoard({
   return (
     <div
       ref={boardRef}
-      className="absolute inset-0 cursor-grab touch-none overflow-hidden bg-[#b7d48c] active:cursor-grabbing"
+      className="absolute inset-0 cursor-grab touch-none overflow-clip bg-[#b7d48c] active:cursor-grabbing"
       onPointerDown={(event) => {
         if ((event.target as Element).closest("button, [data-board]")) return;
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -125,7 +131,7 @@ export function CityBoard({
           const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
           const midX = (pair[0].x + pair[1].x) / 2 - rect.left;
           const midY = (pair[0].y + pair[1].y) / 2 - rect.top;
-          const next = zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist));
+          const next = zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current);
           viewRef.current = next;
           setView(next);
           return;
@@ -151,7 +157,7 @@ export function CityBoard({
       onDoubleClick={(event) => {
         if ((event.target as Element).closest("button, [data-board]")) return;
         const rect = event.currentTarget.getBoundingClientRect();
-        const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35);
+        const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current);
         viewRef.current = next;
         setView(next);
       }}
@@ -244,8 +250,8 @@ export function CityBoard({
   );
 }
 
-function zoomToward(view: View, originX: number, originY: number, nextZ: number): View {
-  const z = Math.min(MAX_Z, Math.max(MIN_Z, nextZ));
+function zoomToward(view: View, originX: number, originY: number, nextZ: number, floor = MIN_Z): View {
+  const z = Math.min(MAX_Z, Math.max(floor, nextZ));
   const wx = (originX - view.x) / view.z;
   const wy = (originY - view.y) / view.z;
   return { z, x: originX - wx * z, y: originY - wy * z };
