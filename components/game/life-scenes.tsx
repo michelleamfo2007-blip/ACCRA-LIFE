@@ -281,3 +281,185 @@ export function Payday({ earned, performance, onClose }: { earned: number; perfo
     </div>
   );
 }
+
+type FlightCam = "outside" | "cabin" | "seat";
+
+const FLIGHT_BEATS = [
+  { at: 0, phase: "boarding", line: "Boarding at the gate: find your seat, bags in the overhead bins." },
+  { at: 0.12, phase: "taxi", line: "Pushback. Cabins secure. Taxiing to runway 03." },
+  { at: 0.22, phase: "climb", line: "Climbing out over Accra…" },
+  { at: 0.4, phase: "cruise", line: "Cruising at 35,000 ft. Soft drink or malt?" },
+  { at: 0.55, phase: "cruise", line: "The man beside you is humming highlife under his breath." },
+  { at: 0.7, phase: "cruise", line: "Clouds over the Ashanti hills. Almost there." },
+  { at: 0.85, phase: "descent", line: "Seatbelts on. Descending into the Garden City." },
+  { at: 0.94, phase: "land", line: "Touchdown. Welcome." },
+] as const;
+
+export function FlightRide({
+  from,
+  to,
+  cabin,
+  minutes,
+  fare,
+  onArrive,
+  onBack,
+}: {
+  from: string;
+  to: string;
+  cabin: string;
+  minutes: number;
+  fare: number;
+  onArrive: () => void;
+  onBack: () => void;
+}) {
+  const [cam, setCam] = useState<FlightCam>("outside");
+  const [gone, setGone] = useState(0);
+  const arriveRef = useRef(onArrive);
+  const finished = useRef(false);
+  arriveRef.current = onArrive;
+
+  function finish() {
+    if (finished.current) return;
+    finished.current = true;
+    arriveRef.current();
+  }
+
+  useEffect(() => {
+    const started = Date.now();
+    const span = 12000;
+    const id = window.setInterval(() => {
+      const next = Math.min(1, (Date.now() - started) / span);
+      setGone(next);
+      if (next >= 1) {
+        window.clearInterval(id);
+        if (!finished.current) {
+          finished.current = true;
+          arriveRef.current();
+        }
+      }
+    }, 80);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const beat = [...FLIGHT_BEATS].reverse().find((item) => gone >= item.at) ?? FLIGHT_BEATS[0];
+  const left = Math.max(0, Math.ceil(minutes * (1 - gone)));
+  const code = from.slice(0, 3).toUpperCase();
+  const dest = to.slice(0, 3).toUpperCase();
+  const phase = beat.phase;
+  const air = phase === "climb" || phase === "cruise" || phase === "descent";
+
+  return (
+    <div className="absolute inset-0 z-50 overflow-hidden bg-[#9ec8e8]">
+      {cam === "outside" ? (
+        <div className={`flight-sky ${air ? "flight-sky-air" : "flight-sky-ground"}`}>
+          <div className="flight-horizon" />
+          {air ? <div className="flight-fields" /> : <div className="flight-tarmac" />}
+          <div className={`flight-plane flight-plane-${phase}`}>
+            <Airliner />
+          </div>
+          {phase === "boarding" || phase === "taxi" ? <div className="flight-bridge" /> : null}
+        </div>
+      ) : null}
+      {cam === "cabin" ? <CabinView seat={false} /> : null}
+      {cam === "seat" ? <CabinView seat /> : null}
+
+      <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(300px,78vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">
+              AL {200 + Math.round(minutes)} · {cabin}
+            </p>
+            <p className="text-[11px] text-white/70">9G-ALA · Accra Life Air</p>
+          </div>
+          <p className="text-xs font-bold text-[#FCD116]">
+            {code} → {dest}
+          </p>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
+          <div className="relative h-full rounded-full bg-[#FCD116]" style={{ width: `${Math.max(4, gone * 100)}%` }}>
+            <span className="absolute -right-2 -top-2 text-[10px]">✈️</span>
+          </div>
+        </div>
+        <p className="mt-2 text-xs font-semibold text-white/90">
+          {phase === "boarding"
+            ? `Boarding · gate 2 · ${Math.max(1, Math.ceil((0.12 - gone) * 12))}s`
+            : phase === "land"
+              ? "Arrived"
+              : `${left} min to landing`}
+        </p>
+        <p className="mt-1 text-xs leading-5 text-white/85">{beat.line}</p>
+        <p className="mt-1 text-xs text-white/65">Fare {cedis(fare)}</p>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={finish} className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#121212]">
+            Skip ›
+          </button>
+          <button type="button" onClick={onBack} className="rounded-full bg-white/15 px-3 py-2 text-xs font-semibold">
+            Leave gate
+          </button>
+        </div>
+      </div>
+
+      <div className="absolute bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-[#121212]/80 p-1 text-white shadow-lg">
+        {(
+          [
+            ["outside", "Outside"],
+            ["cabin", "Cabin"],
+            ["seat", "My seat"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setCam(id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${cam === id ? "bg-white text-[#121212]" : ""}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Airliner() {
+  return (
+    <svg viewBox="0 0 280 90" className="h-full w-full drop-shadow-xl">
+      <ellipse cx="150" cy="48" rx="110" ry="18" fill="#f8fafc" />
+      <path d="M40 48 L8 58 L8 42 Z" fill="#f8fafc" />
+      <rect x="70" y="38" width="120" height="6" rx="2" fill="#006B3F" />
+      <text x="90" y="36" fill="#006B3F" fontSize="10" fontWeight="700" fontFamily="ui-sans-serif">
+        ACCRA LIFE AIR
+      </text>
+      {[78, 92, 106, 120, 134, 148, 162].map((x) => (
+        <rect key={x} x={x} y="46" width="8" height="5" rx="1" fill="#7ec8ea" />
+      ))}
+      <path d="M95 48 L145 20 L165 20 L130 48 Z" fill="#e2e8f0" />
+      <path d="M95 48 L145 76 L165 76 L130 48 Z" fill="#cbd5e1" />
+      <path d="M220 30 L248 18 L255 22 L230 48 Z" fill="#006B3F" />
+      <circle cx="238" cy="28" r="7" fill="#FCD116" />
+      <text x="238" y="31" textAnchor="middle" fill="#121212" fontSize="7" fontWeight="800">
+        AL
+      </text>
+      <rect x="210" y="54" width="10" height="14" rx="2" fill="#94a3b8" />
+      <rect x="120" y="54" width="10" height="14" rx="2" fill="#94a3b8" />
+    </svg>
+  );
+}
+
+function CabinView({ seat }: { seat: boolean }) {
+  return (
+    <div className={`flight-cabin ${seat ? "flight-cabin-seat" : ""}`}>
+      <div className="flight-cabin-ceiling" />
+      <div className="flight-cabin-aisle">
+        {Array.from({ length: 8 }, (_, row) => (
+          <div key={row} className="flight-cabin-row">
+            <span className="flight-seat" />
+            <span className="flight-seat" />
+            <span className="flight-aisle-gap" />
+            <span className="flight-seat flight-seat-you" />
+            <span className="flight-seat" />
+          </div>
+        ))}
+        <div className="flight-cabin-trolley" aria-hidden>
+          🧳
+        </div>
+        <p className="flight-cabin-wc">WC</p>
+      </div>
+    </div>
+  );
+}

@@ -83,16 +83,24 @@ export function boardHint(life: Life, routeId: string) {
   return `Check in at ${spotById(route.from).name} to board.`;
 }
 
-export function bookFlight(life: Life, routeId: string, cabinId: string): StepResult {
+export function canBoard(life: Life, routeId: string, cabinId: string) {
   const route = routeOf(routeId);
   const cabin = cabinOf(cabinId);
-  if (!route || !cabin) return { life, notes: [], error: "Pick a flight and a cabin." };
+  if (!route || !cabin) return "Pick a flight and a cabin.";
   const board = boardHint(life, routeId);
-  if (board) return { life, notes: [], error: board };
+  if (board) return board;
   const wait = flightWait(life);
-  if (wait > 0) return { life, notes: [], error: `Security already saw you today. Next flight in ${Math.ceil(wait / 60)}h.` };
-  if (life.cash < cabin.cost) return { life, notes: [], error: `You need ${cedis(cabin.cost)} for ${cabin.label.toLowerCase()}.` };
-  if (life.needs.energy < 15) return { life, notes: [], error: "Too tired to fly. Rest first." };
+  if (wait > 0) return `Security already saw you today. Next flight in ${Math.ceil(wait / 60)}h.`;
+  if (life.cash < cabin.cost) return `You need ${cedis(cabin.cost)} for ${cabin.label.toLowerCase()}.`;
+  if (life.needs.energy < 15) return "Too tired to fly. Rest first.";
+  return null;
+}
+
+export function bookFlight(life: Life, routeId: string, cabinId: string): StepResult {
+  const blocked = canBoard(life, routeId, cabinId);
+  if (blocked) return { life, notes: [], error: blocked };
+  const route = routeOf(routeId)!;
+  const cabin = cabinOf(cabinId)!;
 
   const checkIn = 25 + (cabin.id === "economy" ? 20 : cabin.id === "business" ? 10 : 5);
   const timed = passTime(cloneLife(life), checkIn + cabin.minutes).life;

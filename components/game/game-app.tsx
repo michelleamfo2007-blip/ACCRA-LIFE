@@ -9,7 +9,7 @@ import { VenueFloor, type Peer } from "@/components/game/venue-floor";
 import { Catalogue } from "@/components/game/catalogue";
 import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
-import { Payday, ShiftFloor, StreetRide } from "@/components/game/life-scenes";
+import { Payday, ShiftFloor, StreetRide, FlightRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
@@ -25,6 +25,8 @@ import { claimGuide, guideNext } from "@/lib/game/guide";
 import { PlayerChops, WeeklyCard } from "@/components/game/city-apps";
 import { chopSign } from "@/lib/game/kitchen";
 import { checkIn } from "@/lib/game/weekly";
+import { CABINS, bookFlight, routeOf } from "@/lib/game/flights";
+import type { Cabin } from "@/lib/game/flights";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -896,6 +898,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [doOpen, setDoOpen] = useState(false);
   const [rideId, setRideId] = useState<(typeof RIDES)[number]["id"]>("trotro");
   const [trip, setTrip] = useState<{ name: string; placeId: string; ride: Ride } | null>(null);
+  const [flight, setFlight] = useState<{ routeId: string; cabin: Cabin } | null>(null);
   const [shiftId, setShiftId] = useState<string | null>(null);
   const [payday, setPayday] = useState<{ earned: number; performance: number } | null>(null);
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
@@ -1427,6 +1430,28 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
         />
       ) : null}
+      {flight ? (
+        <FlightRide
+          from={spotById(routeOf(flight.routeId)?.from ?? "kotoka").name}
+          to={spotById(routeOf(flight.routeId)?.to ?? "kumasi").name}
+          cabin={CABINS[flight.cabin].label}
+          minutes={CABINS[flight.cabin].minutes}
+          fare={CABINS[flight.cabin].cost}
+          onBack={() => setFlight(null)}
+          onArrive={() => {
+            const going = flight;
+            setFlight(null);
+            const result = bookFlight(life, going.routeId, going.cabin);
+            if (result.error) {
+              flash(result.error);
+              return;
+            }
+            apply(result);
+            setTab("home");
+            setPhoneApp(null);
+          }}
+        />
+      ) : null}
       {shiftId ? (
         <ShiftFloor
           life={life}
@@ -1598,6 +1623,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onGo={(spot) => {
             setTab("map");
             setPlaceId(spot);
+            setPhoneApp(null);
+          }}
+          onFly={(routeId, cabin) => {
+            setFlight({ routeId, cabin: cabin as Cabin });
+            setTab("home");
             setPhoneApp(null);
           }}
           onVisit={(host) => void visitHost(host)}

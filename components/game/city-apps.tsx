@@ -27,7 +27,7 @@ import {
   stars,
 } from "@/lib/game/kitchen";
 import { TRIP_IDS } from "@/lib/game/more-spots";
-import { CABINS, ROUTES, bookFlight, flightWait, type Cabin } from "@/lib/game/flights";
+import { CABINS, ROUTES, canBoard, flightWait, type Cabin } from "@/lib/game/flights";
 import { GOODS, buyPrice, isSupply } from "@/lib/game/trade";
 import { checkInReward, checkedIn, weeklyAt } from "@/lib/game/weekly";
 import { SPOTS, STAMP_BONUS, cedis, spotById, type Life, type StepResult } from "@/lib/game/world";
@@ -38,7 +38,7 @@ function hours(minutes: number) {
   return `${Math.round(minutes / 60)}h`;
 }
 
-export function TripsApp({ life, onBack, onGo, onApply }: { life: Life; onBack: () => void; onGo: (spot: string) => void; onApply: Apply }) {
+export function TripsApp({ life, onBack, onGo, onApply, onFly }: { life: Life; onBack: () => void; onGo: (spot: string) => void; onApply: Apply; onFly: (routeId: string, cabin: Cabin) => void }) {
   const stamps = life.stamps ?? [];
   const got = TRIP_IDS.filter((id) => stamps.includes(id)).length;
   const markets = SPOTS.filter((spot) => isSupply(spot.id));
@@ -107,7 +107,18 @@ export function TripsApp({ life, onBack, onGo, onApply }: { life: Life; onBack: 
                       Go to {spotById(route.from).name}
                     </Btn>
                   ) : (
-                    <Btn kind="dark" disabled={wait > 0 || life.cash < seat.cost} onClick={() => onApply(bookFlight(life, route.id, cabin))}>
+                    <Btn
+                      kind="dark"
+                      disabled={wait > 0 || life.cash < seat.cost}
+                      onClick={() => {
+                        const error = canBoard(life, route.id, cabin);
+                        if (error) {
+                          onApply({ life, notes: [], error });
+                          return;
+                        }
+                        onFly(route.id, cabin);
+                      }}
+                    >
                       Board {seat.label} · {cedis(seat.cost)}
                     </Btn>
                   )}

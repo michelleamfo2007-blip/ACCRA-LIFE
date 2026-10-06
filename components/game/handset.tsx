@@ -121,12 +121,14 @@ export function Handset({
   married,
   raining,
   onGo,
+  onFly,
   openTo,
 }: {
   openTo?: string | null;
   married: boolean;
   raining: boolean;
   onGo: (spot: string) => void;
+  onFly: (routeId: string, cabin: string) => void;
   friends: { username: string; name: string }[];
   life: Life;
   username: string;
@@ -430,7 +432,7 @@ export function Handset({
               {app === "alerts" ? <AlertsApp life={life} onBack={() => setApp("home")} onOpen={openApp} /> : null}
               {app === "feed" ? <FeedApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
               {app === "trade" ? <MarketApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
-              {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} onApply={onSocial} /> : null}
+              {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} onApply={onSocial} onFly={onFly} /> : null}
               {app === "chop" ? <ChopApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "charts" ? <ChartsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}

@@ -631,6 +631,195 @@ body {
   }
 }
 
+.flight-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(#8ec5e8 0%, #c5e4f7 48%, #b9d48a 48%, #8fbc5a 100%);
+}
+.flight-sky-air {
+  background: linear-gradient(#6ba7d4 0%, #a8d4ef 55%, #9ec46a 55%, #6f9a3a 100%);
+}
+.flight-horizon {
+  position: absolute;
+  inset: 46% 0 auto;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.flight-tarmac {
+  position: absolute;
+  inset: 52% 0 0;
+  background: linear-gradient(#8b93a1, #6b7280);
+}
+.flight-tarmac::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 38%;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #fcd116 0 28px, transparent 28px 48px);
+}
+.flight-fields {
+  position: absolute;
+  inset: 54% 0 0;
+  background:
+    repeating-linear-gradient(90deg, #7aa84a 0 48px, #8fbc5a 48px 96px),
+    repeating-linear-gradient(0deg, transparent 0 36px, rgba(90, 70, 40, 0.12) 36px 72px);
+  animation: flight-scroll 8s linear infinite;
+}
+.flight-bridge {
+  position: absolute;
+  right: 18%;
+  bottom: 34%;
+  width: 18%;
+  height: 10%;
+  border-radius: 8px;
+  background: #94a3b8;
+  box-shadow: inset 0 -8px 0 #64748b;
+}
+.flight-plane {
+  position: absolute;
+  width: min(58vw, 420px);
+  height: auto;
+  aspect-ratio: 280 / 90;
+  left: 18%;
+  bottom: 28%;
+  transition: transform 0.6s ease, bottom 0.8s ease, left 0.8s ease;
+}
+.flight-plane-boarding,
+.flight-plane-taxi {
+  bottom: 28%;
+  left: 18%;
+}
+.flight-plane-taxi {
+  animation: flight-taxi 1.4s ease-in-out infinite alternate;
+}
+.flight-plane-climb {
+  bottom: 42%;
+  left: 28%;
+  transform: rotate(-8deg) scale(0.92);
+}
+.flight-plane-cruise {
+  bottom: 48%;
+  left: 30%;
+  transform: rotate(-2deg);
+  animation: flight-cruise 2.4s ease-in-out infinite alternate;
+}
+.flight-plane-descent {
+  bottom: 38%;
+  left: 36%;
+  transform: rotate(6deg) scale(0.95);
+}
+.flight-plane-land {
+  bottom: 28%;
+  left: 40%;
+  transform: rotate(0deg);
+}
+.flight-cabin {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#eef2f7, #dbe3ee 40%, #c5ceda);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.flight-cabin-ceiling {
+  position: absolute;
+  inset: 0 0 55%;
+  background: linear-gradient(#f8fafc, #e2e8f0);
+}
+.flight-cabin-aisle {
+  position: relative;
+  width: min(70vw, 280px);
+  height: 70%;
+  margin-top: 8%;
+  background: linear-gradient(#334155, #1e293b);
+  border-radius: 18px 18px 0 0;
+  padding: 12px 10px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+.flight-cabin-seat .flight-cabin-aisle {
+  transform: scale(1.25) translateY(8%);
+}
+.flight-cabin-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.flight-seat {
+  width: 18%;
+  height: 22px;
+  border-radius: 6px 6px 2px 2px;
+  background: #1e3a5f;
+  box-shadow: inset 0 6px 0 #f8fafc;
+}
+.flight-seat-you {
+  background: #006b3f;
+}
+.flight-aisle-gap {
+  width: 12%;
+}
+.flight-cabin-trolley {
+  position: absolute;
+  left: 42%;
+  top: 42%;
+  font-size: 22px;
+  animation: flight-trolley 3s ease-in-out infinite alternate;
+}
+.flight-cabin-wc {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 800;
+  color: #fcd116;
+  background: #006b3f;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+@keyframes flight-scroll {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: -192px 0, 0 -72px;
+  }
+}
+@keyframes flight-taxi {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(18px);
+  }
+}
+@keyframes flight-cruise {
+  from {
+    transform: rotate(-2deg) translateY(0);
+  }
+  to {
+    transform: rotate(-1deg) translateY(-10px);
+  }
+}
+@keyframes flight-trolley {
+  from {
+    top: 36%;
+  }
+  to {
+    top: 58%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flight-fields,
+  .flight-plane-taxi,
+  .flight-plane-cruise,
+  .flight-cabin-trolley {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
