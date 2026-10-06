@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
-import { accraHour, cedis, peopleAt, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
+import { accraHour, cedis, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
-const SHIRTS = ["#2f6fed", "#f5c542", "#ec4899", "#3cba78", "#f4efe6", "#e5484d"];
+const SHIRTS = ["#CE1126", "#f5c542", "#ec4899", "#006B3F", "#f4efe6", "#e5484d"];
 const PANTS = ["#1c1917", "#243056", "#6b3a4a", "#1f4d3a"];
 const HAIR = ["Afro", "Bob", "Bun", "Cut"];
 const HOTELS = new Set(["hotel", "kempinski", "movenpick"]);
@@ -18,19 +18,20 @@ type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
 
 export function VenueFloor({
   life,
+  people,
   onHome,
   onAct,
   onOpenChat,
   onPay,
 }: {
   life: Life;
+  people: { username: string; name: string }[];
   onHome: () => void;
   onAct: (verb: Verb, person?: string) => void;
   onOpenChat: (person: string) => void;
   onPay: (person: string, amount: number) => string | null;
 }) {
   const spot = spotById(life.where);
-  const people = peopleAt(spot.id);
   const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
   const [who, setWho] = useState<string | null>(null);
@@ -39,11 +40,15 @@ export function VenueFloor({
     { left: "24%", top: "62%" },
     { left: "50%", top: "46%" },
     { left: "72%", top: "60%" },
+    { left: "18%", top: "48%" },
+    { left: "62%", top: "70%" },
+    { left: "40%", top: "38%" },
   ];
+  const open = people.find((person) => person.username === who) ?? null;
 
   function speak(person: string, talk: TalkKind) {
     const verb = talkVerb(person, talk, spot);
-    setLines((prev) => [...prev, { from: "you", text: youSay(talk, spot.name) }, { from: "them", text: theySay(person, talk, spot) }]);
+    setLines((prev) => [...prev, { from: "you", text: youSay(talk, spot.name) }]);
     onAct(verb, person);
   }
 
@@ -52,10 +57,10 @@ export function VenueFloor({
       <div className="absolute inset-x-1 top-[4.25rem] bottom-36">
         <div className="relative mx-auto h-full max-w-3xl">
           <VenueScene spot={spot} night={night} kind={kind} />
-          {people.map((person, index) => (
+          {people.slice(0, stands.length).map((person, index) => (
             <PersonTag
-              key={person}
-              name={person}
+              key={person.username}
+              name={person.name}
               tone="blue"
               style={stands[index]}
               skin={SKINS[index % SKINS.length]}
@@ -63,24 +68,24 @@ export function VenueFloor({
               hair={HAIR[index % HAIR.length]}
               pants={PANTS[index % PANTS.length]}
               onClick={() => {
-                setWho(person);
-                setLines([{ from: "them", text: theySay(person, "hello", spot) }]);
+                setWho(person.username);
+                setLines([]);
               }}
             />
           ))}
           <PersonTag name="You" tone="pink" style={{ left: "36%", top: "78%" }} skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} pants={life.look.body === "woman" ? "#1c1917" : life.look.accent} />
         </div>
       </div>
-      {who ? (
+      {open ? (
         <TalkSheet
-          person={who}
+          person={`${open.name} · @${open.username}`}
           place={spot.name}
           cash={life.cash}
           lines={lines}
           onClose={() => setWho(null)}
-          onChat={() => onOpenChat(who)}
-          onPick={(talk) => speak(who, talk)}
-          onPay={(amount) => onPay(who, amount)}
+          onChat={() => onOpenChat(open.username)}
+          onPick={(talk) => speak(open.name, talk)}
+          onPay={(amount) => onPay(open.name, amount)}
         />
       ) : (
         <div className="absolute inset-x-3 bottom-[5.5rem] z-30 rounded-3xl bg-white p-3 shadow-xl">
@@ -94,7 +99,7 @@ export function VenueFloor({
                 {verb.label}
               </button>
             ))}
-            <button type="button" onClick={onHome} className="shrink-0 rounded-full bg-[#16203c] px-3 py-1.5 text-sm font-semibold text-white">
+            <button type="button" onClick={onHome} className="shrink-0 rounded-full bg-[#121212] px-3 py-1.5 text-sm font-semibold text-white">
               Head home · ₵5
             </button>
           </div>
@@ -125,7 +130,7 @@ function PersonTag({
 }) {
   const body = (
     <>
-      <span className={`mb-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#2f6fed]"}`}>{name}</span>
+      <span className={`mb-1 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#CE1126]"}`}>{name}</span>
       <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} className="h-20 w-fit" />
     </>
   );
@@ -180,12 +185,12 @@ function TalkSheet({
       </div>
       <div className="mt-3 max-h-28 space-y-1.5 overflow-auto">
         {lines.map((line, index) => (
-          <p key={`${line.from}-${index}`} className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${line.from === "you" ? "ml-auto bg-[#e7f8ee] text-[#16203c]" : "bg-[#f4f7fb] text-[#16203c]"}`}>
+          <p key={`${line.from}-${index}`} className={`max-w-[90%] rounded-2xl px-3 py-2 text-sm ${line.from === "you" ? "ml-auto bg-[#e7f8ee] text-[#121212]" : "bg-[#f4f7fb] text-[#121212]"}`}>
             {line.text}
           </p>
         ))}
       </div>
-      <button type="button" onClick={onChat} className="mt-3 w-full rounded-full bg-[#3cba78] py-3 font-bold text-white">
+      <button type="button" onClick={onChat} className="mt-3 w-full rounded-full bg-[#006B3F] py-3 font-bold text-white">
         Chat
       </button>
       <button type="button" onClick={() => setPaying((value) => !value)} className="mt-2 w-full rounded-full bg-[#fff4c2] py-3 text-sm font-bold text-[#8a6a12]">
@@ -204,7 +209,7 @@ function TalkSheet({
         >
           <span className="text-sm text-[#8a6a12]">Wallet {cedis(cash)}</span>
           <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" aria-label="Amount in cedis" className="h-9 w-20 rounded-full bg-white px-3 text-sm outline-none" />
-          <button type="submit" className="rounded-full bg-[#16203c] px-3 py-1.5 text-sm font-semibold text-white">
+          <button type="submit" className="rounded-full bg-[#121212] px-3 py-1.5 text-sm font-semibold text-white">
             Send
           </button>
         </form>
@@ -242,7 +247,7 @@ function sceneKind(spot: Spot): Kind {
 }
 
 function talkVerb(person: string, talk: TalkKind, spot: Spot): Verb {
-  const line = theySay(person, talk, spot);
+  const line = youSay(talk, spot.name);
   if (talk === "gist") return { id: `gist-${person}`, label: line, detail: line, minutes: 15, cost: 0, earn: 0, effects: { social: 16, fun: 8 }, social: true };
   if (talk === "joke") return { id: `joke-${person}`, label: line, detail: line, minutes: 8, cost: 0, earn: 0, effects: { social: 10, fun: 12 }, social: true };
   if (talk === "shade") return { id: `shade-${person}`, label: line, detail: line, minutes: 6, cost: 0, earn: 0, effects: { fun: 8, social: 4 }, social: true };
@@ -256,45 +261,6 @@ function youSay(talk: TalkKind, place: string) {
   if (talk === "shade") return "You are dressed like the night has plans.";
   if (talk === "place") return `What is ${place} actually like?`;
   return "Ei. I just got here.";
-}
-
-function theySay(person: string, talk: TalkKind, spot: Spot) {
-  const bag = LINES[talk];
-  const line = bag[hash(person + spot.id + talk) % bag.length];
-  return line(person, spot);
-}
-
-const LINES: Record<TalkKind, ((person: string, spot: Spot) => string)[]> = {
-  hello: [
-    (person, spot) => `${person}: Ei, you made it to ${spot.name}. Come stand.`,
-    (person) => `${person}: I was people-watching. You saved me from it.`,
-    (person, spot) => `${person}: This ${spot.name} crowd changes every hour. Stay a bit.`,
-  ],
-  gist: [
-    (person) => `${person}: The waakye queue was to the road this morning. Worth it.`,
-    (person) => `${person}: Somebody's generator has been singing since dumsor. The whole lane knows the song.`,
-    (person) => `${person}: Have you heard? The highlife set tonight is the one people came for.`,
-  ],
-  joke: [
-    (person) => `${person} laughs. "You and this city. Sit down."`,
-    (person) => `${person}: That joke is older than the trotro, and it still lands.`,
-    (person) => `${person}: Okay. I owe you one back before you leave.`,
-  ],
-  shade: [
-    (person) => `${person}: We heard you. The shade has been noted.`,
-    (person) => `${person}: Bold. Say it again when the music drops.`,
-    (person) => `${person} smiles like they will remember this.`,
-  ],
-  place: [
-    (person, spot) => `${person}: ${spot.blurb}`,
-    (person, spot) => `${person}: You are in ${spot.name}. Look around, it is all here.`,
-  ],
-};
-
-function hash(text: string) {
-  let n = 0;
-  for (const char of text) n = (n * 33 + char.charCodeAt(0)) % 997;
-  return n;
 }
 
 function VenueScene({ spot, night, kind }: { spot: Spot; night: boolean; kind: Kind }) {
@@ -323,8 +289,8 @@ function VenueScene({ spot, night, kind }: { spot: Spot; night: boolean; kind: K
       {kind === "hotel" ? <Pool /> : null}
       {indoor ? (
         <>
-          <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#16203c" ink="white" />
-          <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill={kind === "club" ? "#f5c542" : "#1f4d3a"} ink={kind === "club" ? "#16203c" : "white"} />
+          <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
+          <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill={kind === "club" ? "#f5c542" : "#1f4d3a"} ink={kind === "club" ? "#121212" : "white"} />
         </>
       ) : (
         <StandingBoard x={-72} z={6} text={title} />
@@ -370,7 +336,7 @@ function furniture(kind: Kind, night: boolean): Block[] {
   }
   if (kind === "gym") {
     return [
-      { x: -36, y: 0, z: 18, w: 46, h: 3, d: 28, color: "#2f6fed" },
+      { x: -36, y: 0, z: 18, w: 46, h: 3, d: 28, color: "#CE1126" },
       { x: 28, y: 0, z: 10, w: 34, h: 8, d: 10, color: "#1c1917" },
       { x: 36, y: 8, z: 12, w: 18, h: 3, d: 3, color: "#9aa4b2" },
       { x: 70, y: 0, z: -16, w: 12, h: 28, d: 10, color: "#3a4454" },
@@ -379,9 +345,9 @@ function furniture(kind: Kind, night: boolean): Block[] {
   if (kind === "hall") {
     return [
       { x: -28, y: 0, z: -30, w: 96, h: 18, d: 16, color: "#f7f4ef" },
-      { x: 8, y: 18, z: -26, w: 22, h: 2, d: 8, color: "#e7eef6" },
-      ...chair(-62, 28, "#2f6fed"),
-      ...chair(-40, 40, "#2f6fed"),
+      { x: 8, y: 18, z: -26, w: 22, h: 2, d: 8, color: "#fff6df" },
+      ...chair(-62, 28, "#CE1126"),
+      ...chair(-40, 40, "#CE1126"),
       ...cafeSet(36, 36, "#8d5a32"),
     ];
   }
@@ -478,7 +444,7 @@ function Palm({ x, z }: { x: number; z: number }) {
     <g>
       <line x1={bx} y1={by} x2={tx} y2={ty} stroke="#8a5a32" strokeWidth="4" />
       <ellipse cx={tx - 16} cy={ty + 2} rx="16" ry="6" fill="#2f8f4e" transform={`rotate(-28 ${tx} ${ty})`} />
-      <ellipse cx={tx + 16} cy={ty + 2} rx="16" ry="6" fill="#3cba78" transform={`rotate(26 ${tx} ${ty})`} />
+      <ellipse cx={tx + 16} cy={ty + 2} rx="16" ry="6" fill="#006B3F" transform={`rotate(26 ${tx} ${ty})`} />
       <ellipse cx={tx} cy={ty - 6} rx="12" ry="7" fill="#67a83e" />
     </g>
   );
@@ -537,7 +503,7 @@ function StandingBoard({ x, z, text }: { x: number; z: number; text: string }) {
           { x: x + length - 6, y: 0, z, w: 3, h: 34, d: 3, color: "#6b6256" },
         ]}
       />
-      <FaceSign axis="x" x={x - 2} y={18} z={z + 3.2} length={length} tall={13} text={text} fill="#16203c" ink="white" />
+      <FaceSign axis="x" x={x - 2} y={18} z={z + 3.2} length={length} tall={13} text={text} fill="#121212" ink="white" />
     </g>
   );
 }

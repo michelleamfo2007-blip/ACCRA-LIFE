@@ -153,6 +153,88 @@ export async function crowdCounts() {
   return { players: players ?? 0, online };
 }
 
+export type FoundPlayer = { username: string; name: string; where: string | null };
+
+function cleanQuery(query: string) {
+  return query.trim().replace(/^@/, "").replace(/[%_,.()"'\\]/g, "").slice(0, 32);
+}
+
+export async function findPlayers(query: string, where?: string, except?: string): Promise<FoundPlayer[]> {
+  const client = db();
+  if (!client) return [];
+  const q = cleanQuery(query);
+  let request = client.from("players").select("username, name, life");
+  if (q) request = request.or(`username.ilike.%${q}%,name.ilike.%${q}%`);
+  else if (where) request = request.filter("life->>where", "eq", where);
+  else return [];
+  const { data } = await request.limit(30);
+  const people = ((data ?? []) as { username: string; name: string; life?: { where?: string } | null }[])
+    .filter((row) => row.username !== except)
+    .map((row) => ({ username: row.username, name: row.name, where: row.life?.where ?? null }));
+  people.sort((a, b) => Number(b.username === q) - Number(a.username === q));
+  return people;
+}
+
+type Mail = { who: "me" | "them"; text: string; time: string; at: string };
+
+function mailBag(life: Life | null): Record<string, Mail[]> {
+  const chats = (life as (Life & { chats?: Record<string, Mail[]> }) | null)?.chats;
+  if (!chats || typeof chats !== "object") return {};
+  return chats;
+}
+
+function accraTime() {
+  return new Intl.DateTimeFormat("en-GH", { timeZone: "Africa/Accra", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date());
+}
+
+async function keepChats(username: string, chats: Record<string, Mail[]>) {
+  const player = await readPlayer(username);
+  if (!player) return false;
+  const life = { ...(player.life ?? {}), chats } as Life;
+  return savePlayer({ ...player, life });
+}
+
+export async function listChats(username: string) {
+  const player = await readPlayer(username);
+  if (!player) return [];
+  const bag = mailBag(player.life);
+  const threads = await Promise.all(
+    Object.keys(bag).map(async (id) => {
+      const other = await readPlayer(id);
+      const last = bag[id]?.[bag[id].length - 1];
+      return { username: id, name: other?.name ?? id, last: last?.text ?? "", time: last?.time ?? "" };
+    }),
+  );
+  return threads;
+}
+
+export async function readChat(username: string, withUser: string) {
+  const player = await readPlayer(username);
+  if (!player) return [];
+  return (mailBag(player.life)[withUser] ?? []).map(({ who, text, time }) => ({ who, text, time }));
+}
+
+export async function sendChat(from: string, to: string, text: string) {
+  const body = text.trim().slice(0, 500);
+  if (!body) return "Write something first.";
+  if (from === to) return "That is your own username.";
+  const sender = await readPlayer(from);
+  const recipient = await readPlayer(to);
+  if (!sender) return "Log in again.";
+  if (!recipient) return "Nobody in Accra goes by that name.";
+  const note = { text: body, time: accraTime(), at: new Date().toISOString() };
+  const senderBag = mailBag(sender.life);
+  const recipientBag = mailBag(recipient.life);
+  const mine: Mail = { ...note, who: "me" };
+  const theirs: Mail = { ...note, who: "them" };
+  senderBag[to] = [...(senderBag[to] ?? []), mine].slice(-80);
+  recipientBag[from] = [...(recipientBag[from] ?? []), theirs].slice(-80);
+  const sent = await keepChats(from, senderBag);
+  const delivered = await keepChats(to, recipientBag);
+  if (!sent || !delivered) return "The message did not save.";
+  return null;
+}
+
 export async function loginPlayer(username: string, passwordHash: string) {
   const player = await readPlayer(username);
   if (!player || !same(player.passwordHash, passwordHash)) return null;

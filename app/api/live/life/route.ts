@@ -13,7 +13,8 @@ export async function POST(request: Request) {
   if (!life || typeof life !== "object") return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
   const player = await readPlayer(session.uid);
   if (!player) return NextResponse.json({ error: "That username is not in Accra." }, { status: 404 });
-  const saved = await savePlayer({ ...player, life });
+  const kept = (player.life as { chats?: unknown } | null)?.chats;
+  const saved = await savePlayer({ ...player, life: { ...life, ...(kept ? { chats: kept } : {}) } });
   if (!saved) return NextResponse.json({ error: "The city could not save this life." }, { status: 503 });
   return NextResponse.json({ ok: true });
 }

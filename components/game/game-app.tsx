@@ -38,10 +38,8 @@ import {
   accraHour,
   realMinutes,
   huntGem,
-  meetPerson,
   moodOf,
   passTime,
-  peopleAt,
   questFor,
   RIDES,
   repayLoan,
@@ -94,7 +92,7 @@ export function GameApp() {
       const snap = parseRaw(getRaw());
       if (!snap.session) return;
       const account = snap.accounts.find((item) => item.username === snap.session);
-      if (!account?.life) return;
+      if (!account?.life?.needs) return;
       const now = realMinutes();
       let life = account.life;
       if (life.minutes < 1_000_000) {
@@ -128,8 +126,8 @@ export function GameApp() {
   }
 
   return (
-    <div className="game-root relative h-dvh overflow-hidden bg-[#e7eef6] text-[#16203c]">
-      {me?.life ? (
+    <div className="game-root relative h-dvh overflow-hidden bg-[#fff6df] text-[#121212]">
+      {me?.life?.needs ? (
         <Play account={me} flash={flash} />
       ) : me ? (
         <Creator account={me} flash={flash} />
@@ -139,12 +137,12 @@ export function GameApp() {
         <Guest onAuth={setAuth} flash={flash} cookieOk={cookieOk} />
       )}
       {toast ? (
-        <div className="pointer-events-none absolute left-1/2 top-24 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-full bg-[#16203c] px-4 py-3 text-center text-sm font-medium text-white shadow-xl">
+        <div className="pointer-events-none absolute left-1/2 top-24 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-full bg-[#121212] px-4 py-3 text-center text-sm font-medium text-white shadow-xl">
           {toast}
         </div>
       ) : null}
-      <div className="game-splash absolute inset-0 z-[60] flex items-center justify-center bg-[#eef2f7]">
-        <p className="font-display text-4xl tracking-tight text-[#16203c]">Accra Life</p>
+      <div className="game-splash absolute inset-0 z-[60] flex items-center justify-center bg-[#fff6df]">
+        <p className="font-display text-4xl tracking-tight text-[#121212]">Accra Life</p>
       </div>
     </div>
   );
@@ -222,7 +220,7 @@ function Guest({
         </LayerChip>
       </div>
       <div className="absolute left-1/2 top-[7.4rem] z-20 -translate-x-1/2">
-        <p className="rounded-full bg-[#2f9d62] px-5 py-2 text-sm font-semibold text-white shadow">🎉 All-white season is law this week</p>
+        <p className="rounded-full bg-[#006B3F] px-5 py-2 text-sm font-semibold text-white shadow">🎉 All-white season is law this week</p>
       </div>
       <div className="absolute bottom-4 left-1/2 z-20 w-[min(94vw,560px)] -translate-x-1/2 space-y-3">
         {spot ? (
@@ -243,10 +241,10 @@ function Guest({
             <p className="text-sm font-semibold">{crowd.online.toLocaleString("en-GH")} Accra people playing right now · free</p>
           </div>
           <div className="grid grid-cols-[1.4fr_.8fr] gap-2">
-            <button type="button" onClick={() => onAuth("signup")} className="rounded-full bg-[#3cba78] py-3.5 text-base font-bold text-white">
+            <button type="button" onClick={() => onAuth("signup")} className="rounded-full bg-[#006B3F] py-3.5 text-base font-bold text-white">
               Sign up free
             </button>
-            <button type="button" onClick={() => onAuth("login")} className="rounded-full bg-[#eef1f6] py-3.5 text-base font-bold">
+            <button type="button" onClick={() => onAuth("login")} className="rounded-full bg-[#fff1c9] py-3.5 text-base font-bold">
               Log in
             </button>
           </div>
@@ -256,15 +254,15 @@ function Guest({
         <div className="absolute bottom-0 left-0 right-0 z-30 rounded-t-[28px] bg-white px-5 py-5 text-center shadow-[0_-12px_40px_rgba(22,32,60,.16)] sm:bottom-6 sm:left-1/2 sm:w-[min(92vw,640px)] sm:-translate-x-1/2 sm:rounded-[28px]">
           <p className="text-sm leading-6">
             We keep your Sim on this device, and count a visit. No ad trackers.{" "}
-            <button type="button" className="font-semibold text-[#2f6fed]" onClick={() => setPrivacy(true)}>
+            <button type="button" className="font-semibold text-[#CE1126]" onClick={() => setPrivacy(true)}>
               Privacy
             </button>
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <button type="button" className="rounded-full bg-[#eef1f6] py-3 font-semibold" onClick={() => acceptCookie()}>
+            <button type="button" className="rounded-full bg-[#fff1c9] py-3 font-semibold" onClick={() => acceptCookie()}>
               Essential only
             </button>
-            <button type="button" className="rounded-full bg-[#3cba78] py-3 font-bold text-white" onClick={() => acceptCookie()}>
+            <button type="button" className="rounded-full bg-[#006B3F] py-3 font-bold text-white" onClick={() => acceptCookie()}>
               Accept
             </button>
           </div>
@@ -354,14 +352,14 @@ function Auth({
   }
 
   return (
-    <div className="h-dvh overflow-auto bg-[#e7eef6] px-5 py-6">
-      <button type="button" onClick={onClose} className="text-sm font-semibold text-[#2f6fed]">
+    <div className="h-dvh overflow-auto bg-[#fff6df] px-5 py-6">
+      <button type="button" onClick={onClose} className="text-sm font-semibold text-[#CE1126]">
         ← Back to the city
       </button>
       <div className="mx-auto mt-6 w-full max-w-md text-center">
         <p className="text-4xl">👑</p>
         <h1 className="mt-2 font-display text-4xl tracking-tight">
-          Accra Life <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#16203c] align-middle text-xs font-bold text-white">18+</span>
+          Accra Life <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#121212] align-middle text-xs font-bold text-white">18+</span>
         </h1>
         <p className="mt-2 text-[#5c6b82]">Live your Accra story with real neighbourhoods.</p>
         <div className="mt-6 rounded-[28px] bg-[#e7edf5] p-1 text-left">
@@ -404,7 +402,7 @@ function Auth({
               </label>
             ) : null}
             {error ? <p className="text-sm font-medium text-[#c2413b]">{error}</p> : null}
-            <button type="submit" disabled={pending} className="w-full rounded-full bg-[#3cba78] py-3.5 font-bold text-white disabled:opacity-60">
+            <button type="submit" disabled={pending} className="w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white disabled:opacity-60">
               {pending ? "Please wait…" : mode === "signup" ? "Sign up · it's free" : "Log in"}
             </button>
             <p className="text-center text-xs leading-5 text-[#5c6b82]">Create a username and you can log in from any phone. That name is yours in Accra.</p>
@@ -447,7 +445,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
   const canNext = step === 1 ? traits.length === 2 : true;
 
   return (
-    <div className="flex h-dvh flex-col bg-[#e7eef6] lg:flex-row">
+    <div className="flex h-dvh flex-col bg-[#fff6df] lg:flex-row">
       <div
         className="relative z-0 flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         onPointerDown={(event) => {
@@ -470,7 +468,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             <p className="font-display text-xl">{titles[step]}</p>
             <div className="mt-1 flex justify-center gap-1">
               {[0, 1, 2, 3].map((index) => (
-                <span key={index} className={`h-1.5 w-6 rounded-full ${index <= Math.min(step, 3) ? "bg-[#3cba78]" : "bg-[#d5deea]"}`} />
+                <span key={index} className={`h-1.5 w-6 rounded-full ${index <= Math.min(step, 3) ? "bg-[#006B3F]" : "bg-[#ead9a0]"}`} />
               ))}
             </div>
           </div>
@@ -478,7 +476,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             <button type="button" onClick={randomise} className="grid h-11 w-11 place-items-center rounded-full bg-white shadow" aria-label="Randomise">
               ↻
             </button>
-            <button type="button" disabled={!canNext || step === 4} onClick={() => setStep((value) => Math.min(4, value + 1))} className="rounded-full bg-[#3cba78] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+            <button type="button" disabled={!canNext || step === 4} onClick={() => setStep((value) => Math.min(4, value + 1))} className="rounded-full bg-[#006B3F] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
               Next
             </button>
           </div>
@@ -501,7 +499,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
       <div className="relative z-10 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-xl lg:m-4 lg:max-h-none lg:w-[440px] lg:rounded-[28px]">
         {step === 0 ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-full bg-[#eef1f6] px-4 py-3">
+            <div className="flex items-center justify-between rounded-full bg-[#fff1c9] px-4 py-3">
               <span className="font-bold">@{account.username}</span>
               <span className="text-sm text-[#8b97ab]">your Sim&apos;s name</span>
             </div>
@@ -551,7 +549,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
                       return [...current, trait.id];
                     })
                   }
-                  className={`block w-full rounded-3xl px-4 py-3 text-left ${on ? "bg-[#e7f8ee] ring-2 ring-[#3cba78]" : "bg-[#f4f7fb]"}`}
+                  className={`block w-full rounded-3xl px-4 py-3 text-left ${on ? "bg-[#fff4c2] ring-2 ring-[#FCD116]" : "bg-[#f4f7fb]"}`}
                 >
                   <p className="font-bold">
                     {trait.emoji} {trait.name}
@@ -566,7 +564,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
           <div className="space-y-3">
             <p className="text-sm text-[#5c6b82]">What&apos;s {account.username}&apos;s big dream?</p>
             {DREAMS.map((item) => (
-              <button key={item.id} type="button" onClick={() => setDream(item.id)} className={`block w-full rounded-3xl px-4 py-3 text-left ${dream === item.id ? "bg-[#e7f8ee] ring-2 ring-[#3cba78]" : "bg-[#f4f7fb]"}`}>
+              <button key={item.id} type="button" onClick={() => setDream(item.id)} className={`block w-full rounded-3xl px-4 py-3 text-left ${dream === item.id ? "bg-[#fff4c2] ring-2 ring-[#FCD116]" : "bg-[#f4f7fb]"}`}>
                 <p className="font-bold">
                   {item.emoji} {item.name}
                 </p>
@@ -603,12 +601,12 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
                   type="button"
                   disabled={blocked}
                   onClick={() => setHomeId(home.id)}
-                  className={`block w-full rounded-3xl px-4 py-3 text-left disabled:opacity-50 ${on ? "bg-[#e7f8ee] ring-2 ring-[#3cba78]" : "bg-[#f4f7fb]"}`}
+                  className={`block w-full rounded-3xl px-4 py-3 text-left disabled:opacity-50 ${on ? "bg-[#fff4c2] ring-2 ring-[#FCD116]" : "bg-[#f4f7fb]"}`}
                 >
                   <p className="font-bold">
                     {home.emoji} {home.name} · {home.area}
                   </p>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#2f9d62]">{home.tag}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#006B3F]">{home.tag}</p>
                   <p className="mt-1 text-sm leading-5 text-[#5c6b82]">{blocked ? "Work your way here." : home.detail}</p>
                   <p className="mt-1 text-sm font-semibold">Rent {cedis(home.rent)}/wk</p>
                 </button>
@@ -620,7 +618,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
           type="button"
           disabled={!canNext}
           onClick={() => (step === 4 ? moveIn() : setStep((value) => value + 1))}
-          className="mt-4 w-full rounded-full bg-[#3cba78] py-3.5 font-bold text-white disabled:opacity-40"
+          className="mt-4 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white disabled:opacity-40"
         >
           {step === 1 && traits.length < 2 ? `Choose ${2 - traits.length} more` : step === 3 ? "Choose where to live" : step === 4 ? "Move in" : "Continue"}
         </button>
@@ -644,6 +642,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
   const [onAir, setOnAir] = useState(false);
   const [now, setNow] = useState<number | null>(null);
+  const herePeople = usePlacePeople(account.life?.where ?? null);
+  const sheetPeople = usePlacePeople(placeId);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     tick();
@@ -742,17 +742,17 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       ) : tab === "home" ? (
         <VenueFloor
           life={life}
+          people={herePeople}
           onHome={() => apply(goTo(life, "home"))}
           onAct={(verb, person) => apply(runVerb(life, verb, life.where, person))}
           onPay={(person, amount) => paySomeone(person, amount)}
-          onOpenChat={(person) => {
-            apply(meetPerson(life, person));
-            setChatLaunch({ id: person });
+          onOpenChat={(username) => {
+            setChatLaunch({ id: `user:${username}` });
             setTab("phone");
           }}
         />
       ) : (
-        <div className="h-full bg-[#e7eef6]" />
+        <div className="h-full bg-[#fff6df]" />
       )}
       {clean ? (
         <button type="button" className="absolute bottom-4 left-4 z-30 rounded-full bg-white px-4 py-2 text-sm font-semibold shadow" onClick={() => setClean(false)}>
@@ -769,7 +769,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 {mood.emoji} {mood.label}
               </span>
               <span className="shrink-0 text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
-              <span className="shrink-0 text-[#2f9d62]">● {crowd.online.toLocaleString("en-GH")} online</span>
+              <span className="shrink-0 text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span>
             </div>
             <button type="button" className="rounded-full bg-white px-3 py-2 text-sm font-bold shadow-lg" onClick={() => setWalletOpen(true)}>
               {cedis(life.cash)} +
@@ -791,7 +791,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <p className="text-sm font-bold">{quest.title}</p>
               <p className="text-xs text-[#5c6b82]">{quest.detail}</p>
             </button>
-            {life.dumsor ? <p className="w-56 rounded-full bg-[#16203c] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
+            {life.dumsor ? <p className="w-56 rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
             <button type="button" className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow" onClick={() => setClean(true)}>
               ⌃ Clean screen
             </button>
@@ -837,7 +837,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 ["phone", "Phone"],
               ] as const
             ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#16203c] text-white" : ""}`}>
+              <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""}`}>
                 {label}
               </button>
             ))}
@@ -886,7 +886,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             onSend={paySomeone}
           />
           {life.loan > 0 ? (
-            <button type="button" className="mt-4 w-full rounded-full bg-[#16203c] py-3 font-bold text-white" onClick={() => apply(repayLoan(life))}>
+            <button type="button" className="mt-4 w-full rounded-full bg-[#121212] py-3 font-bold text-white" onClick={() => apply(repayLoan(life))}>
               Pay toward the susu
             </button>
           ) : null}
@@ -896,7 +896,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <PlaceSheet
           place={place}
           here={life.where === place.id}
-          people={peopleAt(place.id)}
+          people={sheetPeople.map((person) => person.name)}
           rideId={rideId}
           onRide={setRideId}
           onClose={() => setPlaceId(null)}
@@ -993,6 +993,32 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   );
 }
 
+function usePlacePeople(where: string | null) {
+  const [people, setPeople] = useState<{ username: string; name: string }[]>([]);
+  useEffect(() => {
+    if (!where || where === "home") {
+      setPeople([]);
+      return;
+    }
+    let stop = false;
+    const load = () => {
+      fetch(`/api/live/people?where=${encodeURIComponent(where)}`)
+        .then((response) => response.json())
+        .then((payload: { people?: { username: string; name: string }[] }) => {
+          if (!stop && Array.isArray(payload.people)) setPeople(payload.people);
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = window.setInterval(load, 15000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [where]);
+  return people;
+}
+
 function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; onSend: (name: string, amount: number) => string | null }) {
   const names = [...new Set(people)];
   const [who, setWho] = useState(names[0] ?? "");
@@ -1015,7 +1041,7 @@ function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; 
       ) : (
         <div className="flex flex-wrap gap-2">
           {names.map((name) => (
-            <button key={name} type="button" onClick={() => setWho(name)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${who === name ? "bg-[#16203c] text-white" : "bg-[#f4f7fb]"}`}>
+            <button key={name} type="button" onClick={() => setWho(name)} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${who === name ? "bg-[#121212] text-white" : "bg-[#f4f7fb]"}`}>
               {name}
             </button>
           ))}
@@ -1024,7 +1050,7 @@ function WalletSend({ cash, people, onSend }: { cash: number; people: string[]; 
       <div className="flex items-center gap-2">
         <span className="text-sm text-[#5c6b82]">{cedis(cash)}</span>
         <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" aria-label="Amount in cedis" className="h-10 w-24 rounded-full bg-[#f4f7fb] px-3 text-sm outline-none" />
-        <button type="submit" disabled={!who} className="rounded-full bg-[#3cba78] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+        <button type="submit" disabled={!who} className="rounded-full bg-[#006B3F] px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
           Send
         </button>
       </div>
@@ -1057,7 +1083,7 @@ function DoSheet({ name, look, onClose, onPick }: { name: string; look: Look; on
               <span className="grid h-10 w-10 place-items-center rounded-full bg-[#f4f7fb] text-lg">{CARD_ICON[verb.id] ?? "✨"}</span>
               <span className="text-right">
                 <span className="block rounded-full bg-[#f4f7fb] px-2 py-0.5 text-[11px] text-[#5c6b82]">⏱ {verb.minutes}m</span>
-                <span className={`mt-1 block text-xs font-semibold ${verb.earn ? "text-[#2f9d62]" : "text-[#2f9d62]"}`}>{verb.earn ? `Earns ${cedis(verb.earn)}` : verb.cost ? cedis(verb.cost) : "Free"}</span>
+                <span className={`mt-1 block text-xs font-semibold ${verb.earn ? "text-[#006B3F]" : "text-[#006B3F]"}`}>{verb.earn ? `Earns ${cedis(verb.earn)}` : verb.cost ? cedis(verb.cost) : "Free"}</span>
               </span>
             </span>
             <span className="mt-3 block font-semibold">{verb.label}</span>
@@ -1116,7 +1142,7 @@ function PlaceSheet({
       <p className="mt-3 text-sm leading-6 text-[#5c6b82]">{blurb}</p>
       <button
         type="button"
-        className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#2f6fed]"
+        className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#CE1126]"
         onClick={() => {
           const url = `${window.location.origin}/?spot=${place.id}`;
           void navigator.clipboard?.writeText(url).then(() => {
@@ -1138,12 +1164,13 @@ function PlaceSheet({
           </button>
         ))}
         {onGem ? (
-          <button type="button" onClick={onGem} className="rounded-full bg-[#e7f8ee] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
+          <button type="button" onClick={onGem} className="rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
             Search for the gem
           </button>
         ) : null}
       </div>
       <p className="mt-4 text-sm font-semibold text-[#5c6b82]">Here now</p>
+      {people.length ? null : <p className="mt-2 text-sm text-[#5c6b82]">Nobody else is here.</p>}
       <div className="mt-2 flex gap-3">
         {people.map((person) => (
           <span key={person} className="text-center text-xs">
@@ -1153,7 +1180,7 @@ function PlaceSheet({
         ))}
       </div>
       {here ? (
-        <p className="mt-4 rounded-full bg-[#e7f8ee] py-3 text-center text-sm font-semibold text-[#1f8a4c]">You&apos;re already here.</p>
+        <p className="mt-4 rounded-full bg-[#fff4c2] py-3 text-center text-sm font-semibold text-[#1f8a4c]">You&apos;re already here.</p>
       ) : (
         <>
           <div className="mt-4 grid grid-cols-4 gap-2">
@@ -1162,7 +1189,7 @@ function PlaceSheet({
                 key={item.id}
                 type="button"
                 onClick={() => onRide(item.id)}
-                className={`rounded-2xl px-2 py-3 text-center ${rideId === item.id ? "bg-[#e7f0ff] ring-2 ring-[#2f6fed]" : "bg-[#f4f7fb]"}`}
+                className={`rounded-2xl px-2 py-3 text-center ${rideId === item.id ? "bg-[#fff4c2] ring-2 ring-[#CE1126]" : "bg-[#f4f7fb]"}`}
               >
                 <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "okada" ? "🏍️" : "🚕"}</span>
                 <span className="mt-1 block text-sm font-semibold">{item.label}</span>
@@ -1170,7 +1197,7 @@ function PlaceSheet({
               </button>
             ))}
           </div>
-          <button type="button" onClick={onGo} className="mt-3 w-full rounded-full bg-[#3cba78] py-3.5 font-bold text-white">
+          <button type="button" onClick={onGo} className="mt-3 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white">
             Go · {ride.cost ? cedis(ride.cost) : "Free"}
           </button>
         </>
@@ -1230,9 +1257,9 @@ function TopBrand({ crowd, onSignup, onLogin }: { crowd: { players: number; onli
       <span className="text-xl">👑</span>
       <span className="font-display text-lg tracking-tight">Accra Life</span>
       <span className="text-xs font-semibold text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
-      <span className="text-xs font-semibold text-[#2f9d62]">● {crowd.online.toLocaleString("en-GH")} online</span>
+      <span className="text-xs font-semibold text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span>
       <span className="ml-auto flex gap-2">
-        <button type="button" onClick={onSignup} className="rounded-full bg-[#3cba78] px-3 py-1.5 text-sm font-bold text-white">
+        <button type="button" onClick={onSignup} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-sm font-bold text-white">
           Sign up
         </button>
         <button type="button" onClick={onLogin} className="rounded-full px-3 py-1.5 text-sm font-bold">
@@ -1248,7 +1275,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="absolute inset-x-0 bottom-0 z-40 max-h-[78vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="font-display text-2xl">{title}</h2>
-        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-[#eef1f6]" aria-label="Close">
+        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-[#fff1c9]" aria-label="Close">
           ×
         </button>
       </div>
@@ -1265,7 +1292,7 @@ function Privacy({ onClose }: { onClose: () => void }) {
         <p className="mt-2 text-sm leading-6 text-[#5c6b82]">
           Accra Life stores your Sim, password hash, and choices in this browser. Nothing is sold, and there is no ad tracker. Clearing site data logs the life out of this device.
         </p>
-        <button type="button" className="mt-4 w-full rounded-full bg-[#16203c] py-3 font-bold text-white" onClick={onClose}>
+        <button type="button" className="mt-4 w-full rounded-full bg-[#121212] py-3 font-bold text-white" onClick={onClose}>
           Close
         </button>
       </div>
@@ -1289,7 +1316,7 @@ function Choice({ label, options, value, onChange }: { label: string; options: s
       <p className="mb-2 text-sm font-semibold">{label}</p>
       <div className="grid grid-cols-2 gap-2">
         {options.map((option) => (
-          <button key={option} type="button" onClick={() => onChange(option)} className={`rounded-full py-3 font-semibold capitalize ${value === option ? "bg-[#16203c] text-white" : "bg-[#eef1f6]"}`}>
+          <button key={option} type="button" onClick={() => onChange(option)} className={`rounded-full py-3 font-semibold capitalize ${value === option ? "bg-[#121212] text-white" : "bg-[#fff1c9]"}`}>
             {option}
           </button>
         ))}
@@ -1300,7 +1327,7 @@ function Choice({ label, options, value, onChange }: { label: string; options: s
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`rounded-full px-3 py-2 text-sm font-semibold ${active ? "bg-[#16203c] text-white" : "bg-[#eef1f6]"}`}>
+    <button type="button" onClick={onClick} className={`rounded-full px-3 py-2 text-sm font-semibold ${active ? "bg-[#121212] text-white" : "bg-[#fff1c9]"}`}>
       {children}
     </button>
   );
@@ -1312,7 +1339,7 @@ function Swatches({ label, colors, value, onChange }: { label: string; colors: r
       <p className="mb-2 text-sm font-semibold">{label}</p>
       <div className="flex flex-wrap gap-2">
         {colors.map((color) => (
-          <button key={color} type="button" aria-label={color} onClick={() => onChange(color)} className={`h-8 w-8 rounded-full ${value === color ? "ring-2 ring-[#16203c] ring-offset-2" : ""}`} style={{ background: color }} />
+          <button key={color} type="button" aria-label={color} onClick={() => onChange(color)} className={`h-8 w-8 rounded-full ${value === color ? "ring-2 ring-[#121212] ring-offset-2" : ""}`} style={{ background: color }} />
         ))}
       </div>
     </div>
@@ -1321,7 +1348,7 @@ function Swatches({ label, colors, value, onChange }: { label: string; colors: r
 
 function LayerChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold shadow ${active ? "bg-[#16203c] text-white" : "bg-white"}`}>
+    <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold shadow ${active ? "bg-[#121212] text-white" : "bg-white"}`}>
       {children}
     </button>
   );
@@ -1341,5 +1368,5 @@ function Need({ n, icon }: { n: number; icon: string }) {
 function barColor(value: number) {
   if (value < 30) return "bg-[#e5484d]";
   if (value < 55) return "bg-[#f59e42]";
-  return "bg-[#3cba78]";
+  return "bg-[#006B3F]";
 }

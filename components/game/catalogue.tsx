@@ -31,7 +31,7 @@ export function Catalogue({
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 flex max-h-[78vh] flex-col rounded-t-[28px] bg-[#f7f8fb] shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
       <div className="flex items-center justify-between px-5 pt-4">
-        <h2 className="font-display text-2xl tracking-tight text-[#16203c]">Catalogue</h2>
+        <h2 className="font-display text-2xl tracking-tight text-[#121212]">Catalogue</h2>
         <button type="button" onClick={onClose} className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-[#5c6b82] shadow-sm">
           Hide
         </button>
@@ -42,7 +42,7 @@ export function Catalogue({
             key={chip.id}
             type="button"
             onClick={() => setCategory(chip.id)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold ${category === chip.id ? "bg-[#16203c] text-white" : "bg-[#e7eef6] text-[#3d4d66]"}`}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold ${category === chip.id ? "bg-[#121212] text-white" : "bg-[#fff1c9] text-[#121212]"}`}
           >
             {MARKS[chip.id]} {chip.label}
           </button>
@@ -66,8 +66,8 @@ export function Catalogue({
               <span className="mt-1 grid h-28 place-items-center">
                 <ItemArt item={item} />
               </span>
-              <span className="mt-1 block text-sm font-semibold text-[#16203c]">{item.name}</span>
-              <span className={`mt-1 block text-sm font-bold ${have ? "text-[#8b97ab]" : "text-[#2f9d62]"}`}>{have ? "In the room" : cedis(item.price)}</span>
+              <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
+              <span className={`mt-1 block text-sm font-bold ${have ? "text-[#8b97ab]" : "text-[#006B3F]"}`}>{have ? "In the room" : cedis(item.price)}</span>
             </button>
           );
         })}
@@ -79,7 +79,7 @@ export function Catalogue({
 function ItemArt({ item }: { item: ShopItem }) {
   return (
     <svg viewBox="0 0 120 90" className="h-24 w-28" aria-hidden>
-      <ellipse cx="60" cy="80" rx="36" ry="5.5" fill="#16203c" opacity="0.08" />
+      <ellipse cx="60" cy="80" rx="36" ry="5.5" fill="#121212" opacity="0.08" />
       <Piece item={item} />
     </svg>
   );
@@ -332,7 +332,7 @@ function Speaker({ color }: { color: string }) {
       <rect x="38" y="22" width="44" height="52" rx="12" fill={color} />
       <circle cx="60" cy="42" r="12" fill="#2a3344" />
       <circle cx="60" cy="42" r="5" fill="#4d5b70" />
-      <circle cx="60" cy="64" r="3" fill="#3cba78" />
+      <circle cx="60" cy="64" r="3" fill="#006B3F" />
     </g>
   );
 }

@@ -20,15 +20,15 @@ const TREES = makeTrees();
 
 const BOARDS: { x: number; y: number; fill: string; text: string }[] = [
   { x: 200, y: 250, fill: "#1f7a4d", text: "Waakye open" },
-  { x: 520, y: 200, fill: "#16203c", text: "Highlife tonight" },
+  { x: 520, y: 200, fill: "#121212", text: "Highlife tonight" },
   { x: 760, y: 300, fill: "#8d3b2f", text: "Osu after 8" },
   { x: 1040, y: 420, fill: "#355f86", text: "MoMo ready" },
   { x: 1280, y: 520, fill: "#1f7a4d", text: "Labadi Sunday" },
-  { x: 360, y: 640, fill: "#16203c", text: "Live Accra." },
+  { x: 360, y: 640, fill: "#121212", text: "Live Accra." },
   { x: 980, y: 820, fill: "#8d3b2f", text: "Jollof still hot" },
   { x: 1500, y: 760, fill: "#355f86", text: "Kente in stock" },
   { x: 640, y: 980, fill: "#1f7a4d", text: "Trotro this way" },
-  { x: 1700, y: 280, fill: "#16203c", text: "ECG, hold on" },
+  { x: 1700, y: 280, fill: "#121212", text: "ECG, hold on" },
 ];
 
 const AREAS = [
@@ -213,7 +213,7 @@ export function CityBoard({
               style={{ left: spot.x, top: spot.y }}
             >
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)]">{spot.emoji}</span>
-              {showName ? <span className={`mt-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow ${spot.soon ? "bg-[#f5c542] text-[#16203c]" : "bg-white text-[#16203c]"}`}>{spot.soon ? `${spot.name} · Coming soon` : spot.name}</span> : null}
+              {showName ? <span className={`mt-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow ${spot.soon ? "bg-[#f5c542] text-[#121212]" : "bg-white text-[#121212]"}`}>{spot.soon ? `${spot.name} · Coming soon` : spot.name}</span> : null}
             </button>
           );
         })}
@@ -308,7 +308,7 @@ function Hills() {
   );
 }
 
-const WALLS = ["#f7f1e6", "#f3d7c4", "#efe6d4", "#f8f5ef", "#e7eef6", "#f6ead8"];
+const WALLS = ["#f7f1e6", "#f3d7c4", "#efe6d4", "#f8f5ef", "#fff6df", "#f6ead8"];
 const ROOFS = ["#c4784a", "#8d4d3a", "#6d8f4e", "#8eabc4", "#d5dee8", "#b08968"];
 const SIDES = ["#e4d8c4", "#e0c2ac", "#ddd4c0", "#e7e2d8", "#d5dee8", "#e6d4bc"];
 

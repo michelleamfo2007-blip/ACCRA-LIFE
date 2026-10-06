@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { MessagesApp, SettingsApp, openingUnread, type ChatMsg } from "@/components/game/phone-social";
 import {
   DREAMS,
@@ -86,6 +86,26 @@ export function Handset({
   useEffect(() => {
     onAir(app === "radio");
   }, [app, onAir]);
+  useEffect(() => {
+    if (!thread?.startsWith("user:")) return;
+    const withUser = thread.slice(5);
+    let stop = false;
+    const load = () => {
+      fetch(`/api/live/chat?with=${encodeURIComponent(withUser)}`)
+        .then((response) => response.json())
+        .then((payload: { messages?: ChatMsg[] }) => {
+          if (stop || !Array.isArray(payload.messages)) return;
+          setChats((current) => ({ ...current, [thread]: payload.messages ?? [] }));
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = window.setInterval(load, 4000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [thread]);
 
   useEffect(() => () => onAir(false), [onAir]);
   const battery = Math.max(8, Math.min(100, life.needs.energy));
@@ -125,7 +145,7 @@ export function Handset({
 
   return (
     <div className="absolute inset-0 z-40 grid place-items-center bg-[#0c1220]/55 px-4 backdrop-blur-[2px]">
-      <button type="button" onClick={onClose} className="absolute right-4 top-4 z-50 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#16203c] shadow">
+      <button type="button" onClick={onClose} className="absolute right-4 top-4 z-50 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#121212] shadow">
         × Close
       </button>
       <div className="relative h-[min(760px,86dvh)] w-[min(390px,100%)]">
@@ -165,9 +185,22 @@ export function Handset({
                   onSend={(text) => {
                     if (!thread) return;
                     pushChat(thread, { who: "me", text, time });
-                    if (thread.startsWith("user:") || thread.startsWith("group:")) return;
-                    const reply = npcReply(thread, text);
-                    window.setTimeout(() => pushChat(thread, { who: "them", text: reply, time }), 500);
+                    if (!thread.startsWith("user:")) {
+                      pushChat(thread, { who: "note", text: "That chat is not a real account.", time });
+                      return;
+                    }
+                    const to = thread.slice(5);
+                    void fetch("/api/live/chat", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ to, text }),
+                    })
+                      .then((response) => response.json())
+                      .then((payload: { error?: string; messages?: ChatMsg[] }) => {
+                        if (payload.messages) setChats((current) => ({ ...current, [thread]: payload.messages ?? [] }));
+                        else if (payload.error) pushChat(thread, { who: "note", text: payload.error, time });
+                      })
+                      .catch(() => pushChat(thread, { who: "note", text: "The message did not leave this phone.", time }));
                   }}
                   onAct={(kind, amount) => {
                     if (!thread) return;
@@ -230,7 +263,7 @@ export function Handset({
 }
 
 function Status({ time, battery, ink }: { time: string; battery: number; ink: "light" | "dark" }) {
-  const color = ink === "dark" ? "text-[#16203c]" : "text-white";
+  const color = ink === "dark" ? "text-[#121212]" : "text-white";
   return (
     <div className={`relative z-10 flex items-center justify-between px-6 pt-3 text-[12px] font-semibold ${color}`}>
       <span>{time}</span>
@@ -238,8 +271,8 @@ function Status({ time, battery, ink }: { time: string; battery: number; ink: "l
       <span className="flex items-center gap-1.5">
         <Signal />
         <span className="text-[10px]">5G</span>
-        <span className={`relative h-2.5 w-6 rounded-[3px] border ${ink === "dark" ? "border-[#16203c]/70" : "border-white/80"}`}>
-          <span className={`absolute inset-y-[1px] left-[1px] rounded-[2px] ${ink === "dark" ? "bg-[#16203c]" : "bg-white"}`} style={{ width: `${Math.max(8, battery - 8)}%` }} />
+        <span className={`relative h-2.5 w-6 rounded-[3px] border ${ink === "dark" ? "border-[#121212]/70" : "border-white/80"}`}>
+          <span className={`absolute inset-y-[1px] left-[1px] rounded-[2px] ${ink === "dark" ? "bg-[#121212]" : "bg-white"}`} style={{ width: `${Math.max(8, battery - 8)}%` }} />
         </span>
       </span>
     </div>
@@ -254,19 +287,6 @@ function Signal() {
       ))}
     </span>
   );
-}
-
-function npcReply(name: string, text: string) {
-  const lines = [
-    "I hear you. I am still here.",
-    "Say less. Come stand with me.",
-    "😂 Okay. Text me when you are leaving.",
-    "The place is still full. Do not rush off.",
-    "I saved your message. Answer when you can.",
-  ];
-  let n = 0;
-  for (const char of `${name}:${text}`) n = (n * 33 + char.charCodeAt(0)) % lines.length;
-  return lines[n];
 }
 
 function longDate(at = new Date()) {
@@ -293,7 +313,7 @@ function HomeScreen({
       <p className="text-center text-[52px] font-semibold leading-none tracking-tight">{time}</p>
       <p className="mt-1 text-center text-[13px] text-white/85">{date}</p>
       <div className="mt-5 grid grid-cols-4 gap-x-1 gap-y-4">
-        <AppIcon label="Jobs" color="#3cba78" onClick={() => onOpen("work")}>
+        <AppIcon label="Jobs" color="#006B3F" onClick={() => onOpen("work")}>
           <Briefcase />
         </AppIcon>
         <AppIcon label="Messages" color="#5b8def" badge={inbox} onClick={() => onOpen("messages")}>
@@ -302,7 +322,7 @@ function HomeScreen({
         <AppIcon label="Radio" color="#1c1c1c" onClick={() => onOpen("radio")}>
           <Disc />
         </AppIcon>
-        <AppIcon label="Market" color="#2f9d62" onClick={onMarket}>
+        <AppIcon label="Market" color="#006B3F" onClick={onMarket}>
           <Basket />
         </AppIcon>
         <AppIcon label="Ride" color="#f0b429" onClick={onRide}>
@@ -340,7 +360,7 @@ function HomeScreen({
         <AppIcon label="MoMo" color="#111" onClick={() => onOpen("momo")}>
           <WalletMark />
         </AppIcon>
-        <AppIcon label="Jobs" color="#16203c" onClick={() => onOpen("work")}>
+        <AppIcon label="Jobs" color="#121212" onClick={() => onOpen("work")}>
           <Briefcase />
         </AppIcon>
         <AppIcon label="Ride" color="#e23d3d" onClick={onRide}>
@@ -359,14 +379,33 @@ function Skyline() {
   );
 }
 
-function ContactsScreen({ life, onBack, onOpen }: { life: Life; onBack: () => void; onOpen: (id: string) => void }) {
-  const people = life.relations.length ? life.relations : [{ name: homeById(life.homeId).neighbor, score: 10 }];
+function ContactsScreen({ onBack, onOpen }: { life: Life; onBack: () => void; onOpen: (id: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [people, setPeople] = useState<{ username: string; name: string }[]>([]);
+  const [notice, setNotice] = useState("");
+  async function search(event: FormEvent) {
+    event.preventDefault();
+    const typed = query.trim().replace(/^@/, "");
+    if (!typed) return;
+    const response = await fetch(`/api/live/people?q=${encodeURIComponent(typed)}`);
+    const payload = (await response.json().catch(() => null)) as { people?: { username: string; name: string }[] } | null;
+    const hits = payload?.people ?? [];
+    setPeople(hits);
+    setNotice(hits.length ? "" : `Nobody in Accra goes by @${typed}.`);
+  }
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <AppHeader title="Contacts" onBack={onBack} />
+      <form className="mx-4 mt-3 flex gap-2" onSubmit={search}>
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="@username" className="h-10 flex-1 rounded-full bg-white px-4 text-sm outline-none" />
+        <button type="submit" className="rounded-full bg-[#121212] px-4 text-sm font-semibold text-white">
+          Find
+        </button>
+      </form>
+      {notice ? <p className="px-4 pt-3 text-sm text-[#8b97ab]">{notice}</p> : null}
       <div className="min-h-0 flex-1 overflow-auto">
         {people.map((person) => (
-          <ThreadRow key={person.name} name={person.name} preview={person.score >= 70 ? "Close" : "In your book"} time="" onClick={() => onOpen(person.name)} />
+          <ThreadRow key={person.username} name={person.name} preview={`@${person.username}`} time="" onClick={() => onOpen(`user:${person.username}`)} />
         ))}
       </div>
     </div>
@@ -375,7 +414,7 @@ function ContactsScreen({ life, onBack, onOpen }: { life: Life; onBack: () => vo
 
 function NoteScreen({ title, lines, onBack }: { title: string; lines: string[]; onBack: () => void }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
       <AppHeader title={title} onBack={onBack} />
       <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">
         {lines.map((line) => (
@@ -417,7 +456,7 @@ function ThreadRow({ name, preview, time, onClick }: { name: string; preview: st
 
 function WorkScreen({ life, onBack, onWork }: { life: Life; onBack: () => void; onWork: (jobId: string) => void }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
       <AppHeader title="Jobs" onBack={onBack} />
       <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 py-3">
         <p className="px-1 text-xs text-[#5c6b82]">Career level {careerLevel(life)}. A shift needs energy, and trotro fare if you are not already there.</p>
@@ -438,7 +477,7 @@ function GoalsScreen({ life, onBack }: { life: Life; onBack: () => void }) {
   const dream = DREAMS.find((item) => item.id === life.dream);
   const status = dreamStatus(life);
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
       <AppHeader title="Dream" onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
         <p className="font-display text-2xl">
@@ -446,7 +485,7 @@ function GoalsScreen({ life, onBack }: { life: Life; onBack: () => void }) {
         </p>
         <p className="mt-1 text-sm text-[#5c6b82]">{dream?.detail}</p>
         <div className="mt-4 h-2 rounded-full bg-[#e7edf5]">
-          <div className="h-2 rounded-full bg-[#3cba78]" style={{ width: `${Math.min(100, (status.current / status.max) * 100)}%` }} />
+          <div className="h-2 rounded-full bg-[#006B3F]" style={{ width: `${Math.min(100, (status.current / status.max) * 100)}%` }} />
         </div>
         <p className="mt-1 text-xs text-[#5c6b82]">
           {status.label}: {status.current} / {status.max}
@@ -479,7 +518,7 @@ function MomoScreen({
 }) {
   const home = homeById(life.homeId);
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <AppHeader title="MoMo" onBack={onBack} tone="yellow" />
       <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-[#8a6a12]">Available</p>
@@ -491,7 +530,7 @@ function MomoScreen({
             Rent at {home.name}: {cedis(home.rent)} every Saturday.
           </p>
           {life.loan > 0 ? (
-            <button type="button" onClick={onRepay} className="mt-2 w-full rounded-full bg-[#16203c] py-3 text-sm font-bold text-white">
+            <button type="button" onClick={onRepay} className="mt-2 w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
               Pay susu
             </button>
           ) : null}
@@ -505,7 +544,7 @@ function MomoScreen({
 }
 
 function AppHeader({ title, onBack, tone = "dark" }: { title: string; onBack: () => void; tone?: "dark" | "green" | "yellow" }) {
-  const bar = tone === "green" ? "bg-[#075e54] text-white" : tone === "yellow" ? "bg-[#f5c542] text-[#16203c]" : "bg-white text-[#16203c]";
+  const bar = tone === "green" ? "bg-[#075e54] text-white" : tone === "yellow" ? "bg-[#f5c542] text-[#121212]" : "bg-white text-[#121212]";
   return (
     <div className={`flex items-center gap-2 px-2 py-2 ${bar}`}>
       <button type="button" onClick={onBack} className="grid h-9 w-9 place-items-center rounded-full text-lg" aria-label="Back">
@@ -543,8 +582,8 @@ function Star() {
 function Disc() {
   return (
     <svg viewBox="0 0 24 24" className="h-7 w-7" aria-hidden>
-      <circle cx="12" cy="12" r="8" fill="none" stroke="#3cba78" strokeWidth="2" />
-      <circle cx="12" cy="12" r="2" fill="#3cba78" />
+      <circle cx="12" cy="12" r="8" fill="none" stroke="#006B3F" strokeWidth="2" />
+      <circle cx="12" cy="12" r="2" fill="#006B3F" />
     </svg>
   );
 }
@@ -584,10 +623,10 @@ function Paper() {
 function Seeds() {
   return (
     <svg viewBox="0 0 24 24" className="h-7 w-7" aria-hidden>
-      <circle cx="8" cy="10" r="2.2" fill="#16203c" />
-      <circle cx="14" cy="8" r="2.2" fill="#16203c" />
-      <circle cx="16" cy="14" r="2.2" fill="#16203c" />
-      <circle cx="10" cy="15" r="2.2" fill="#16203c" />
+      <circle cx="8" cy="10" r="2.2" fill="#121212" />
+      <circle cx="14" cy="8" r="2.2" fill="#121212" />
+      <circle cx="16" cy="14" r="2.2" fill="#121212" />
+      <circle cx="10" cy="15" r="2.2" fill="#121212" />
     </svg>
   );
 }
@@ -610,7 +649,7 @@ function Bulb() {
 
 function Gear() {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-[#16203c]" aria-hidden>
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-[#121212]" aria-hidden>
       <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.2 2.6-.9-.2a6.8 6.8 0 0 0-.7-1.6l.5-.8a1 1 0 0 0-.2-1.3l-1.1-1.1a1 1 0 0 0-1.3-.2l-.8.5a6.8 6.8 0 0 0-1.6-.7l-.2-.9a1 1 0 0 0-1-0.8h-1.6a1 1 0 0 0-1 .8l-.2.9a6.8 6.8 0 0 0-1.6.7l-.8-.5a1 1 0 0 0-1.3.2L4.1 7.2a1 1 0 0 0-.2 1.3l.5.8a6.8 6.8 0 0 0-.7 1.6l-.9.2a1 1 0 0 0-.8 1v1.6a1 1 0 0 0 .8 1l.9.2c.1.6.4 1.1.7 1.6l-.5.8a1 1 0 0 0 .2 1.3l1.1 1.1a1 1 0 0 0 1.3.2l.8-.5c.5.3 1 .6 1.6.7l.2.9a1 1 0 0 0 1 .8h1.6a1 1 0 0 0 1-.8l.2-.9c.6-.1 1.1-.4 1.6-.7l.8.5a1 1 0 0 0 1.3-.2l1.1-1.1a1 1 0 0 0 .2-1.3l-.5-.8c.3-.5.6-1 .7-1.6l.9-.2a1 1 0 0 0 .8-1v-1.6a1 1 0 0 0-.8-1z" />
     </svg>
   );

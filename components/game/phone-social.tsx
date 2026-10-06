@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cedis, handleOf, type Life } from "@/lib/game/world";
 
 export type ChatMsg = { who: "me" | "them" | "note"; text: string; time: string };
@@ -43,7 +43,7 @@ export function MessagesApp({
   onReport: (id: string) => void;
 }) {
   if (thread) {
-    const person = resolvePerson(thread, life, players);
+    const person = resolvePerson(thread, players);
     return (
       <Thread
         person={person}
@@ -102,28 +102,50 @@ function Inbox({
   const [groupName, setGroupName] = useState("");
   const [making, setMaking] = useState(false);
   const [notice, setNotice] = useState("");
-  const people = peopleBook(life, players).filter((person) => !blocked.includes(person.id));
+  const [found, setFound] = useState<{ username: string; name: string }[]>([]);
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/live/chat")
+      .then((response) => response.json())
+      .then((payload: { threads?: { username: string; name: string }[] }) => {
+        if (stop || !Array.isArray(payload.threads)) return;
+        setFound(payload.threads.map((thread) => ({ username: thread.username, name: thread.name })));
+      })
+      .catch(() => {});
+    return () => {
+      stop = true;
+    };
+  }, []);
+  const people = peopleBook([...players, ...found]).filter((person) => !blocked.includes(person.id));
   const unreadTotal = people.reduce((sum, person) => sum + (unread[person.id] ?? 0), 0);
   const shown = people.filter((person) => {
     const hay = `${person.name} ${person.handle}`.toLowerCase();
     return hay.includes(query.trim().toLowerCase());
   });
 
-  function findPerson() {
+  async function findPerson() {
     const typed = lookup.trim().toLowerCase().replace(/^@/, "");
     if (!typed) return;
-    const hit = peopleBook(life, players).find((person) => person.handle.slice(1) === typed || person.id === typed || person.name.toLowerCase() === typed);
-    if (!hit) {
+    const response = await fetch(`/api/live/people?q=${encodeURIComponent(typed)}`);
+    const payload = (await response.json().catch(() => null)) as { people?: { username: string; name: string }[] } | null;
+    const hits = payload?.people ?? [];
+    if (!hits.length) {
       setNotice(`Nobody in Accra goes by @${typed}.`);
       return;
     }
+    setFound((current) => {
+      const seen = new Set(current.map((person) => person.username));
+      return [...current, ...hits.filter((person) => !seen.has(person.username))];
+    });
     setNotice("");
     setLookup("");
-    onOpen(hit.id);
+    const exact = hits.find((person) => person.username === typed) ?? (hits.length === 1 ? hits[0] : null);
+    if (exact) onOpen(`user:${exact.username}`);
+    else setNotice(hits.map((person) => `@${person.username}`).join(", "));
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#121212]">
       <PhoneTitle title="Messages" onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-auto px-4 pb-8">
         <div className="grid grid-cols-2 rounded-full bg-[#f2f4f8] p-1 text-sm font-semibold">
@@ -211,7 +233,7 @@ function Inbox({
                 }}
               >
                 <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Group name" className="h-10 flex-1 rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
-                <button type="submit" className="rounded-full bg-[#16203c] px-4 text-sm font-semibold text-white">
+                <button type="submit" className="rounded-full bg-[#121212] px-4 text-sm font-semibold text-white">
                   Create
                 </button>
               </form>
@@ -219,6 +241,7 @@ function Inbox({
             <p className="mt-4 text-[11px] font-bold tracking-wide text-[#8b97ab]">CHATS</p>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your chats" className="mt-2 h-10 w-full rounded-2xl bg-[#f4f7fb] px-4 text-sm outline-none" />
             <div className="mt-2">
+              {shown.length ? null : <p className="mt-3 text-sm text-[#8b97ab]">Search a username. Only real accounts show up.</p>}
               {shown.map((person) => {
                 const last = [...(chats[person.id] ?? [])].reverse()[0];
                 return (
@@ -279,7 +302,7 @@ function Thread({
     if (!clean || blocked) return;
     onSend(clean);
     const ask = clean.match(/(?:give me|send me|gimme)\s*₵?\s*(\d[\d,]*)/i);
-    if (ask && !group) {
+    if (ask && !group && !person.id.startsWith("user:")) {
       const wanted = Number(ask[1].replace(/,/g, ""));
       if (wanted > 40) onAct("spare", wanted);
       else onAct("spare", wanted);
@@ -289,7 +312,7 @@ function Thread({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#121212]">
       <div className="flex items-center gap-1 px-2 pt-1">
         <button type="button" onClick={onBack} className="grid h-9 w-9 place-items-center text-xl" aria-label="Back">
           ‹
@@ -318,7 +341,7 @@ function Thread({
         >
           <span className="text-sm text-[#8a6a12]">Wallet {cedis(cash)}</span>
           <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" className="h-9 w-20 rounded-full bg-white px-3 text-sm outline-none" />
-          <button type="submit" className="rounded-full bg-[#16203c] px-3 py-1.5 text-sm font-semibold text-white">
+          <button type="submit" className="rounded-full bg-[#121212] px-3 py-1.5 text-sm font-semibold text-white">
             Send
           </button>
         </form>
@@ -334,7 +357,7 @@ function Thread({
             </p>
           ) : (
             <div key={`${line.text}-${index}`} className={line.who === "me" ? "ml-auto max-w-[78%]" : "max-w-[78%]"}>
-              <p className={`rounded-3xl px-3 py-2 text-sm leading-5 ${line.who === "me" ? "bg-[#4c6fff] text-white" : "bg-[#eef1f6] text-[#16203c]"}`}>{line.text}</p>
+              <p className={`rounded-3xl px-3 py-2 text-sm leading-5 ${line.who === "me" ? "bg-[#006B3F] text-white" : "bg-[#fff1c9] text-[#121212]"}`}>{line.text}</p>
               <p className={`mt-0.5 text-[11px] text-[#8b97ab] ${line.who === "me" ? "text-right" : ""}`}>{line.time}</p>
             </div>
           ),
@@ -351,7 +374,7 @@ function Thread({
           😊
         </button>
         <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={`Message ${person.handle}…`} className="h-10 flex-1 rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
-        <button type="submit" className="grid h-10 w-10 place-items-center rounded-full bg-[#b7ebc6] text-[#16203c]" aria-label="Send">
+        <button type="submit" className="grid h-10 w-10 place-items-center rounded-full bg-[#b7ebc6] text-[#121212]" aria-label="Send">
           ➤
         </button>
       </form>
@@ -372,7 +395,7 @@ function Thread({
 function Chip({ tint, onClick, children }: { tint: "green" | "blue" | "yellow" | "orange" | "gray"; onClick: () => void; children: ReactNode }) {
   const tone = {
     green: "bg-[#e7f8ee] text-[#1f8a4c]",
-    blue: "bg-[#e7f0ff] text-[#2f6fed]",
+    blue: "bg-[#e7f0ff] text-[#CE1126]",
     yellow: "bg-[#fff4c2] text-[#8a6a12]",
     orange: "bg-[#fff1e4] text-[#c46a2f]",
     gray: "bg-[#f4f7fb] text-[#5c6b82]",
@@ -411,7 +434,7 @@ export function SettingsApp({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#16203c]">
+    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#121212]">
       <PhoneTitle title="Settings" onBack={onBack} />
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 pb-8">
         <div>
@@ -452,7 +475,7 @@ export function SettingsApp({
               }}
             >
               <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="you@email.com" className="h-10 flex-1 rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
-              <button type="submit" className="rounded-full bg-[#16203c] px-4 text-sm font-semibold text-white">
+              <button type="submit" className="rounded-full bg-[#121212] px-4 text-sm font-semibold text-white">
                 Save
               </button>
             </form>
@@ -507,7 +530,7 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
 
 function ToggleSwitch({ on, onChange }: { on: boolean; onChange: (value: boolean) => void }) {
   return (
-    <button type="button" onClick={() => onChange(!on)} className={`h-7 w-12 rounded-full p-1 ${on ? "bg-[#3cba78]" : "bg-[#d5dbe6]"}`} aria-pressed={on}>
+    <button type="button" onClick={() => onChange(!on)} className={`h-7 w-12 rounded-full p-1 ${on ? "bg-[#006B3F]" : "bg-[#d5dbe6]"}`} aria-pressed={on}>
       <span className={`block h-5 w-5 rounded-full bg-white shadow ${on ? "ml-auto" : ""}`} />
     </button>
   );
@@ -524,19 +547,18 @@ function PhoneTitle({ title, onBack }: { title: string; onBack: () => void }) {
   );
 }
 
-function peopleBook(life: Life, players: { username: string; name: string }[]) {
-  const npcs = (life.relations.length ? life.relations : [{ name: "Auntie next door", score: 10 }]).map((person) => ({
-    id: person.name,
-    name: person.name,
-    handle: handleOf(person.name),
-  }));
-  const saved = players.map((player) => ({ id: `user:${player.username}`, name: player.name, handle: `@${player.username}` }));
-  return [...npcs, ...saved];
+function peopleBook(players: { username: string; name: string }[]) {
+  const seen = new Set<string>();
+  return players.flatMap((player) => {
+    if (seen.has(player.username)) return [];
+    seen.add(player.username);
+    return [{ id: `user:${player.username}`, name: player.name, handle: `@${player.username}` }];
+  });
 }
 
-function resolvePerson(id: string, life: Life, players: { username: string; name: string }[]) {
+function resolvePerson(id: string, players: { username: string; name: string }[]) {
   if (id.startsWith("group:")) return { id, name: id.slice(6), handle: id.slice(6) };
-  return peopleBook(life, players).find((person) => person.id === id) ?? { id, name: id, handle: handleOf(id) };
+  return peopleBook(players).find((person) => person.id === id) ?? { id, name: id.startsWith("user:") ? id.slice(5) : id, handle: id.startsWith("user:") ? `@${id.slice(5)}` : handleOf(id) };
 }
 
 export function openingUnread(_life: Life) {
