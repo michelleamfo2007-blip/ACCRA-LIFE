@@ -37,6 +37,7 @@ import {
   hangWithGuest,
   maybeKnock,
   offerSleepover,
+  receiveGuest,
   sendGuestHome,
   tickGuests,
 } from "@/lib/game/home-life";
@@ -936,6 +937,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const inbox = useInbox(account.username, Boolean(account.cloud), (next) => {
     setPing(next);
     window.setTimeout(() => setPing((current) => (current?.at === next.at ? null : current)), 6000);
+    // Visitor walked into your place — show them on the sofa as a real player guest.
+    if (life?.where === "home" && /at your place/i.test(next.text) && next.username) {
+      const arrived = receiveGuest(life, next.name.replace(/^@/, "") || next.username, { invited: true, username: next.username });
+      commitLife(account.username, tickGuests(arrived.life));
+      if (arrived.note) flash(arrived.note);
+    }
     try {
       if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
         new Notification(next.name, { body: next.text, tag: `accralife-${next.id}` });
@@ -980,7 +987,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       return;
     }
     let nextLife = tickGuests(result.life);
-    if (nextLife.where === "home" && !(nextLife.guests ?? []).length && Math.random() < 0.18) {
+    // Offline-only: scripted neighbours. Online homes invite real Accra Life players.
+    if (!account.cloud && nextLife.where === "home" && !(nextLife.guests ?? []).length && Math.random() < 0.18) {
       const knock = maybeKnock(nextLife);
       nextLife = knock.life;
       if (knock.note) result = { ...result, notes: [knock.note, ...result.notes] };
@@ -1146,10 +1154,25 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onHang={(name, kind) => apply(hangWithGuest(life, name, kind))}
           onSleepover={(name) => apply(offerSleepover(life, name))}
           onSendHome={(name) => apply(sendGuestHome(life, name))}
-          onInviteKnock={() => {
-            const name = [...life.relations].sort((a, b) => b.score - a.score)[0]?.name ?? "Ama from next door";
-            apply(invitePerson(life, name));
+          cloud={Boolean(account.cloud)}
+          friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
+          invites={inbox.social?.invites ?? []}
+          onInvite={(username) => {
+            if (!account.cloud) {
+              flash("Sign in online to invite real Accra Life players.");
+              return;
+            }
+            const friend = inbox.threads.find((thread) => thread.username === username);
+            const name = friend?.name ?? `@${username}`;
+            void netAction({ action: "invite", to: username }).then((error) => {
+              if (error) {
+                flash(error);
+                return;
+              }
+              apply(invitePerson(life, name, username));
+            });
           }}
+          onVisit={(username) => void visitHost(username)}
           onUpgrade={() => setTab("buy")}
         />
       ) : tab === "home" ? (

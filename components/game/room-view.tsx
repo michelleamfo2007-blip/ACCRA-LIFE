@@ -46,7 +46,11 @@ export function RoomView({
   onHang,
   onSleepover,
   onSendHome,
-  onInviteKnock,
+  onInvite,
+  onVisit,
+  cloud = false,
+  friends = [],
+  invites = [],
   onUpgrade,
 }: {
   life: Life;
@@ -62,7 +66,11 @@ export function RoomView({
   onHang?: (name: string, kind: "chat" | "tv" | "game" | "drink") => void;
   onSleepover?: (name: string) => void;
   onSendHome?: (name: string) => void;
-  onInviteKnock?: () => void;
+  onInvite?: (username: string) => void;
+  onVisit?: (username: string) => void;
+  cloud?: boolean;
+  friends?: { username: string; name: string }[];
+  invites?: { from: string; at: string }[];
   onUpgrade?: () => void;
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
@@ -293,14 +301,18 @@ export function RoomView({
           😴 Sleepover · breakfast gist in the morning
         </div>
       ) : null}
-      {!draft && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInviteKnock ? (
+      {!draft && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInvite && onVisit ? (
         <HomeDesk
           life={life}
+          cloud={cloud}
+          friends={friends}
+          invites={invites}
           onCook={onCook}
           onHang={onHang}
           onSleepover={onSleepover}
           onSendHome={onSendHome}
-          onInviteKnock={onInviteKnock}
+          onInvite={onInvite}
+          onVisit={onVisit}
           onBuyHint={onUpgrade}
         />
       ) : null}

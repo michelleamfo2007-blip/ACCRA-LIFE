@@ -414,8 +414,8 @@ export function Handset({
                         return;
                       }
                       void onNet({ action: "invite", to: other }).then((error) => {
-                        pushChat(thread, { who: "note", text: error ?? `You invited @${other} over. They can visit for the next day.`, time });
-                        if (!error) onSocial(invitePerson(life, name));
+                        pushChat(thread, { who: "note", text: error ?? `You invited @${other} over. They can Visit from People for the next day.`, time });
+                        if (!error) onSocial(invitePerson(life, name, other));
                       });
                       return;
                     }

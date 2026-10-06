@@ -4,6 +4,8 @@ export type GuestDoing = "arrive" | "chat" | "eat" | "cook" | "tv" | "game" | "s
 
 export type HomeGuest = {
   name: string;
+  /** Real Accra Life player handle when this guest is online. */
+  username?: string;
   arrivedAt: number;
   until: number;
   doing: GuestDoing;
@@ -171,19 +173,20 @@ export function maybeKnock(life: Life): { life: Life; note?: string } {
   return receiveGuest(life, pick.name, { invited: false });
 }
 
-export function receiveGuest(life: Life, name: string, opts: { invited?: boolean; sleepover?: boolean } = {}) {
+export function receiveGuest(life: Life, name: string, opts: { invited?: boolean; sleepover?: boolean; username?: string } = {}) {
   const next = cloneLife(life);
   const stay = opts.sleepover ? 480 : 90 + Math.floor(Math.random() * 70);
   const gift = Math.random() > 0.35 ? GIFTS[Math.floor(Math.random() * GIFTS.length)] : undefined;
   const guest: HomeGuest = {
     name,
+    username: opts.username,
     arrivedAt: next.minutes,
     until: next.minutes + stay,
     doing: "arrive",
     sleepover: opts.sleepover,
     gift,
   };
-  next.guests = [...activeGuests(next).filter((item) => item.name !== name), guest];
+  next.guests = [...activeGuests(next).filter((item) => item.name !== name && item.username !== opts.username), guest];
   next.needs.social = Math.min(100, next.needs.social + (opts.invited ? 8 : 6));
   bump(next, name, opts.invited ? 8 : 5);
   if (gift) {
@@ -199,15 +202,20 @@ export function receiveGuest(life: Life, name: string, opts: { invited?: boolean
   return { life: next, note: line };
 }
 
-export function inviteHome(life: Life, name: string) {
+export function inviteHome(life: Life, name: string, username?: string) {
   if (life.where !== "home") {
     return { life, notes: [] as string[], error: "Head home first. Then call them over." };
   }
-  const known = life.relations.find((person) => person.name === name);
-  if (known && known.score < 8) {
+  const known = life.relations.find((person) => person.name === name || person.name === username || person.name === `@${username}`);
+  if (known && known.score < 8 && !username) {
     return { life, notes: [] as string[], error: "They barely know you yet. Gist more outside first." };
   }
-  return { ...receiveGuest(life, name, { invited: true }), notes: [`${name} is on the way.`] as string[], error: undefined as string | undefined };
+  const label = username ? `@${username}` : name;
+  return {
+    ...receiveGuest(life, name, { invited: true, username }),
+    notes: [`Invite out to ${label}. They can open People and Visit.`] as string[],
+    error: undefined as string | undefined,
+  };
 }
 
 export function hangWithGuest(life: Life, name: string, kind: "chat" | "tv" | "game" | "drink"): { life: Life; notes: string[]; error?: string } {

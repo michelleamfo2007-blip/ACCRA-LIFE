@@ -61,6 +61,7 @@ export function callPerson(life: Life, name: string, kind: CallKind = "gist"): S
     line = `Work call with ${name}. Something might come.`;
   }
   if (kind === "come-home") {
+    // Phone Calls still queue a local guest; home "Invite over" is for real @players.
     const invited = invitePerson(next, name);
     if (invited.error) return invited;
     invited.life.log = [`${name}: "I dey come. Make the door open."`, ...invited.life.log].slice(0, 14);

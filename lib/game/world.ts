@@ -47,7 +47,7 @@ export type Life = {
   inbox: string[];
   relations: { name: string; score: number }[];
   /** Friends currently at your place (home loop). */
-  guests?: { name: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string }[];
+  guests?: { name: string; username?: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string }[];
   funded: boolean;
   lastRentAt: number;
   outageCheckedDay: number;
@@ -1845,25 +1845,30 @@ export function treatPerson(life: Life, name: string): StepResult {
   return { life: next, notes: [`Waakye is on the way to ${name}.`] };
 }
 
-export function invitePerson(life: Life, name: string): StepResult {
-  const known = life.relations.find((person) => person.name === name);
-  if (known && known.score < 8) return { life, notes: [], error: "They barely know you yet. Gist more first." };
+export function invitePerson(life: Life, name: string, username?: string): StepResult {
+  const known = life.relations.find((person) => person.name === name || person.name === username || person.name === `@${username}`);
+  if (known && known.score < 8 && !username) return { life, notes: [], error: "They barely know you yet. Gist more first." };
   const next = clone(life);
   next.needs.social = clampNeed(next.needs.social + 12);
   bumpRelation(next, name, 10);
   const stay = life.where === "home" ? 120 : 200;
+  const label = username ? `@${username}` : name;
   next.guests = [
-    ...(next.guests ?? []).filter((guest) => guest.name !== name),
+    ...(next.guests ?? []).filter((guest) => guest.name !== name && guest.username !== username),
     {
       name,
+      username,
       arrivedAt: next.minutes,
       until: next.minutes + stay,
       doing: "arrive",
       gift: Math.random() > 0.4 ? "Sugar bread" : undefined,
     },
   ];
-  pushLog(next, life.where === "home" ? `${name} is at the door.` : `${name} is coming over.`);
-  return { life: next, notes: [life.where === "home" ? `${name} is at the door. Clear a chair.` : `${name} is on the way. Clear a chair.`] };
+  pushLog(next, life.where === "home" ? `${label} is invited over.` : `You invited ${label} over.`);
+  return {
+    life: next,
+    notes: [life.where === "home" ? `Invite sent to ${label}. They Visit from People.` : `${label} can Visit from People for the next day.`],
+  };
 }
 
 export function visitPerson(life: Life, name: string): StepResult {

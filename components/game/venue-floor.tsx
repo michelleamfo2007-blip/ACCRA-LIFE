@@ -36,6 +36,7 @@ function startSpot(seed: string) {
 
 type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables" | "airport";
 type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
+type Seat = { id: string; label: string; left: number; top: number; face?: 1 | -1 };
 
 export function VenueFloor({
   life,
@@ -83,6 +84,7 @@ export function VenueFloor({
   const [stride, setStride] = useState<{ ms: number; face: 1 | -1; moving: boolean }>({ ms: 700, face: 1, moving: false });
   const [panel, setPanel] = useState(true);
   const [doing, setDoing] = useState<{ label: string; dance: boolean; sit?: boolean } | null>(null);
+  const [seatedAt, setSeatedAt] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [bottleShow, setBottleShow] = useState<null | { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number }>(null);
   const [empties, setEmpties] = useState<{ id: string; left: number; top: number; emoji: string }[]>([]);
@@ -98,6 +100,8 @@ export function VenueFloor({
   const actTimer = useRef<number | null>(null);
   const busy = useRef(false);
   const nightLife = isNightlife(spot.id, CLUB_IDS);
+  const dining = isDiningSpot(spot);
+  const seats = dining ? seatsFor(spot.id) : [];
   const party = lively || BEACHES.has(spot.id) || nightLife;
   const staff = staffFor(spot);
   const stands = [
@@ -130,6 +134,7 @@ export function VenueFloor({
     setBottleShow(null);
     busy.current = false;
     setDoing(null);
+    setSeatedAt(null);
     return () => {
       if (stopTimer.current) window.clearTimeout(stopTimer.current);
       if (actTimer.current) window.clearTimeout(actTimer.current);
@@ -167,9 +172,39 @@ export function VenueFloor({
 
   function tapFloor(event: MouseEvent<HTMLDivElement>) {
     if ((event.target as HTMLElement).closest("button")) return;
+    if (seatedAt) {
+      setSeatedAt(null);
+      setDoing(null);
+    }
     const box = event.currentTarget.getBoundingClientRect();
     walkTo(((event.clientX - box.left) / box.width) * 100, ((event.clientY - box.top) / box.height) * 100);
     if (window.innerWidth < 640) setPanel(false);
+  }
+
+  function sitAt(seat: Seat, then?: () => void) {
+    if (busy.current || bottleShow) return;
+    busy.current = true;
+    setPanel(true);
+    setWho(null);
+    setDoing({ label: seat.label, dance: false, sit: true });
+    const left = seat.left + (Math.random() * 3 - 1.5);
+    const top = seat.top + (Math.random() * 2 - 1);
+    if (seat.face) setStride((current) => ({ ...current, face: seat.face! }));
+    const ms = walkTo(left, top);
+    if (actTimer.current) window.clearTimeout(actTimer.current);
+    actTimer.current = window.setTimeout(() => {
+      setSeatedAt(seat.id);
+      setDoing({ label: seat.label, dance: false, sit: true });
+      busy.current = false;
+      then?.();
+    }, ms);
+  }
+
+  function nearestSeat() {
+    if (!seats.length) return null;
+    const fromLeft = Number.parseFloat(youAt.left);
+    const fromTop = Number.parseFloat(youAt.top);
+    return [...seats].sort((a, b) => Math.hypot(a.left - fromLeft, a.top - fromTop) - Math.hypot(b.left - fromLeft, b.top - fromTop))[0] ?? null;
   }
 
   function speak(person: string, talk: TalkKind) {
@@ -182,36 +217,72 @@ export function VenueFloor({
   const crowd = people.length;
   const flavor = spotFlavor(spot);
 
+  function runPaidAction(paid: Verb, bottle: ReturnType<typeof bottleOf>, left: number, top: number, keepSeat: boolean, seatLabel?: string) {
+    onAct(paid);
+    if (isBottleVerb(paid)) {
+      runBottlePop(bottle ?? { id: paid.id, label: paid.label, detail: paid.detail, cost: paid.cost, emoji: paid.emoji ?? "🍾", vibe: "mid" }, left, top);
+      return;
+    }
+    const hold = Math.round(Math.max(1800, Math.min(5200, (paid.minutes || 20) * 70)));
+    actTimer.current = window.setTimeout(() => {
+      if (keepSeat) {
+        setDoing({ label: seatLabel ?? "At the table", dance: false, sit: true });
+        busy.current = false;
+        return;
+      }
+      setDoing(null);
+      setSeatedAt(null);
+      busy.current = false;
+    }, hold);
+  }
+
   function performAction(verb: Verb, offer: Offer) {
-    if (busy.current || doing || bottleShow) return;
+    if (busy.current || bottleShow) return;
+    if (doing && !seatedAt) return;
     const paid = payVerb(verb, offer);
     const bottle = bottleOf(paid);
-    const target = isBottleVerb(paid)
-      ? zones.find((zone) => zone.id === "booth" || zone.id === "tables" || zone.id === "cafe") ?? zoneForVerb(paid, zones)
-      : zoneForVerb(paid, zones);
     const dance = paid.tag === "party" || /dance|drum|party|highlife|floor/i.test(`${paid.id} ${paid.label}`);
     const text = `${paid.id} ${paid.label}`;
-    const sitting = /sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table|vip/i.test(text) && !dance && !/stroll|step outside|walk the|bottle|hennessy|moët|moet|cîroc|ciroc|bucket|bitters/i.test(text);
+    const food = paid.tag === "food" || /eat|order|chop|plate|waakye|banku|brunch|bowl|kitchen|grill|lunch|breakfast|red-red|noodle|taco|wing|tilapia|fufu|coffee|pan/i.test(text);
+    const sittingVerb = /sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table|vip/i.test(text) && !dance && !/stroll|step outside|walk the|bottle|hennessy|moët|moet|cîroc|ciroc|bucket|bitters/i.test(text);
+
+    // Restaurants: sit at a table/chair before the plate arrives.
+    if (dining && food && seats.length) {
+      const seat = (seatedAt && seats.find((item) => item.id === seatedAt)) || nearestSeat();
+      if (!seat) return;
+      const finish = () => {
+        busy.current = true;
+        setDoing({ label: paid.label, dance: false, sit: true });
+        if (actTimer.current) window.clearTimeout(actTimer.current);
+        actTimer.current = window.setTimeout(() => runPaidAction(paid, bottle, seat.left, seat.top, true, seat.label), 280);
+      };
+      if (seatedAt === seat.id) {
+        finish();
+        return;
+      }
+      sitAt(seat, finish);
+      return;
+    }
+
+    if (dining && sittingVerb) {
+      const seat = nearestSeat() ?? { id: "tables", label: "A table", left: 36, top: 58 };
+      sitAt(seat);
+      return;
+    }
+
     busy.current = true;
     setPanel(false);
     setWho(null);
-    setDoing({ label: paid.label, dance: dance && !isBottleVerb(paid), sit: sitting || Boolean(isBottleVerb(paid)) });
+    setSeatedAt(null);
+    const target = isBottleVerb(paid)
+      ? zones.find((zone) => zone.id === "booth" || zone.id === "tables" || zone.id === "cafe") ?? zoneForVerb(paid, zones)
+      : zoneForVerb(paid, zones);
+    setDoing({ label: paid.label, dance: dance && !isBottleVerb(paid), sit: sittingVerb || Boolean(isBottleVerb(paid)) });
     const left = target.left + (Math.random() * 6 - 3);
     const top = target.top + (Math.random() * 4 - 2);
     const ms = walkTo(left, top);
     if (actTimer.current) window.clearTimeout(actTimer.current);
-    actTimer.current = window.setTimeout(() => {
-      onAct(paid);
-      if (isBottleVerb(paid)) {
-        runBottlePop(bottle ?? { id: paid.id, label: paid.label, detail: paid.detail, cost: paid.cost, emoji: paid.emoji ?? "🍾", vibe: "mid" }, left, top);
-        return;
-      }
-      const hold = Math.round(Math.max(1800, Math.min(5200, (paid.minutes || 20) * 70)));
-      actTimer.current = window.setTimeout(() => {
-        setDoing(null);
-        busy.current = false;
-      }, hold);
-    }, ms);
+    actTimer.current = window.setTimeout(() => runPaidAction(paid, bottle, left, top, false), ms);
   }
 
   function runBottlePop(bottle: Bottle, left: number, top: number) {
@@ -272,6 +343,25 @@ export function VenueFloor({
           style={{ transform: `scale(${zoom})` }}
         >
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
+          {seats.map((seat) => (
+            <button
+              key={seat.id}
+              type="button"
+              aria-label={`Sit at ${seat.label}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (seatedAt === seat.id) return;
+                sitAt(seat);
+              }}
+              className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-2xl px-2 py-1.5 text-[10px] font-bold shadow-md transition ${
+                seatedAt === seat.id ? "bg-[#006B3F] text-white ring-2 ring-white/80" : "bg-white/95 text-[#243044] hover:bg-[#fff4c2]"
+              }`}
+              style={{ left: `${seat.left}%`, top: `${seat.top}%` }}
+            >
+              <span className="text-base leading-none">🪑</span>
+              <span className="max-w-[4.5rem] truncate">{seatedAt === seat.id ? "Seated" : seat.label}</span>
+            </button>
+          ))}
           {staff.map((person) => (
             <PersonTag
               key={person.role}
@@ -352,7 +442,7 @@ export function VenueFloor({
             tone="pink"
             style={youAt}
             walk={stride.ms}
-            pose={stride.moving ? "walk" : doing?.sit ? "sit" : doing ? "act" : "idle"}
+            pose={stride.moving ? "walk" : doing?.sit || seatedAt ? "sit" : doing ? "act" : "idle"}
             dance={Boolean(doing?.dance)}
             face={stride.face}
             skin={life.look.skin}
@@ -391,13 +481,17 @@ export function VenueFloor({
                 ? "🍾 Pop — Accra noticed"
                 : "The table cheers"}
         </p>
-      ) : doing ? (
+      ) : doing || seatedAt ? (
         <p className="pointer-events-none absolute left-1/2 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.6rem))] z-20 -translate-x-1/2 rounded-full bg-[#006B3F] px-4 py-1.5 text-xs font-bold text-white shadow-lg">
-          {stride.moving ? `Heading over · ${doing.label}` : doing.sit ? `Sitting · ${doing.label}` : `${doing.label}…`}
+          {stride.moving
+            ? `Heading over · ${doing?.label ?? "a seat"}`
+            : seatedAt || doing?.sit
+              ? `Sitting · ${doing?.label ?? "table"} · order when ready`
+              : `${doing?.label}…`}
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
-          {nightLife ? "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
+          {dining ? "Tap a chair · sit · then order" : nightLife ? "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
         </p>
       )}
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
@@ -489,19 +583,42 @@ export function VenueFloor({
             </button>
           </form>
 
+          {dining && !seatedAt ? (
+            <p className="mt-3 rounded-2xl bg-[#fff4c2] px-3 py-2 text-xs font-semibold text-[#7a3b0c]">Sit at a table or chair first — then order from the menu.</p>
+          ) : null}
+          {seatedAt ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSeatedAt(null);
+                setDoing(null);
+              }}
+              className="mt-3 w-full rounded-full bg-[#f4f7fb] px-3 py-2 text-xs font-bold text-[#243044]"
+            >
+              Stand up from the seat
+            </button>
+          ) : null}
           {zones.length ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {zones.map((zone) => (
-                <button
-                  key={zone.id}
-                  type="button"
-                  onClick={() => walkTo(zone.left, zone.top)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-left text-xs font-semibold text-[#243044]"
-                >
-                  <span className="text-base leading-none">{zone.emoji}</span>
-                  <span>{zone.label}</span>
-                </button>
-              ))}
+              {zones.map((zone) => {
+                const seatZone = zone.id === "chairs" || zone.id === "tables" || zone.id === "cafe" || zone.id.startsWith("seat-");
+                return (
+                  <button
+                    key={zone.id}
+                    type="button"
+                    onClick={() => {
+                      if (dining && seatZone) sitAt({ id: zone.id, label: zone.label, left: zone.left, top: zone.top });
+                      else walkTo(zone.left, zone.top);
+                    }}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-2xl px-3 py-2 text-left text-xs font-semibold ${
+                      seatedAt === zone.id ? "bg-[#006B3F] text-white" : "bg-[#f4f7fb] text-[#243044]"
+                    }`}
+                  >
+                    <span className="text-base leading-none">{zone.emoji}</span>
+                    <span>{dining && seatZone ? `Sit · ${zone.label}` : zone.label}</span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
 
@@ -522,10 +639,28 @@ export function VenueFloor({
           ) : null}
           {children}
           <ActionDeck
-            verbs={[...(nightLife ? clubVerbs(spot.id) : []), ...extra, ...spot.actions]}
+            verbs={[
+              ...(dining && !seatedAt
+                ? [
+                    {
+                      id: `sit-${spot.id}`,
+                      label: "Sit at a table",
+                      detail: "Pull up a chair. Then order something to eat.",
+                      minutes: 2,
+                      cost: 0,
+                      earn: 0,
+                      effects: { fun: 2 },
+                      emoji: "🪑",
+                    } satisfies Verb,
+                  ]
+                : []),
+              ...(nightLife ? clubVerbs(spot.id) : []),
+              ...extra,
+              ...spot.actions,
+            ]}
             here
             focus={focus}
-            busy={Boolean(doing) || Boolean(bottleShow)}
+            busy={(Boolean(doing) && !seatedAt) || Boolean(bottleShow)}
             onPay={performAction}
           />
           <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
@@ -834,6 +969,39 @@ function zoneForVerb(verb: Verb, zones: { id: string; label: string; emoji: stri
   return pick("mid", "hang") ?? zones[Math.floor(zones.length / 2)] ?? zones[0];
 }
 
+function isDiningSpot(spot: Spot) {
+  if (isNightlife(spot.id, CLUB_IDS)) return false;
+  if (spot.actions.some((verb) => verb.tag === "food")) return true;
+  return ["asanka", "buka", "viewing", "muni", "jamestown-coffee", "kishitei", "dez-amis", "vine-brasa"].includes(spot.id);
+}
+
+function seatsFor(spotId: string): Seat[] {
+  if (spotId === "buka" || spotId === "viewing" || spotId === "asanka" || spotId === "muni") {
+    return [
+      { id: "seat-window", label: "Window stool", left: 28, top: 56, face: 1 },
+      { id: "seat-mid", label: "Middle table", left: 44, top: 60, face: -1 },
+      { id: "seat-back", label: "Back bench", left: 58, top: 54, face: 1 },
+      { id: "seat-corner", label: "Corner chair", left: 70, top: 62, face: -1 },
+      { id: "seat-street", label: "Street table", left: 34, top: 70, face: 1 },
+    ];
+  }
+  if (spotId === "jamestown-coffee" || spotId === "dez-amis" || spotId === "kishitei" || spotId === "vine-brasa") {
+    return [
+      { id: "seat-cafe-a", label: "Cafe chair", left: 30, top: 54, face: 1 },
+      { id: "seat-cafe-b", label: "Two-top", left: 48, top: 58, face: -1 },
+      { id: "seat-cafe-c", label: "Window seat", left: 64, top: 50, face: 1 },
+      { id: "seat-cafe-d", label: "Booth", left: 72, top: 64, face: -1 },
+    ];
+  }
+  return [
+    { id: "seat-a", label: "Chair", left: 26, top: 52, face: 1 },
+    { id: "seat-b", label: "Table for two", left: 40, top: 58, face: -1 },
+    { id: "seat-c", label: "Long table", left: 54, top: 54, face: 1 },
+    { id: "seat-d", label: "Cafe seat", left: 66, top: 62, face: -1 },
+    { id: "seat-e", label: "Bar stool", left: 48, top: 42, face: 1 },
+  ];
+}
+
 function zonesFor(spotId: string): { id: string; label: string; emoji: string; left: number; top: number }[] {
   if (spotId === "kotoka") {
     return [
@@ -876,12 +1044,23 @@ function zonesFor(spotId: string): { id: string; label: string; emoji: string; l
       { id: "desk", label: "Front desk", emoji: "🪪", left: 52, top: 36 },
     ];
   }
-  if (spotId === "buka" || spotId === "viewing") {
+  if (spotId === "buka" || spotId === "viewing" || spotId === "asanka" || spotId === "muni") {
     return [
       { id: "counter", label: "Counter", emoji: "🍲", left: 48, top: 40 },
-      { id: "tables", label: "Tables", emoji: "🪑", left: 36, top: 58 },
+      { id: "chairs", label: "Window stool", emoji: "🪑", left: 28, top: 56 },
+      { id: "tables", label: "Middle table", emoji: "🍽️", left: 44, top: 60 },
+      { id: "cafe", label: "Back bench", emoji: "🪑", left: 58, top: 54 },
       { id: "tv", label: "Screen", emoji: "📺", left: 70, top: 46 },
       { id: "street", label: "Street edge", emoji: "🛣️", left: 22, top: 68 },
+    ];
+  }
+  if (spotId === "jamestown-coffee" || spotId === "dez-amis" || spotId === "kishitei" || spotId === "vine-brasa") {
+    return [
+      { id: "counter", label: "Counter", emoji: "☕", left: 46, top: 38 },
+      { id: "chairs", label: "Cafe chair", emoji: "🪑", left: 30, top: 54 },
+      { id: "tables", label: "Two-top", emoji: "🍽️", left: 48, top: 58 },
+      { id: "cafe", label: "Window seat", emoji: "🪟", left: 64, top: 50 },
+      { id: "street", label: "Street edge", emoji: "🛣️", left: 74, top: 68 },
     ];
   }
   if (spotId === "gym" || spotId === "stadium") {
@@ -1416,7 +1595,7 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
       { x: 88, y: 0, z: 52, w: 8, h: 6, d: 8, color: "#8a5a32" },
     ];
   }
-  // tables / default hang spots — chop-bar lived-in
+  // tables / default hang spots — chop-bar / restaurant lived-in
   return [
     { x: -28, y: 0, z: -30, w: 80, h: 16, d: 16, color: "#b87824" },
     { x: -20, y: 16, z: -26, w: 64, h: 3, d: 10, color: "#e8d4b0" },
@@ -1425,9 +1604,15 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
     { x: 16, y: 19, z: -22, w: 6, h: 4, d: 6, color: "#f4efe6" },
     ...benchTable(-48, 24),
     ...benchTable(8, 40),
+    ...benchTable(-20, 56, "#b86a1c"),
     ...cafeSet(56, 18, "#c43a3a"),
+    ...cafeSet(-72, 8, "#e8e8e8"),
+    ...cafeSet(30, 48, "#006B3F"),
     ...chair(-70, 40, "#d64545"),
     ...chair(-88, 48, "#e8e8e8"),
+    ...chair(78, 36, "#243044"),
+    ...chair(92, 44, "#CE1126"),
+    ...chair(-4, 68, "#f5c542"),
     { x: 78, y: 0, z: -20, w: 12, h: 28, d: 8, color: "#1e293b" },
     { x: 82, y: 10, z: -18, w: 6, h: 10, d: 2, color: "#22c55e" },
     { x: -96, y: 0, z: 36, w: 14, h: 12, d: 12, color: "#b01020" },
