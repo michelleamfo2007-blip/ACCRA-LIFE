@@ -1,5 +1,5 @@
 import "server-only";
-import { cedis, type Life } from "@/lib/game/world";
+import { cedis, spotById, type Life } from "@/lib/game/world";
 import type { Bond, BondStage, ChatGroup, HostHome, Net, NetRef, SocialView, SusuGroup } from "@/lib/game/net";
 import { EMOTES, REFER_CAP, REFER_PRIZE, RING_PRICE, WEDDING_PRICE } from "@/lib/game/net";
 import { chargePlayer, creditPlayer, mutedNote, readPlayer, sendChat, updateLife } from "@/lib/server/live";
@@ -317,9 +317,30 @@ export async function invitePlayer(username: string, to: string) {
   const them = await readPlayer(to);
   if (!them?.life) return "Nobody in Accra goes by that name.";
   if (netOf(them.life).blocked?.includes(username)) return `@${to} is not taking invites from you.`;
-  const saved = await updateLife(to, (life) => withNet(life, (net) => ({ ...net, invites: [...(net.invites ?? []).filter((item) => item.from !== username), { from: username, at: new Date().toISOString() }].slice(-10) })));
+  const saved = await updateLife(to, (life) => withNet(life, (net) => ({ ...net, invites: [...(net.invites ?? []).filter((item) => !(item.from === username && (item.kind ?? "home") === "home")), { from: username, at: new Date().toISOString(), kind: "home" as const }].slice(-10) })));
   if (!saved) return "The invite did not send.";
   await sendChat(username, to, "🏠 Come over to my place! Open People on your phone to visit.");
+  return null;
+}
+
+export async function inviteTable(username: string, to: string, spot: string, seatId: string) {
+  if (!HANDLE.test(to) || to === username) return "Pick a real username.";
+  if (!spot || !seatId) return "Sit at a table first.";
+  const them = await readPlayer(to);
+  if (!them?.life) return "Nobody in Accra goes by that name.";
+  if (netOf(them.life).blocked?.includes(username)) return `@${to} is not taking invites from you.`;
+  const place = spotById(spot).name;
+  const saved = await updateLife(to, (life) =>
+    withNet(life, (net) => ({
+      ...net,
+      invites: [
+        ...(net.invites ?? []).filter((item) => !(item.from === username && item.kind === "table")),
+        { from: username, at: new Date().toISOString(), kind: "table" as const, spot, seatId },
+      ].slice(-10),
+    })),
+  );
+  if (!saved) return "The table invite did not send.";
+  await sendChat(username, to, `🍽️ Come eat with me at ${place}. I saved you a seat — open the map and meet me there.`);
   return null;
 }
 

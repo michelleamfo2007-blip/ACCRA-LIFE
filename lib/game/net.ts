@@ -32,7 +32,7 @@ export type Bond = { with: string; stage: BondStage; since: string };
 
 export type BondAsk = { from: string; kind: BondStage; at: string; paid?: number };
 
-export type Invite = { from: string; at: string };
+export type Invite = { from: string; at: string; kind?: "home" | "table"; spot?: string; seatId?: string };
 
 export type Crew = {
   id: string;

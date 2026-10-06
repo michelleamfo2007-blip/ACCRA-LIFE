@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
-import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { CLUB_IDS, EATERY_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
 import {
   bottleOf,
   clubCrowdAt,
+  clubNightLine,
   clubStateLabel,
   clubVerbs,
   isBottleVerb,
   isNightlife,
+  sessionOf,
   type Bottle,
   type ClubNpc,
 } from "@/lib/game/club-night";
@@ -51,6 +53,10 @@ export function VenueFloor({
   me = "",
   onMove,
   onTrade,
+  onInviteTable,
+  onClaimTable,
+  onClearTable,
+  friends = [],
   lively = false,
   children,
 }: {
@@ -64,6 +70,10 @@ export function VenueFloor({
   onAct: (verb: Verb, person?: string) => void;
   onOpenChat: (person: string) => void;
   onPay: (person: string, amount: number, username?: string) => string | null | Promise<string | null>;
+  onInviteTable?: (username: string, seatId: string) => void;
+  onClaimTable?: (seatId: string) => void;
+  onClearTable?: () => void;
+  friends?: { username: string; name: string }[];
   focus?: string | null;
   extra?: Verb[];
   homeFare?: number;
@@ -102,6 +112,8 @@ export function VenueFloor({
   const nightLife = isNightlife(spot.id, CLUB_IDS);
   const dining = isDiningSpot(spot);
   const seats = dining ? seatsFor(spot.id) : [];
+  const club = nightLife ? sessionOf(life) : null;
+  const tableGuests = (life.guests ?? []).filter((guest) => guest.doing === "dine" && guest.spot === spot.id && guest.until > life.minutes);
   const party = lively || BEACHES.has(spot.id) || nightLife;
   const staff = staffFor(spot);
   const stands = [
@@ -196,6 +208,7 @@ export function VenueFloor({
       setSeatedAt(seat.id);
       setDoing({ label: seat.label, dance: false, sit: true });
       busy.current = false;
+      onClaimTable?.(seat.id);
       then?.();
     }, ms);
   }
@@ -343,25 +356,29 @@ export function VenueFloor({
           style={{ transform: `scale(${zoom})` }}
         >
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
-          {seats.map((seat) => (
-            <button
-              key={seat.id}
-              type="button"
-              aria-label={`Sit at ${seat.label}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (seatedAt === seat.id) return;
-                sitAt(seat);
-              }}
-              className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-2xl px-2 py-1.5 text-[10px] font-bold shadow-md transition ${
-                seatedAt === seat.id ? "bg-[#006B3F] text-white ring-2 ring-white/80" : "bg-white/95 text-[#243044] hover:bg-[#fff4c2]"
-              }`}
-              style={{ left: `${seat.left}%`, top: `${seat.top}%` }}
-            >
-              <span className="text-base leading-none">🪑</span>
-              <span className="max-w-[4.5rem] truncate">{seatedAt === seat.id ? "Seated" : seat.label}</span>
-            </button>
-          ))}
+          {seats.map((seat) => {
+            const guest = tableGuests.find((item) => item.seatId === seat.id) ?? (seatedAt === seat.id ? tableGuests[0] : null);
+            return (
+              <button
+                key={seat.id}
+                type="button"
+                aria-label={`Sit at ${seat.label}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (seatedAt === seat.id) return;
+                  sitAt(seat);
+                }}
+                className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-2xl px-2 py-1.5 text-[10px] font-bold shadow-md transition ${
+                  seatedAt === seat.id ? "bg-[#006B3F] text-white ring-2 ring-white/80" : "bg-white/95 text-[#243044] hover:bg-[#fff4c2]"
+                }`}
+                style={{ left: `${seat.left}%`, top: `${seat.top}%` }}
+              >
+                <span className="text-base leading-none">🪑</span>
+                <span className="max-w-[4.5rem] truncate">{seatedAt === seat.id ? "Seated" : seat.label}</span>
+                {guest ? <span className="max-w-[4.5rem] truncate text-[9px] text-[#006B3F]">{guest.username ? `@${guest.username}` : guest.name}</span> : null}
+              </button>
+            );
+          })}
           {staff.map((person) => (
             <PersonTag
               key={person.role}
@@ -586,17 +603,59 @@ export function VenueFloor({
           {dining && !seatedAt ? (
             <p className="mt-3 rounded-2xl bg-[#fff4c2] px-3 py-2 text-xs font-semibold text-[#7a3b0c]">Sit at a table or chair first — then order from the menu.</p>
           ) : null}
+          {club ? (
+            <p className="mt-3 rounded-2xl bg-[#121212] px-3 py-2 text-xs font-semibold text-[#FCD116]">
+              {clubNightLine(club)}
+              {club.bottles ? ` · ${club.bottles} bottle${club.bottles === 1 ? "" : "s"}` : ""}
+              {club.danced ? " · danced" : ""}
+            </p>
+          ) : null}
           {seatedAt ? (
             <button
               type="button"
               onClick={() => {
                 setSeatedAt(null);
                 setDoing(null);
+                onClearTable?.();
               }}
               className="mt-3 w-full rounded-full bg-[#f4f7fb] px-3 py-2 text-xs font-bold text-[#243044]"
             >
               Stand up from the seat
             </button>
+          ) : null}
+          {dining && seatedAt && onInviteTable ? (
+            <div className="mt-3 space-y-2 rounded-2xl bg-[#f4f7fb] px-3 py-3">
+              <p className="text-xs font-bold text-[#243044]">Invite to your table</p>
+              {tableGuests.length ? (
+                <p className="text-[11px] text-[#5c6b82]">
+                  Waiting / here: {tableGuests.map((guest) => guest.username ? `@${guest.username}` : guest.name).join(", ")}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  ...friends.map((friend) => ({ key: friend.username, label: `@${friend.username}`, username: friend.username })),
+                  ...people
+                    .filter((person) => person.username !== me && !friends.some((friend) => friend.username === person.username))
+                    .slice(0, 6)
+                    .map((person) => ({ key: person.username, label: `@${person.username}`, username: person.username })),
+                ]
+                  .filter((item, index, list) => list.findIndex((row) => row.username === item.username) === index)
+                  .slice(0, 8)
+                  .map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => onInviteTable(item.username, seatedAt)}
+                      className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#006B3F] shadow-sm"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+              </div>
+              {!friends.length && !people.filter((person) => person.username !== me).length ? (
+                <p className="text-[11px] text-[#5c6b82]">Chat someone first, or invite a player who is already here.</p>
+              ) : null}
+            </div>
           ) : null}
           {zones.length ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -622,10 +681,10 @@ export function VenueFloor({
             </div>
           ) : null}
 
-          {party ? (
+          {party && !club ? (
             <p className="mt-3 rounded-full bg-[#121212] px-3 py-1.5 text-center text-xs font-semibold text-[#FCD116]">
               {nightLife
-                ? "Night open · floor, bar, bottle service. Sparklers when you spend."
+                ? "Night open · bar, table, bottle, floor — then call it a night."
                 : lively
                   ? "Packed right now. Accra showed up."
                   : "Party on. Highlife, and the floor is already full."}
@@ -654,7 +713,7 @@ export function VenueFloor({
                     } satisfies Verb,
                   ]
                 : []),
-              ...(nightLife ? clubVerbs(spot.id) : []),
+              ...(nightLife ? clubVerbs(spot.id, club) : []),
               ...extra,
               ...spot.actions,
             ]}
@@ -664,7 +723,7 @@ export function VenueFloor({
             onPay={performAction}
           />
           <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
-            Head home · {cedis(homeFare)}
+            {club && (club.danced || club.bottles > 0) ? `Call it a night · home ${cedis(homeFare)}` : `Head home · ${cedis(homeFare)}`}
           </button>
         </div>
       )}
@@ -971,12 +1030,13 @@ function zoneForVerb(verb: Verb, zones: { id: string; label: string; emoji: stri
 
 function isDiningSpot(spot: Spot) {
   if (isNightlife(spot.id, CLUB_IDS)) return false;
+  if (EATERY_IDS.has(spot.id)) return true;
   if (spot.actions.some((verb) => verb.tag === "food")) return true;
-  return ["asanka", "buka", "viewing", "muni", "jamestown-coffee", "kishitei", "dez-amis", "vine-brasa"].includes(spot.id);
+  return ["asanka", "buka", "viewing", "auntie-muni", "jamestown-coffee", "kishitei", "dez-amis", "vine-brasa"].includes(spot.id);
 }
 
 function seatsFor(spotId: string): Seat[] {
-  if (spotId === "buka" || spotId === "viewing" || spotId === "asanka" || spotId === "muni") {
+  if (spotId === "buka" || spotId === "viewing" || spotId === "asanka" || spotId === "auntie-muni") {
     return [
       { id: "seat-window", label: "Window stool", left: 28, top: 56, face: 1 },
       { id: "seat-mid", label: "Middle table", left: 44, top: 60, face: -1 },

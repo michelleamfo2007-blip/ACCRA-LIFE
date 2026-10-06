@@ -1,4 +1,6 @@
 import { interestDue } from "@/lib/game/bank";
+import { royaltiesDue } from "@/lib/game/career";
+import { hangoverActive } from "@/lib/game/club-night";
 import { bedState, rentDue } from "@/lib/game/estate";
 import { salesDue } from "@/lib/game/fleet";
 import { eggsDue, hungry, kidReady, starving } from "@/lib/game/pets";
@@ -58,5 +60,8 @@ export function alertsFor(life: Life): Alert[] {
 
   if (storyReady(life)) list.push({ id: "story", emoji: "📖", text: "A story chapter is ready to finish.", app: "stories" });
   if (life.health?.sick) list.push({ id: "sick", emoji: "🤒", text: "You are sick. See the clinic.", app: "health", urgent: true });
+  if (hangoverActive(life)) list.push({ id: "hangover", emoji: "😵‍💫", text: "Club night hangover. Sleep it off or move slow.", app: "health" });
+  const due = royaltiesDue(life);
+  if (due >= 20) list.push({ id: "royalties", emoji: "🎙️", text: `Streaming royalties ready: ${cedis(due)}. Open Studio.`, app: "studio", urgent: due >= 100 });
   return list;
 }

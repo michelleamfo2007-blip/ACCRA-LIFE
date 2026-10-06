@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
-import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
+import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, nextMusicMove, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
 import { CROPS, LAND, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, collectRent, cropOf, farmSize, goToCourt, harvestBed, landOf, payGuards, plantCrop, plotsOf, rentDue, sellPlot, stageCost, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
 import { CARS, INSURANCE, buyCar, carOf, driveHail, fillCost, fillUp, hailWait, insureCar, sellCar, tradeIn } from "@/lib/game/garage";
@@ -274,8 +274,42 @@ export function StudioApp({ life, onBack, onApply, onGo }: { life: Life; onBack:
   const studio = recordWait(life);
   const voice = gigWait(life);
   const due = royaltiesDue(life);
+  const move = nextMusicMove(life);
   return (
     <Screen title="Studio" life={life} color="#3b1f5c" onBack={onBack}>
+      <Card tone={move.ready ? "good" : undefined}>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#8b97ab]">Payday path</p>
+        <p className="mt-1 font-display text-2xl leading-tight">{move.label}</p>
+        <p className="mt-1 text-xs text-[#5c6b82]">{move.detail}</p>
+        <p className="mt-2 text-[11px] font-semibold text-[#8b97ab]">Record → gig → royalties → headline</p>
+        <div className="mt-3">
+          {move.step === "collect" ? (
+            <Btn kind="green" disabled={!move.ready} onClick={() => onApply(collectRoyalties(life))}>
+              {move.label}
+            </Btn>
+          ) : move.step === "gig" && life.where !== "home" ? (
+            <Btn kind="gold" disabled={!move.ready} onClick={() => onApply(playGig(life))}>
+              {move.label}
+            </Btn>
+          ) : move.step === "record" ? (
+            <div className="space-y-2">
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Song title" maxLength={40} className="h-10 w-full rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
+              <Btn
+                kind="dark"
+                disabled={!move.ready || !title.trim()}
+                onClick={() => {
+                  onApply(recordSong(life, title));
+                  setTitle("");
+                }}
+              >
+                {move.label}
+              </Btn>
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-[#f4f7fb] px-3 py-2 text-xs font-semibold text-[#5c6b82]">{move.ready ? move.label : move.detail}</p>
+          )}
+        </div>
+      </Card>
       <Card>
         <p className="text-xs font-semibold uppercase tracking-wide text-[#8b97ab]">{tierOf(music.fans)}</p>
         <p className="font-display text-3xl">{music.fans.toLocaleString("en-GH")} fans</p>

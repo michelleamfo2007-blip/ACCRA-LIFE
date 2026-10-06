@@ -79,17 +79,67 @@ export function playGig(life: Life): StepResult {
   const wait = gigWait(life);
   if (wait > 0) return { life, notes: [], error: `Your voice needs rest. Back in ${Math.ceil(wait / 60)}h.` };
   const timed = passTime(cloneLife(life), 90).life;
-  const pay = Math.min(1500, 20 + Math.floor(music.fans / 40));
-  const gained = 10 + timed.skills.music * 5 + Math.floor(music.fans * 0.03);
+  const pay = Math.min(2200, 45 + Math.floor(music.fans / 28) + timed.skills.music * 8);
+  const gained = 14 + timed.skills.music * 6 + Math.floor(music.fans * 0.04);
   timed.cash += pay;
   timed.music = { ...musicOf(timed), fans: music.fans + gained, lastGig: timed.minutes };
   timed.needs.energy = Math.max(0, timed.needs.energy - 14);
   timed.needs.fun = Math.min(100, timed.needs.fun + 16);
   timed.needs.social = Math.min(100, timed.needs.social + 12);
   timed.stats = { ...timed.stats, gigs: (timed.stats?.gigs ?? 0) + 1 };
-  const line = `You performed at ${spotById(life.where).name}. ${cedis(pay)} and ${gained} new fans.`;
+  const due = royaltiesDue(timed);
+  const line = `You performed at ${spotById(life.where).name}. ${cedis(pay)} door money and ${gained} new fans.`;
+  const tip = due > 0 ? ` Streams still paying — about ${cedis(due)} waiting in Studio.` : " Streams start counting. Check Studio for royalties later.";
   logLine(timed, line);
-  return { life: timed, notes: [line] };
+  return { life: timed, notes: [line + tip] };
+}
+
+export type MusicMove = {
+  step: "record" | "gig" | "collect" | "show" | "wait";
+  label: string;
+  detail: string;
+  ready: boolean;
+  amount?: number;
+};
+
+/** Single next beat on the record → gig → royalties payday path. */
+export function nextMusicMove(life: Life): MusicMove {
+  const music = musicOf(life);
+  const due = royaltiesDue(life);
+  if (due >= 20) {
+    return { step: "collect", label: `Collect royalties · ${cedis(due)}`, detail: "Streams paid. Pull the cash before the next record.", ready: true, amount: due };
+  }
+  if (!music.songs.length) {
+    const wait = recordWait(life);
+    return {
+      step: "record",
+      label: wait > 0 ? `Studio in ${Math.ceil(wait / 60)}h` : `Record a song · ${cedis(STUDIO_FEE)}`,
+      detail: "Nobody books an artist with no music. Book Osu studio time.",
+      ready: wait <= 0 && life.cash >= STUDIO_FEE,
+    };
+  }
+  const voice = gigWait(life);
+  if (voice > 0 && due < 1) {
+    return { step: "wait", label: `Voice rests · ${Math.ceil(voice / 60)}h`, detail: "Let the last gig settle. Royalties keep counting.", ready: false };
+  }
+  if (life.where === "home") {
+    return { step: "gig", label: "Go out to play a gig", detail: "Bars, clubs, and beaches book small sets. Leave home first.", ready: false };
+  }
+  if (voice <= 0) {
+    const pay = Math.min(2200, 45 + Math.floor(music.fans / 28) + life.skills.music * 8);
+    return { step: "gig", label: `Play a gig · ~${cedis(pay)}`, detail: "Door money tonight. Streams keep paying after.", ready: true, amount: pay };
+  }
+  if (due >= 1) {
+    return { step: "collect", label: `Collect royalties · ${cedis(due)}`, detail: "Small payday. Claim it, then book the next session.", ready: true, amount: due };
+  }
+  const studio = recordWait(life);
+  if (studio <= 0 && life.cash >= STUDIO_FEE) {
+    return { step: "record", label: `Record another · ${cedis(STUDIO_FEE)}`, detail: "Fresh track, more streams, bigger gigs.", ready: true };
+  }
+  if (music.fans >= 200) {
+    return { step: "show", label: "Headline a show", detail: "Fans are ready. Hire a venue when the band is free.", ready: showWait(life) <= 0 };
+  }
+  return { step: "wait", label: "Streams counting", detail: "Check Studio when royalties pass ₵20.", ready: false };
 }
 
 export const VIDEO_FEE = 800;

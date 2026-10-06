@@ -1,7 +1,8 @@
-import { ACCRA_SPOTS } from "@/lib/game/accra-spots";
+import { ACCRA_SPOTS, CLUB_IDS } from "@/lib/game/accra-spots";
 import { MORE_SPOTS, TRIP_IDS } from "@/lib/game/more-spots";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
+import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night";
 import { weatherAt, weatherStress } from "@/lib/game/sky";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
@@ -46,8 +47,14 @@ export type Life = {
   log: string[];
   inbox: string[];
   relations: { name: string; score: number }[];
-  /** Friends currently at your place (home loop). */
-  guests?: { name: string; username?: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string }[];
+  /** Friends currently at your place (home loop) or seated at your restaurant table. */
+  guests?: { name: string; username?: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string; spot?: string; seatId?: string }[];
+  /** Nightlife session — bar → table → bottle → dance → leave. */
+  club?: { spot: string; state: string; bottles: number; spend: number; danced: boolean; startedAt: number; posted?: boolean };
+  /** Soft next-morning penalty after a heavy club night. */
+  hangover?: { until: number } | null;
+  /** Seat you claimed at an eatery (for inviting friends to the table). */
+  table?: { spot: string; seatId: string } | null;
   funded: boolean;
   lastRentAt: number;
   outageCheckedDay: number;
@@ -1252,10 +1259,11 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
   const to = from + minutes;
   const hours = minutes / 60;
   if (mode === "awake") {
+    const hung = next.hangover && next.hangover.until > next.minutes ? 1.35 : 1;
     next.needs.hunger = clampNeed(next.needs.hunger - 5 * hours);
-    next.needs.energy = clampNeed(next.needs.energy - (next.traits.includes("lazy") ? 2.2 : 3.4) * hours);
+    next.needs.energy = clampNeed(next.needs.energy - (next.traits.includes("lazy") ? 2.2 : 3.4) * hours * hung);
     const bored = next.traits.includes("outout") || next.traits.includes("night") ? 4.6 : 2.6;
-    next.needs.fun = clampNeed(next.needs.fun - bored * hours);
+    next.needs.fun = clampNeed(next.needs.fun - bored * hours * (hung > 1 ? 1.2 : 1));
     next.needs.social = clampNeed(next.needs.social - 2 * hours);
     const dusty = seasonFlags(next.minutes).harmattan ? 1 : 0;
     next.needs.hygiene = clampNeed(next.needs.hygiene - ((next.traits.includes("fresh") ? 1.4 : 3) + dusty) * hours);
@@ -1268,6 +1276,7 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     next.needs.hunger = clampNeed(next.needs.hunger - 2.4 * hours);
     next.needs.hygiene = clampNeed(next.needs.hygiene - 1.1 * hours);
     next.needs.bladder = clampNeed(next.needs.bladder - 2.2 * hours);
+    if (next.hangover) next.hangover = null;
   }
   const real = from >= 1_000_000;
   const clockTo = real ? realMinutes() : to;
@@ -1461,6 +1470,9 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.special === "gem" && next.gemDay === dayIndex(next.minutes)) {
     return { life: next, notes, error: "You already found today's gem." };
   }
+  if (verb.id.startsWith("club-need-table")) {
+    return { life, notes: [], error: "Take a table first. Then bottle service can land." };
+  }
   let cost = verb.cost;
   if (verb.tag === "food" && next.birthId === "market") cost = Math.round(cost * 0.7);
   if (verb.tag === "party" && seasonFlags(next.minutes).detty) cost = Math.round(cost * 1.3);
@@ -1499,6 +1511,15 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "sleep") {
     const bonus = (after.inventory.includes("mattress") ? 14 : 0) + homeById(after.homeId).comfort;
     after.needs.energy = clampNeed(after.needs.energy + bonus);
+    if (after.hangover) {
+      after.hangover = null;
+      notes.push("Sleep clears the club night. Head quieter.");
+    }
+  }
+  if (isNightlife(placeId, CLUB_IDS) && (verb.tag === "party" || verb.id.startsWith("club-")) && verb.id !== "club-leave") {
+    after.club = sessionAfterVerb(sessionOf(after), verb, placeId, after.minutes);
+  } else if (after.club && !isNightlife(placeId, CLUB_IDS)) {
+    after.club = undefined;
   }
   if (verb.id === "cook" && after.inventory.includes("pan")) after.needs.hunger = clampNeed(after.needs.hunger + 12);
   if (verb.id === "radio" && after.inventory.includes("speaker")) after.needs.fun = clampNeed(after.needs.fun + 12);
@@ -1869,6 +1890,49 @@ export function invitePerson(life: Life, name: string, username?: string): StepR
     life: next,
     notes: [life.where === "home" ? `Invite sent to ${label}. They Visit from People.` : `${label} can Visit from People for the next day.`],
   };
+}
+
+/** Invite someone to sit with you at a restaurant table. */
+export function inviteToTable(life: Life, name: string, opts: { username?: string; seatId: string } ): StepResult {
+  if (life.where === "home") return { life, notes: [], error: "You are home. Invite them over from the sofa." };
+  if (!life.table || life.table.spot !== life.where || life.table.seatId !== opts.seatId) {
+    return { life, notes: [], error: "Sit at a table first, then invite them over." };
+  }
+  const known = life.relations.find((person) => person.name === name || person.name === opts.username || person.name === `@${opts.username}`);
+  if (known && known.score < 6 && !opts.username) return { life, notes: [], error: "They barely know you yet. Gist more first." };
+  const next = clone(life);
+  const label = opts.username ? `@${opts.username}` : name;
+  const place = spotById(life.where).name;
+  next.needs.social = clampNeed(next.needs.social + 10);
+  bumpRelation(next, name, 8);
+  next.guests = [
+    ...(next.guests ?? []).filter((guest) => guest.name !== name && guest.username !== opts.username),
+    {
+      name,
+      username: opts.username,
+      arrivedAt: next.minutes,
+      until: next.minutes + 90,
+      doing: "dine",
+      spot: life.where,
+      seatId: opts.seatId,
+    },
+  ];
+  pushLog(next, `You invited ${label} to your table at ${place}.`);
+  return { life: next, notes: [`Invite sent — ${label} can join your table at ${place}.`] };
+}
+
+export function claimTable(life: Life, seatId: string): Life {
+  const next = clone(life);
+  next.table = { spot: life.where, seatId };
+  return next;
+}
+
+export function clearTable(life: Life): Life {
+  if (!life.table) return life;
+  const next = clone(life);
+  next.table = null;
+  next.guests = (next.guests ?? []).filter((guest) => guest.doing !== "dine" || guest.spot !== life.where);
+  return next;
 }
 
 export function visitPerson(life: Life, name: string): StepResult {

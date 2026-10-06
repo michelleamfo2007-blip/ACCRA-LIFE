@@ -15,6 +15,7 @@ import { TourCoach } from "@/components/game/tour-coach";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { hangoverActive, leaveClubNight, sessionOf } from "@/lib/game/club-night";
 import { postClout } from "@/lib/game/phone-life";
 import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
 import { TradeSheet } from "@/components/game/trade-sheet";
@@ -77,6 +78,9 @@ import {
   realMinutes,
   huntGem,
   invitePerson,
+  inviteToTable,
+  claimTable,
+  clearTable,
   moodOf,
   payOffer,
   passTime,
@@ -999,9 +1003,24 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     if (note) flash(note);
   }
 
+  function endClubNight(thenHome = false) {
+    const left = leaveClubNight(life!);
+    if (left.shouldPost && left.place) {
+      const posted = postClout(left.life, left.place);
+      apply({ life: posted.error ? left.life : posted.life, notes: [...left.notes, ...(posted.error ? [] : posted.notes)] });
+    } else {
+      apply(left);
+    }
+    if (thenHome) setTrip({ name: "Home", placeId: "home", ride: homeRide });
+  }
+
   function actHere(verb: Verb, person?: string) {
     if (verb.id === "phone-post") {
       apply(postClout(life!, spotById(life!.where).name));
+      return;
+    }
+    if (verb.id === "club-leave") {
+      endClubNight(true);
       return;
     }
     const event = verb.id.startsWith("pev-") ? playerEvents.find((item) => eventVerbId(item) === verb.id) : null;
@@ -1183,6 +1202,23 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           me={account.username}
           onMove={shareSpot}
           onTrade={() => setTradeOpen(true)}
+          friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
+          onClaimTable={(seatId) => commitLife(account.username, claimTable(life, seatId))}
+          onClearTable={() => commitLife(account.username, clearTable(life))}
+          onInviteTable={(username, seatId) => {
+            if (!account.cloud) {
+              const friend = inbox.threads.find((thread) => thread.username === username);
+              apply(inviteToTable(life, friend?.name ?? `@${username}`, { username, seatId }));
+              return;
+            }
+            void netAction({ action: "invite-table", to: username, spot: life.where, seatId }).then((error) => {
+              if (error) {
+                flash(error);
+                return;
+              }
+              apply(inviteToTable(life, `@${username}`, { username, seatId }));
+            });
+          }}
           focus={menuFocus}
           lively={(() => {
             const heat = happeningsAt(life.where, now ? new Date(now) : new Date())[0]?.heat ?? "quiet";
@@ -1210,7 +1246,14 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               : []),
           ]}
           homeFare={homeRide.cost}
-          onHome={() => setTrip({ name: "Home", placeId: "home", ride: homeRide })}
+          onHome={() => {
+            const session = sessionOf(life);
+            if (session && (session.danced || session.bottles > 0 || session.spend >= 40)) {
+              endClubNight(true);
+              return;
+            }
+            setTrip({ name: "Home", placeId: "home", ride: homeRide });
+          }}
           onAct={(verb, person) => actHere(verb, person)}
           onPay={(person, amount, username) => paySomeone(person, amount, username)}
           onOpenChat={(username) => {
@@ -1337,6 +1380,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <button type="button" className={`w-full rounded-2xl bg-[#0e7c6b] px-3 py-2 text-left text-xs font-semibold text-white shadow ${phoneHint}`} onClick={() => (setPhoneApp("health"), setTab("phone"))}>
                 🤒 {sick.label}. Work pays half. Open Health on your phone.
               </button>
+            ) : null}
+            {!sick && hangoverActive(life) ? (
+              <p className={`w-full rounded-2xl bg-[#3b2a1a] px-3 py-2 text-left text-xs font-semibold text-[#f5d7a4] shadow ${phoneHint}`}>
+                Club hangover. Sleep clears it — or move slow till it fades.
+              </p>
             ) : null}
             <div className="flex flex-wrap gap-1.5">
               {extraHints ? (

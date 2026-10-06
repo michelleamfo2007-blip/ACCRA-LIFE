@@ -12,6 +12,7 @@ import {
   endBond,
   hostHome,
   invitePlayer,
+  inviteTable,
   leaveGroup,
   leaveSusu,
   paySusu,
@@ -117,6 +118,8 @@ export async function POST(request: Request) {
       return reply(await endBond(username));
     case "invite":
       return reply(await invitePlayer(username, handle(body?.to)));
+    case "invite-table":
+      return reply(await inviteTable(username, handle(body?.to), String(body?.spot ?? ""), String(body?.seatId ?? "")));
     case "block":
       return reply(await blockPlayer(username, handle(body?.to), true));
     case "unblock":

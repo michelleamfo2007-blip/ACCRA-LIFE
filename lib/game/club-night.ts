@@ -1,8 +1,18 @@
-import type { Verb } from "@/lib/game/world";
+import { cloneLife, spotById, type Life, type StepResult, type Verb } from "@/lib/game/world";
 
 /** Normal nightlife only — dance floor, bottle service, no sexualized content. */
 
 export type ClubState = "enter" | "bar" | "table" | "dance" | "watch" | "leave";
+
+export type ClubSession = {
+  spot: string;
+  state: ClubState;
+  bottles: number;
+  spend: number;
+  danced: boolean;
+  startedAt: number;
+  posted?: boolean;
+};
 
 export type Bottle = {
   id: string;
@@ -71,9 +81,11 @@ export function isNightlife(spotId: string, clubIds: Set<string>) {
 /** Lounges/bars that run the club system even if not in the hard club list. */
 export const NIGHT_LOUNGES = new Set(["bloom", "monsoon", "republic", "still", "plus233", "lizzys", "duncans"]);
 
-export function clubVerbs(spotId: string): Verb[] {
+export function clubVerbs(spotId: string, session?: ClubSession | null): Verb[] {
   const vip = spotId === "twist" || spotId === "duplex" || spotId === "one-percent" || spotId === "ace-tantra";
   const bottles = BOTTLES.filter((item) => (vip ? true : item.vibe !== "vip" || item.id === "club-ciroc"));
+  const atTable = session?.state === "table" || session?.state === "dance" || (session?.bottles ?? 0) > 0;
+  const deep = Boolean(session && (session.danced || session.bottles > 0 || session.spend >= 60));
   return [
     act({
       id: `club-dance-${spotId}`,
@@ -109,19 +121,45 @@ export function clubVerbs(spotId: string): Verb[] {
       social: true,
       emoji: "🪑",
     }),
-    ...bottles.map((bottle) =>
-      act({
-        id: bottle.id,
-        label: bottle.label,
-        detail: bottle.detail,
-        minutes: 70,
-        cost: bottle.cost,
-        effects: { fun: bottle.vibe === "vip" ? 40 : 22, social: bottle.vibe === "vip" ? 28 : 14, energy: -6 },
-        tag: "party",
-        social: true,
-        emoji: bottle.emoji,
-      }),
-    ),
+    ...(atTable
+      ? bottles.map((bottle) =>
+          act({
+            id: bottle.id,
+            label: bottle.label,
+            detail: bottle.detail,
+            minutes: 70,
+            cost: bottle.cost,
+            effects: { fun: bottle.vibe === "vip" ? 40 : 22, social: bottle.vibe === "vip" ? 28 : 14, energy: -6 },
+            tag: "party",
+            social: true,
+            emoji: bottle.emoji,
+          }),
+        )
+      : [
+          act({
+            id: `club-need-table-${spotId}`,
+            label: "Bottle service",
+            detail: "Take a table first. Then the waiter can walk a bottle in.",
+            minutes: 1,
+            cost: 0,
+            effects: {},
+            emoji: "🍾",
+          }),
+        ]),
+    ...(deep
+      ? [
+          act({
+            id: "club-leave",
+            label: "Call it a night",
+            detail: "Post the story, catch a ride, let tomorrow deal with the morning.",
+            minutes: 15,
+            cost: 0,
+            effects: { energy: -4 },
+            tag: "party",
+            emoji: "🚪",
+          }),
+        ]
+      : []),
   ];
 }
 
@@ -221,4 +259,79 @@ function hash(text: string) {
   let n = 0;
   for (let i = 0; i < text.length; i += 1) n = (n * 31 + text.charCodeAt(i)) | 0;
   return Math.abs(n);
+}
+
+export function sessionOf(life: Life): ClubSession | null {
+  const raw = life.club;
+  if (!raw) return null;
+  return {
+    spot: raw.spot,
+    state: (raw.state as ClubState) || "enter",
+    bottles: raw.bottles ?? 0,
+    spend: raw.spend ?? 0,
+    danced: Boolean(raw.danced),
+    startedAt: raw.startedAt,
+    posted: raw.posted,
+  };
+}
+
+export function sessionAfterVerb(session: ClubSession | null | undefined, verb: Verb, spotId: string, at: number): ClubSession {
+  const base: ClubSession = session?.spot === spotId
+    ? { ...session }
+    : { spot: spotId, state: "enter", bottles: 0, spend: 0, danced: false, startedAt: at };
+  if (verb.id.startsWith("club-bar") || /order at the bar/i.test(verb.label)) base.state = "bar";
+  else if (verb.id.startsWith("club-vip") || /take a (vip )?table/i.test(verb.label)) base.state = "table";
+  else if (verb.id.startsWith("club-dance") || /hit the floor/i.test(verb.label)) {
+    base.state = "dance";
+    base.danced = true;
+  } else if (isBottleVerb(verb)) {
+    base.state = "table";
+    base.bottles += 1;
+  }
+  base.spend += Math.max(0, verb.cost ?? 0);
+  return base;
+}
+
+export function clubNightLine(session: ClubSession) {
+  const place = spotById(session.spot).name;
+  if (session.bottles >= 2 && session.danced) return `${place}: bottles up, floor shaking.`;
+  if (session.bottles >= 1) return `${place}: the table is the show.`;
+  if (session.danced) return `${place}: you found the pocket.`;
+  if (session.state === "bar") return `${place}: holding the rail.`;
+  if (session.state === "table") return `${place}: seated, waiting on the next move.`;
+  return `${place}: just in.`;
+}
+
+/** End the night — hangover if it was heavy; caller may post clout when shouldPost. */
+export function leaveClubNight(life: Life): StepResult & { shouldPost?: boolean; place?: string } {
+  const session = sessionOf(life);
+  if (!session) return { life, notes: [] };
+  const next = cloneLife(life);
+  const heavy = session.bottles >= 1 || session.spend >= 120 || (session.danced && session.spend >= 40);
+  const shouldPost = !session.posted && (session.danced || session.bottles > 0);
+  const notes: string[] = [];
+  if (heavy) {
+    next.hangover = { until: next.minutes + 480 };
+    next.needs.energy = Math.max(0, next.needs.energy - 14);
+    next.needs.hygiene = Math.max(0, next.needs.hygiene - 8);
+    notes.push("Morning will hurt. Water, shade, and a slow start.");
+  } else {
+    notes.push("You leave before the night gets expensive.");
+  }
+  next.club = undefined;
+  next.stats = { ...(next.stats ?? {}), parties: (next.stats?.parties ?? 0) + (session.danced || session.bottles ? 1 : 0) };
+  const place = spotById(session.spot).name;
+  notes.unshift(session.bottles || session.danced ? `Night closed at ${place}.` : `You slide out of ${place}.`);
+  return { life: next, notes, shouldPost, place };
+}
+
+export function hangoverActive(life: Life) {
+  return Boolean(life.hangover && life.hangover.until > life.minutes);
+}
+
+export function clearHangover(life: Life): Life {
+  if (!life.hangover) return life;
+  const next = cloneLife(life);
+  next.hangover = null;
+  return next;
 }
