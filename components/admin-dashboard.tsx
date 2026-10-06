@@ -130,33 +130,37 @@ export function AdminDashboard() {
         {tab === "Overview" ? (
           <div className="space-y-6">
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Site users" value={data.stats.users} />
-              <Stat label="Game players" value={game?.stats.players ?? 0} />
-              <Stat label="Online now" value={game?.stats.online ?? 0} />
-              <Stat label="Houses started" value={game?.stats.withLife ?? 0} />
-              <Stat label="Places" value={data.stats.places} />
-              <Stat label="Events" value={data.stats.events} />
-              <Stat label="Reviews" value={data.stats.reviews} />
-              <Stat label="In queue" value={data.stats.pendingSubmissions} />
-              <Stat label="Open reports" value={data.stats.openReports} />
+              <Stat label="Site users" value={data.stats.users} onOpen={() => setTab("Users")} />
+              <Stat label="Game players" value={game?.stats.players ?? 0} onOpen={() => setTab("Players")} />
+              <Stat label="Online now" value={game?.stats.online ?? 0} onOpen={() => setTab("Players")} />
+              <Stat label="Houses started" value={game?.stats.withLife ?? 0} onOpen={() => setTab("Players")} />
+              <Stat label="Places" value={data.stats.places} onOpen={() => setTab("Places")} />
+              <Stat label="Events" value={data.stats.events} onOpen={() => setTab("Events")} />
+              <Stat label="Reviews" value={data.stats.reviews} onOpen={() => setTab("Reviews")} />
+              <Stat label="In queue" value={data.stats.pendingSubmissions} onOpen={() => setTab("Submissions")} />
+              <Stat label="Open reports" value={data.stats.openReports} onOpen={() => setTab("Reports")} />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               <Panel title="Most viewed places">
+                {data.mostViewed.length === 0 ? <Empty hint="No place views yet." /> : null}
                 {data.mostViewed.map((item) => (
                   <Row key={item.slug} label={item.name} value={String(item.views)} />
                 ))}
               </Panel>
               <Panel title="Most saved">
+                {data.mostSaved.length === 0 ? <Empty hint="No saves yet." /> : null}
                 {data.mostSaved.map((item) => (
                   <Row key={item.slug} label={item.name} value={String(item.saves)} />
                 ))}
               </Panel>
               <Panel title="Searches">
+                {data.topSearches.length === 0 ? <Empty hint="No searches yet." /> : null}
                 {data.topSearches.map((item) => (
                   <Row key={item.query} label={item.query} value={String(item.count)} />
                 ))}
               </Panel>
               <Panel title="Category interest">
+                {data.topCategories.length === 0 ? <Empty hint="No category views yet." /> : null}
                 {data.topCategories.map((item) => (
                   <Row key={item.name} label={item.name} value={String(item.views)} />
                 ))}
@@ -167,6 +171,7 @@ export function AdminDashboard() {
                 ))}
               </Panel>
               <Panel title="Event engagement">
+                {data.eventEngagement.length === 0 ? <Empty hint="No event views or tickets yet." /> : null}
                 {data.eventEngagement.map((item) => (
                   <Row key={item.name} label={item.name} value={`${item.views} views · ${item.reservations} tickets`} />
                 ))}
@@ -179,7 +184,7 @@ export function AdminDashboard() {
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-4">
               <Stat label="Accounts" value={game?.stats.players ?? 0} />
-              <Stat label="Online" value={game?.stats.online ?? 0} />
+              <Stat label="Online" value={game?.stats.online ?? 0} hint="Seen in the last 15 min" />
               <Stat label="With a life" value={game?.stats.withLife ?? 0} />
               <Stat label="Houses" value={game?.stats.houses ?? 0} />
             </div>
@@ -368,13 +373,23 @@ export function AdminDashboard() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[28px] border border-line bg-card p-5">
+function Stat({ label, value, onOpen, hint }: { label: string; value: number; onOpen?: () => void; hint?: string }) {
+  const body = (
+    <>
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">{label}</p>
       <p className="mt-2 font-display text-4xl">{value}</p>
-    </div>
+      {hint ? <p className="mt-1 text-[11px] text-muted">{hint}</p> : null}
+      {onOpen ? <p className="mt-2 text-[11px] font-semibold text-clay">Tap to open →</p> : null}
+    </>
   );
+  if (onOpen) {
+    return (
+      <button type="button" onClick={onOpen} className="rounded-[28px] border border-line bg-card p-5 text-left transition hover:border-clay/40 hover:shadow-sm active:scale-[0.99]">
+        {body}
+      </button>
+    );
+  }
+  return <div className="rounded-[28px] border border-line bg-card p-5">{body}</div>;
 }
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
@@ -384,6 +399,10 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
       <div className="mt-3 space-y-2">{children}</div>
     </div>
   );
+}
+
+function Empty({ hint }: { hint: string }) {
+  return <p className="text-sm text-muted">{hint}</p>;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

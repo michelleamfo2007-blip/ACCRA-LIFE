@@ -3,7 +3,6 @@ import { randomBytes } from "crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import path from "path";
 import { supabase } from "@/lib/server/supabase";
-import { seedEvents } from "@/lib/data/events";
 import { seedPlaces } from "@/lib/data/places";
 import { hashPassword } from "@/lib/server/password";
 import type { MediaAsset, Place, Report, Reservation, Review, Save, StoredEvent, Submission } from "@/lib/types";
@@ -43,20 +42,8 @@ function daysAgo(days: number) {
 }
 
 function seed(): Store {
-  const views: Record<string, number> = {};
-  for (const place of seedPlaces) views[`place:${place.slug}`] = place.views;
-  for (const event of seedEvents) views[`event:${event.slug}`] = event.views;
-  views["category:food-dining"] = 980;
-  views["category:nightlife"] = 860;
-  views["category:beaches-outdoors"] = 740;
-  views["category:events"] = 690;
-  views["category:date-ideas"] = 610;
-  views["area:osu"] = 1200;
-  views["area:labadi"] = 870;
-  views["area:east-legon"] = 640;
-
   return {
-    version: 1,
+    version: 2,
     users: [
       {
         id: "usr_admin",
@@ -75,11 +62,7 @@ function seed(): Store {
         createdAt: daysAgo(18),
       },
     ],
-    saves: [
-      { id: "sav_1", userId: "usr_ama", kind: "place", slug: "buka", createdAt: daysAgo(4) },
-      { id: "sav_2", userId: "usr_ama", kind: "place", slug: "skybar-25", createdAt: daysAgo(3) },
-      { id: "sav_3", userId: "usr_ama", kind: "event", slug: "afrobeats-night", createdAt: daysAgo(1) },
-    ],
+    saves: [],
     reviews: [
       {
         id: "rev_1",
@@ -226,22 +209,29 @@ function seed(): Store {
     customPlaces: [],
     customEvents: [],
     library: [],
-    views,
-    searches: {
-      "date night": 126,
-      osu: 118,
-      beach: 104,
-      brunch: 77,
-      cafes: 69,
-      nightlife: 91,
-      jollof: 58,
-      kokrobite: 63,
-    },
+    views: {},
+    searches: {},
   };
 }
 
+function migrate(store: Store) {
+  let changed = false;
+  if ((store.version ?? 1) < 2) {
+    store.version = 2;
+    store.views = {};
+    store.searches = {};
+    store.saves = (store.saves ?? []).filter((item) => !/^sav_\d+$/.test(item.id));
+    changed = true;
+  }
+  if (!Array.isArray(store.library)) {
+    store.library = [];
+    changed = true;
+  }
+  return { store, changed };
+}
+
 function remember(store: Store) {
-  if (!Array.isArray(store.library)) store.library = [];
+  migrate(store);
   cache = store;
   try {
     mkdirSync(path.dirname(file), { recursive: true });
@@ -255,7 +245,11 @@ function remember(store: Store) {
 function ensure() {
   if (cache) return cache;
   if (!existsSync(file)) return remember(seed());
-  return remember(JSON.parse(readFileSync(file, "utf8")) as Store);
+  const loaded = JSON.parse(readFileSync(file, "utf8")) as Store;
+  const { store, changed } = migrate(loaded);
+  remember(store);
+  if (changed) void pushStore(store);
+  return store;
 }
 
 export async function hydrateStore() {
@@ -264,7 +258,9 @@ export async function hydrateStore() {
   const { data, error } = await db.from("app_store").select("payload").eq("id", 1).maybeSingle();
   if (error) return;
   if (data?.payload && typeof data.payload === "object") {
-    remember(data.payload as Store);
+    const { store, changed } = migrate(data.payload as Store);
+    remember(store);
+    if (changed) await pushStore(store);
     return;
   }
   await db.from("app_store").upsert({ id: 1, payload: ensure(), updated_at: new Date().toISOString() });

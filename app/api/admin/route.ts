@@ -25,7 +25,7 @@ export async function GET() {
   const reservations = reservationCounts();
 
   const mostViewed = Object.entries(store.views)
-    .filter(([key]) => key.startsWith("place:"))
+    .filter(([key, views]) => key.startsWith("place:") && views > 0)
     .map(([key, views]) => {
       const slug = key.slice("place:".length);
       return { slug, name: places.find((place) => place.slug === slug)?.name ?? slug, views };
@@ -35,30 +35,35 @@ export async function GET() {
 
   const mostSaved = places
     .map((place) => ({ slug: place.slug, name: place.name, saves: saves.get(place.slug) ?? 0 }))
+    .filter((place) => place.saves > 0)
     .sort((a, b) => b.saves - a.saves)
     .slice(0, 5);
 
   const topSearches = Object.entries(store.searches)
+    .filter(([, count]) => count > 0)
     .map(([query, count]) => ({ query, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
   const topCategories = categories
     .map((category) => ({ name: category.name, views: store.views[`category:${category.slug}`] ?? 0 }))
+    .filter((category) => category.views > 0)
     .sort((a, b) => b.views - a.views)
     .slice(0, 6);
 
   const popularAreas = areas
     .map((area) => ({ name: area.name, count: places.filter((place) => place.area === area.slug).length }))
+    .filter((area) => area.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
   const eventEngagement = events
     .map((event) => ({
       name: event.name,
-      views: store.views[`event:${event.slug}`] ?? event.views,
+      views: store.views[`event:${event.slug}`] ?? 0,
       reservations: reservations.get(event.slug) ?? 0,
     }))
+    .filter((event) => event.views > 0 || event.reservations > 0)
     .sort((a, b) => b.views + b.reservations * 10 - (a.views + a.reservations * 10))
     .slice(0, 8);
 
