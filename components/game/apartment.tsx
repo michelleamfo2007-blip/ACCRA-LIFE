@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { Figure } from "@/components/game/low-poly-human";
@@ -38,7 +38,7 @@ export function Apartment({
       resize={{ scroll: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
-      <Aim />
+      <CameraRig />
       <color attach="background" args={[dark ? "#10131a" : "#d7e7f2"]} />
       <ambientLight intensity={dark ? 0.22 : 0.82} />
       <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : 0.95} />
@@ -81,19 +81,78 @@ export function Apartment({
   );
 }
 
-function Aim() {
-  const { camera, size } = useThree();
+function CameraRig() {
+  const { camera, gl, size } = useThree();
+  const pan = useRef({ x: 0, z: 0 });
+  const zoom = useRef(1);
+  useEffect(() => {
+    const el = gl.domElement;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    let moved = 0;
+    const down = (event: PointerEvent) => {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      el.setPointerCapture(event.pointerId);
+      moved = 0;
+    };
+    const move = (event: PointerEvent) => {
+      const prev = pointers.get(event.pointerId);
+      if (!prev) return;
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.size >= 2) {
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch > 0) zoom.current = clamp(zoom.current * (pinch / dist), 0.62, 1.7);
+        pinch = dist;
+        return;
+      }
+      const dx = event.clientX - prev.x;
+      const dy = event.clientY - prev.y;
+      moved += Math.abs(dx) + Math.abs(dy);
+      const step = 0.018 * zoom.current;
+      pan.current.x = clamp(pan.current.x - dx * step, -5.5, 5.5);
+      pan.current.z = clamp(pan.current.z + dy * step, -4.2, 4.2);
+    };
+    const up = (event: PointerEvent) => {
+      pointers.delete(event.pointerId);
+      if (pointers.size < 2) pinch = 0;
+      if (moved > 10) event.stopPropagation();
+    };
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      zoom.current = clamp(zoom.current * (event.deltaY > 0 ? 1.08 : 0.92), 0.62, 1.7);
+    };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up, true);
+    el.addEventListener("pointercancel", up, true);
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up, true);
+      el.removeEventListener("pointercancel", up, true);
+      el.removeEventListener("wheel", wheel);
+    };
+  }, [gl]);
   useFrame(() => {
     const aspect = size.width / Math.max(1, size.height);
     const phone = aspect < 0.8;
-    const distance = phone ? 36 : aspect < 1.15 ? 26 : 22;
+    const distance = (phone ? 36 : aspect < 1.15 ? 26 : 22) * zoom.current;
+    const lookX = pan.current.x;
+    const lookY = phone ? -1.8 : 0;
+    const lookZ = pan.current.z;
     const lens = camera as PerspectiveCamera;
-    lens.position.set(distance * 0.42, distance * 0.72, distance * 0.5);
+    lens.position.set(lookX + distance * 0.42, lookY + distance * 0.72, lookZ + distance * 0.5);
     lens.fov = phone ? 42 : 32;
-    lens.lookAt(0, phone ? -1.8 : 0, 0);
+    lens.lookAt(lookX, lookY, lookZ);
     lens.updateProjectionMatrix();
   });
   return null;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function Floor() {
