@@ -154,7 +154,7 @@ export function VenueFloor({
 
   return (
     <div className="relative h-full overflow-hidden" style={{ background: night ? "radial-gradient(circle at 50% 30%, #243044 0%, #12151c 70%)" : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)" }}>
-      <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 overflow-x-auto overflow-y-hidden overscroll-x-contain">
+      <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div ref={stage} onClick={tapFloor} className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer">
           <VenueScene spot={spot} night={night} kind={kind} party={party} />
           {staff.map((person) => (
@@ -236,7 +236,7 @@ export function VenueFloor({
       </div>
       <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">Tap to walk · swipe to look around</p>
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
-        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-30 rounded-3xl bg-white p-4 shadow-xl">
+        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-50 rounded-3xl bg-white p-4 shadow-xl">
           <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
           <p className="text-sm text-[#5c6b82]">{who.startsWith("party:") ? `Out at ${spot.name}. Not a player account.` : `Works at ${spot.name}. Not a player account.`}</p>
           <p className="mt-2 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-sm">{lines[0]?.text}</p>
@@ -259,7 +259,7 @@ export function VenueFloor({
         <button
           type="button"
           onClick={() => setPanel(true)}
-          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 flex items-center justify-between rounded-full bg-white px-4 py-3 text-left text-sm font-semibold shadow-xl sm:inset-x-3"
+          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 flex items-center justify-between rounded-full bg-white px-4 py-3 text-left text-sm font-semibold shadow-xl sm:inset-x-3"
         >
           <span className="truncate">
             {spot.emoji} {spot.name}
@@ -267,7 +267,7 @@ export function VenueFloor({
           <span className="shrink-0 text-[#006B3F]">What to do ▲</span>
         </button>
       ) : (
-        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
+        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 max-h-[min(40vh,22rem)] overflow-auto rounded-3xl bg-white p-3 shadow-xl sm:inset-x-3">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold">
               {spot.emoji} {spot.name}
@@ -400,7 +400,7 @@ function TalkSheet({
   const [amount, setAmount] = useState("20");
   const [receipt, setReceipt] = useState<string | null>(null);
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-4 shadow-[0_-16px_50px_rgba(22,32,60,.22)]">
+    <div className="absolute inset-x-0 bottom-0 z-50 max-h-[62vh] overflow-auto rounded-t-[28px] bg-white p-4 shadow-[0_-16px_50px_rgba(22,32,60,.22)]">
       <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d5dbe6]" />
       <div className="flex items-center gap-3">
         <span className="grid h-11 w-11 place-items-center rounded-full bg-[#f3d7e4] text-lg font-bold">{person.slice(0, 1)}</span>
