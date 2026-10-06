@@ -132,7 +132,7 @@ export function AdminDashboard() {
             <div className="grid gap-3 sm:grid-cols-3">
               <Stat label="Site users" value={data.stats.users} onOpen={() => setTab("Users")} />
               <Stat label="Game players" value={game?.stats.players ?? 0} onOpen={() => setTab("Players")} />
-              <Stat label="Online now" value={game?.stats.online ?? 0} onOpen={() => setTab("Players")} />
+              <Stat label="Online now" value={game?.stats.online ?? 0} hint="Seen in the last 15 min" onOpen={() => setTab("Players")} />
               <Stat label="Houses started" value={game?.stats.withLife ?? 0} onOpen={() => setTab("Players")} />
               <Stat label="Places" value={data.stats.places} onOpen={() => setTab("Places")} />
               <Stat label="Events" value={data.stats.events} onOpen={() => setTab("Events")} />

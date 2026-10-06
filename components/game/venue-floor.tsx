@@ -297,7 +297,7 @@ export function VenueFloor({
         <button
           type="button"
           onClick={() => setPanel(true)}
-          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 flex items-center justify-between rounded-[28px] bg-white px-4 py-3 text-left text-sm font-semibold shadow-[0_-10px_30px_rgba(15,20,40,.22)] sm:inset-x-3"
+          className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 flex items-center justify-between rounded-[28px] bg-white px-4 py-3 text-left text-sm font-semibold shadow-[0_-10px_30px_rgba(15,20,40,.22)] sm:inset-x-3"
         >
           <span className="truncate">
             {spot.emoji} {spot.name}
@@ -306,7 +306,7 @@ export function VenueFloor({
           <span className="shrink-0 text-[#006B3F]">▲</span>
         </button>
       ) : (
-        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-50 max-h-[min(46vh,26rem)] overflow-auto rounded-[28px] bg-white p-3.5 shadow-[0_-14px_44px_rgba(15,20,40,.28)] sm:inset-x-3 sm:p-4">
+        <div className="absolute inset-x-2 bottom-[max(4.75rem,env(safe-area-inset-bottom))] z-30 max-h-[min(46vh,26rem)] overflow-auto rounded-[28px] bg-white p-3.5 shadow-[0_-14px_44px_rgba(15,20,40,.28)] sm:inset-x-3 sm:p-4">
           <div className="flex items-start gap-2">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f4f7fb] text-xl">{spot.emoji}</span>
             <span className="min-w-0 flex-1">

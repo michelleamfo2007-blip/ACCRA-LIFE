@@ -440,6 +440,7 @@ function Guest({
   const [boards, setBoards] = useState(true);
   const [spotId, setSpotId] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState(false);
+  const crowd = useCityCrowd();
   const headline = useCityHeadline();
   const spot = SPOTS.find((item) => item.id === spotId) ?? null;
 
@@ -459,7 +460,7 @@ function Guest({
           setSpotId(id);
         }}
       />
-      <TopBrand onSignup={() => onAuth("signup")} onLogin={() => onAuth("login")} />
+      <TopBrand crowd={crowd} onSignup={() => onAuth("signup")} onLogin={() => onAuth("login")} />
       <div className="absolute left-1/2 top-[4.6rem] z-20 flex max-w-[96vw] -translate-x-1/2 flex-wrap justify-center gap-2">
         <LayerChip active={filter === "all"} onClick={() => setFilter("all")}>
           Free road
@@ -496,7 +497,7 @@ function Guest({
                 <span key={color} className="h-8 w-8 rounded-full border-2 border-white" style={{ background: color }} />
               ))}
             </div>
-            <p className="text-sm font-semibold">Live your Accra story · free</p>
+            <p className="text-sm font-semibold">{crowd.online.toLocaleString("en-GH")} online · free to join</p>
           </div>
           <div className="grid grid-cols-[1.4fr_.8fr] gap-2">
             <button type="button" onClick={() => onAuth("signup")} className="rounded-full bg-[#006B3F] py-3.5 text-base font-bold text-white">
@@ -2042,10 +2043,11 @@ function tagsFor(verb: Verb) {
   return tags;
 }
 
-function TopBrand({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => void }) {
+function TopBrand({ crowd, onSignup, onLogin }: { crowd: { players: number; online: number }; onSignup: () => void; onLogin: () => void }) {
   return (
     <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg">
       <span className="font-display text-lg tracking-tight">Accra Life</span>
+      {crowd.online > 0 ? <span className="text-xs font-semibold text-[#006B3F]">● {crowd.online.toLocaleString("en-GH")} online</span> : null}
       <span className="ml-auto flex gap-2">
         <button type="button" onClick={onSignup} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-sm font-bold text-white">
           Sign up
@@ -2060,14 +2062,19 @@ function TopBrand({ onSignup, onLogin }: { onSignup: () => void; onLogin: () => 
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="absolute inset-x-0 bottom-0 z-40 max-h-[78vh] overflow-auto rounded-t-[28px] bg-white p-5 shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-2xl">{title}</h2>
-        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-[#fff1c9]" aria-label="Close">
-          ×
-        </button>
+    <div className="absolute inset-0 z-[55] flex flex-col justify-end bg-black/35" onClick={onClose}>
+      <div
+        className="max-h-[78vh] overflow-auto rounded-t-[28px] bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-2xl">{title}</h2>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-[#fff1c9]" aria-label="Close">
+            ×
+          </button>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   );
 }
