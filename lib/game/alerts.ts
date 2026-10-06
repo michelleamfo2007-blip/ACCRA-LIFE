@@ -5,12 +5,23 @@ import { eggsDue, hungry, kidReady, starving } from "@/lib/game/pets";
 import { storyReady } from "@/lib/game/story";
 import { tillOf } from "@/lib/game/trade";
 import { TILL_HOURS } from "@/lib/game/biz-table";
-import { cedis, type Life } from "@/lib/game/world";
+import { SERVE_HOURS, salesOf } from "@/lib/game/kitchen";
+import { checkInReward, checkedIn, weeklyNow } from "@/lib/game/weekly";
+import { cedis, spotById, type Life } from "@/lib/game/world";
 
 export type Alert = { id: string; emoji: string; text: string; app: string; urgent?: boolean };
 
 export function alertsFor(life: Life): Alert[] {
   const list: Alert[] = [];
+  const at = new Date(life.minutes * 60000);
+  const live = weeklyNow(at);
+  if (live && !checkedIn(life, live.key)) list.push({ id: `weekly-${live.key}`, emoji: live.event.emoji, text: `${live.event.title} is on at ${spotById(live.event.spot).name}. Check in for ${cedis(checkInReward(life, at))}.`, app: "calendar", urgent: true });
+  if (life.chop) {
+    const sales = salesOf(life);
+    if (life.chop.menu.length && life.chop.menu.every((item) => (life.chop!.stock[item.dish] ?? 0) <= (sales.sold[item.dish] ?? 0))) list.push({ id: "chop-empty", emoji: "🍲", text: `${life.chop.name} has run out of food. Cook a batch.`, app: "chop", urgent: true });
+    if (life.minutes - life.chop.lastServe >= SERVE_HOURS * 60) list.push({ id: "chop-full", emoji: "🍲", text: `${life.chop.name} has a full day of takings. Collect before customers stop counting.`, app: "chop" });
+    else if (sales.revenue >= 150) list.push({ id: "chop-cash", emoji: "🍲", text: `${life.chop.name} has ${cedis(sales.revenue)} in the tin.`, app: "chop" });
+  }
   const pets = life.pets ?? [];
   const starved = pets.filter((pet) => starving(life, pet));
   if (starved.length) list.push({ id: "pets-starving", emoji: "🐾", text: `${starved.map((pet) => pet.name).join(", ")} will wander off soon. Feed them.`, app: "pets", urgent: true });

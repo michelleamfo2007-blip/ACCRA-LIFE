@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
-import { COURSES, STUDIO_FEE, attendClass, classWait, collectRoyalties, courseOf, enrolCourse, gigWait, playGig, recordSong, recordWait, royaltiesDue, streamsOf, tierOf } from "@/lib/game/career";
+import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
 import { CROPS, LAND, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, collectRent, cropOf, farmSize, goToCourt, harvestBed, landOf, payGuards, plantCrop, plotsOf, rentDue, sellPlot, stageCost, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
 import { CARS, INSURANCE, buyCar, carOf, driveHail, fillCost, fillUp, hailWait, insureCar, sellCar, tradeIn } from "@/lib/game/garage";
@@ -266,9 +266,11 @@ export function FamilyApp({ life, married, onBack, onApply }: { life: Life; marr
   );
 }
 
-export function StudioApp({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: Apply }) {
+export function StudioApp({ life, onBack, onApply, onGo }: { life: Life; onBack: () => void; onApply: Apply; onGo?: (spot: string) => void }) {
   const music = life.music ?? { songs: [], fans: 0 };
   const [title, setTitle] = useState("");
+  const [ticket, setTicket] = useState(TICKETS[1]);
+  const showGap = showWait(life);
   const studio = recordWait(life);
   const voice = gigWait(life);
   const due = royaltiesDue(life);
@@ -304,14 +306,63 @@ export function StudioApp({ life, onBack, onApply }: { life: Life; onBack: () =>
           </Btn>
         </div>
       </Card>
+      <Card>
+        <p className="font-semibold">🎤 Headline a show</p>
+        <p className="mt-1 text-xs text-[#5c6b82]">
+          Hire a venue, set the ticket price and play your setlist. You keep {Math.round(SHOW_CUT * 100)}% of the door after the promoter. Be at the venue to start. {showGap > 0 ? `The band rests for ${wait(showGap)}.` : `${music.shows ?? 0} shows so far.`}
+        </p>
+        <div className="mt-2 flex gap-1.5">
+          {TICKETS.map((price) => (
+            <button key={price} type="button" onClick={() => setTicket(price)} className={`flex-1 rounded-full px-2 py-1.5 text-xs font-bold ${ticket === price ? "bg-[#3b1f5c] text-white" : "bg-[#f4f7fb]"}`}>
+              {cedis(price)} ticket
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {VENUES.map((venue) => {
+            const locked = music.fans < venue.minFans;
+            const here = life.where === venue.id;
+            const crowd = crowdFor(life, venue, ticket);
+            return (
+              <div key={venue.id} className="flex items-center gap-2 rounded-2xl bg-[#f6f1fb] px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{venue.label}</span>
+                  <span className="block text-[11px] text-[#5c6b82]">
+                    {locked ? `Needs ${venue.minFans.toLocaleString("en-GH")} fans` : `Hire ${cedis(venue.hire)} · about ${crowd.toLocaleString("en-GH")} of ${venue.capacity.toLocaleString("en-GH")}`}
+                  </span>
+                </span>
+                {here ? (
+                  <Btn kind="gold" disabled={locked || showGap > 0 || !music.songs.length || life.cash < venue.hire} onClick={() => onApply(holdShow(life, venue.id, ticket))}>
+                    Play
+                  </Btn>
+                ) : onGo ? (
+                  <Btn kind="light" disabled={locked} onClick={() => onGo(venue.id)}>
+                    Go
+                  </Btn>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
       {music.songs.length ? <Label>YOUR SONGS</Label> : null}
       {music.songs.map((song) => (
-        <p key={song.id} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm shadow-sm">
-          <span className="min-w-0 truncate font-semibold">{song.title}</span>
-          <span className="shrink-0 text-xs text-[#5c6b82]">
-            {streamsOf(song, life.minutes, music.fans).toLocaleString("en-GH")} streams · {song.quality}/100
+        <div key={song.id} className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm shadow-sm">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold">
+              {song.video ? "🎬 " : ""}
+              {song.title}
+            </span>
+            <span className="block text-xs text-[#5c6b82]">
+              {streamsOf(song, life.minutes, music.fans).toLocaleString("en-GH")} streams · {song.quality}/100
+            </span>
           </span>
-        </p>
+          {song.video ? null : (
+            <Btn kind="light" disabled={life.cash < VIDEO_FEE} onClick={() => onApply(shootVideo(life, song.id))}>
+              🎬 Video {cedis(VIDEO_FEE)}
+            </Btn>
+          )}
+        </div>
       ))}
     </Screen>
   );

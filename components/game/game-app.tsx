@@ -22,6 +22,9 @@ import { dressedFor } from "@/lib/game/tailor";
 import { CODE_LABEL, EVENT_INFO, type HostHome, type LifeEvent, type Match } from "@/lib/game/net";
 import { alertsFor } from "@/lib/game/alerts";
 import { claimGuide, guideNext } from "@/lib/game/guide";
+import { PlayerChops, WeeklyCard } from "@/components/game/city-apps";
+import { chopSign } from "@/lib/game/kitchen";
+import { checkIn } from "@/lib/game/weekly";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -44,6 +47,8 @@ import {
   cedis,
   CLOTHES,
   clockLabel,
+  distanceOf,
+  farRide,
   freshLife,
   gemSpotId,
   giftCash,
@@ -138,6 +143,25 @@ function useAlertPings(life: Life | null, onPing: (text: string) => void) {
     ping.current(`${fresh.emoji} ${fresh.text}`);
     notify("Accra Life", fresh.text, fresh.id);
   }, [life]);
+}
+
+function useChopSign(on: boolean, life: Life | null) {
+  const sign = life ? chopSign(life) : null;
+  const chop = life?.chop;
+  const payload = sign && chop ? JSON.stringify({ name: sign.name, spot: sign.spot, menu: chop.menu, stock: Object.fromEntries(sign.menu.map((item) => [item.dish, 1])) }) : "null";
+  const sent = useRef("null");
+  useEffect(() => {
+    if (!on || payload === sent.current) return;
+    const id = window.setTimeout(() => {
+      sent.current = payload;
+      void fetch("/api/live/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "chop-publish", life: { cash: 0, chop: JSON.parse(payload) } }),
+      }).catch(() => undefined);
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, [on, payload]);
 }
 
 function useTurnPings(username: string, on: boolean, onPing: (text: string) => void) {
@@ -887,6 +911,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [phoneApp, setPhoneApp] = useState<string | null>(null);
   useAlertPings(life, flash);
   useTurnPings(account.username, Boolean(account.cloud), flash);
+  useChopSign(Boolean(account.cloud), life);
   const inbox = useInbox(account.username, Boolean(account.cloud), (next) => {
     setPing(next);
     window.setTimeout(() => setPing((current) => (current?.at === next.at ? null : current)), 6000);
@@ -919,7 +944,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const car = carRide(life);
   const sick = sickness(life);
   const guide = guideNext(life);
-  const homeRide = car && (life.car?.fuel ?? 0) >= 6 ? car : rideIn(RIDES[1], city.weather);
+  const homeRide = farRide(car && (life.car?.fuel ?? 0) >= 6 ? car : rideIn(RIDES[1], city.weather), life.where, "home");
 
   function apply(result: StepResult) {
     if (result.error) {
@@ -1092,7 +1117,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setChatLaunch({ id: `user:${username}` });
             setTab("phone");
           }}
-        />
+        >
+          <WeeklyCard life={life} spotId={life.where} here cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
+          <PlayerChops spotId={life.where} here cloud={Boolean(account.cloud)} onNet={netAction} />
+        </VenueFloor>
       ) : (
         <div className="h-full bg-[#fff6df]" />
       )}
@@ -1229,6 +1257,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <LayerChip active={filter === "civic"} onClick={() => setFilter("civic")}>
                 Gov
               </LayerChip>
+              <LayerChip active={filter === "work"} onClick={() => setFilter("work")}>
+                Work
+              </LayerChip>
+              <LayerChip active={filter === "trip"} onClick={() => setFilter("trip")}>
+                Day trips
+              </LayerChip>
             </div>
           ) : null}
           <button type="button" className="absolute bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] left-2 z-20 flex items-center gap-2 rounded-full bg-white p-1 shadow-lg sm:bottom-[max(6.5rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:left-3 sm:p-1.5" onClick={() => setNeedsOpen(true)} aria-label="Open needs">
@@ -1316,6 +1350,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       {place && tab === "map" ? (
         <PlaceSheet
           place={place}
+          from={life.where}
           here={life.where === place.id}
           people={sheetPeople.map((person) => person.name)}
           rideId={rideId}
@@ -1325,7 +1360,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onRide={setRideId}
           onClose={() => setPlaceId(null)}
           onGo={() => {
-            const ride = rideIn([...RIDES, ...(car ? [car] : [])].find((item) => item.id === rideId) ?? RIDES[1], city.weather);
+            const ride = farRide(rideIn([...RIDES, ...(car ? [car] : [])].find((item) => item.id === rideId) ?? RIDES[1], city.weather), life.where, place.id);
             if (ride.blocked) {
               flash(ride.blocked);
               return;
@@ -1341,7 +1376,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             apply(payOffer(life, verb, offerFrom(verb), place.id));
           }}
           onGem={gemSpotId(life.minutes) === place.id ? () => apply(huntGem(life)) : null}
-        />
+        >
+          <WeeklyCard life={life} spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
+          <PlayerChops spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onNet={netAction} />
+        </PlaceSheet>
       ) : null}
       {doOpen ? (
         <DoSheet
@@ -1730,6 +1768,7 @@ function DoSheet({ name, look, onClose, onPick }: { name: string; look: Look; on
 
 function PlaceSheet({
   place,
+  from,
   here,
   people,
   rideId,
@@ -1741,8 +1780,11 @@ function PlaceSheet({
   onGo,
   onAct,
   onGem,
+  children,
 }: {
+  children?: ReactNode;
   place: Spot;
+  from: string;
   here: boolean;
   people: string[];
   rideId: (typeof RIDES)[number]["id"];
@@ -1756,7 +1798,8 @@ function PlaceSheet({
   onGem: (() => void) | null;
 }) {
   const rides = car ? [...RIDES, car] : RIDES;
-  const ride = rideIn(rides.find((item) => item.id === rideId) ?? RIDES[1], sky);
+  const ride = farRide(rideIn(rides.find((item) => item.id === rideId) ?? RIDES[1], sky), from, place.id);
+  const far = distanceOf(from, place.id);
   const area = areaOf(place);
   const blurb = place.blurb.startsWith(`${area}.`) ? place.blurb.slice(area.length + 1).trim() : place.blurb;
   const [copied, setCopied] = useState(false);
@@ -1791,6 +1834,7 @@ function PlaceSheet({
         </svg>
         {copied ? "Link copied" : `Share a link to ${place.name}`}
       </button>
+      {children}
       <ActionDeck verbs={[...extra, ...place.actions]} here={here} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
       {onGem ? (
         <button type="button" onClick={onGem} className="mt-2 rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
@@ -1813,7 +1857,7 @@ function PlaceSheet({
         <>
           <div className={`mt-4 grid gap-1.5 ${car ? "grid-cols-6" : "grid-cols-5"}`}>
             {rides.map((base) => {
-              const item = rideIn(base, sky);
+              const item = farRide(rideIn(base, sky), from, place.id);
               return (
                 <button
                   key={item.id}
@@ -1824,14 +1868,15 @@ function PlaceSheet({
                 >
                   <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "train" ? "🚆" : item.id === "okada" ? "🏍️" : item.id === "car" ? "🚗" : "🚕"}</span>
                   <span className="mt-1 block text-sm font-semibold">{item.label}</span>
-                  <span className={`block text-xs ${item.note ? "font-semibold text-[#1f4e79]" : "text-[#5c6b82]"}`}>{item.blocked ? "Parked" : item.cost ? cedis(item.cost) : item.id === "car" ? "Fuel" : "Free"}</span>
+                  <span className={`block text-xs ${item.note ? "font-semibold text-[#1f4e79]" : "text-[#5c6b82]"}`}>{item.blocked ? (far ? "Too far" : "Parked") : item.cost ? cedis(item.cost) : item.id === "car" ? "Fuel" : "Free"}</span>
                 </button>
               );
             })}
           </div>
-          {sky.rain ? <p className="mt-2 text-xs font-semibold text-[#1f4e79]">🌧️ {sky.label} Roads are slow. The train runs on time.</p> : null}
+          {far ? <p className="mt-2 text-xs font-semibold text-[#7a3b0c]">🛣️ Out of town. About {Math.round(far / 60)}h on the intercity bus, a bit faster by taxi or your own car.</p> : null}
+          {sky.rain && !far ? <p className="mt-2 text-xs font-semibold text-[#1f4e79]">🌧️ {sky.label} Roads are slow. The train runs on time.</p> : null}
           <button type="button" onClick={onGo} disabled={Boolean(ride.blocked)} className="mt-3 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white disabled:opacity-40">
-            {ride.blocked ? ride.blocked : `Go · ${ride.cost ? cedis(ride.cost) : "Free"} · ${ride.minutes}m`}
+            {ride.blocked ? ride.blocked : `Go · ${ride.cost ? cedis(ride.cost) : "Free"} · ${ride.minutes >= 90 ? `${Math.floor(ride.minutes / 60)}h ${ride.minutes % 60 ? `${ride.minutes % 60}m` : ""}`.trim() : `${ride.minutes}m`}`}
           </button>
         </>
       )}

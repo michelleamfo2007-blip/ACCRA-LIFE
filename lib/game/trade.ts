@@ -95,12 +95,26 @@ export const GOODS: Good[] = [
   { id: "garden-eggs", label: "Garden eggs", emoji: "🍆", base: 26, food: true, farm: true },
   { id: "plantain", label: "Bunch of plantain", emoji: "🍌", base: 45, food: true, farm: true },
   { id: "eggs", label: "Tray of eggs", emoji: "🥚", base: 38, food: true, farm: true },
+  { id: "rice", label: "Bag of rice", emoji: "🍚", base: 90, food: true },
+  { id: "bale", label: "Bale of second-hand clothes", emoji: "👕", base: 160 },
+  { id: "fish", label: "Smoked fish", emoji: "🐟", base: 45, food: true },
 ];
 
 export const BAG_LIMIT = 10;
 
-const SUPPLY = new Set(["makola", "osu-night-market"]);
-const RICH = new Set(["mall", "hotel", "kempinski", "movenpick", "polo-club", "golf", "skybar25", "mad-club"]);
+type Supply = { factor: number; goods?: string[]; food?: boolean };
+
+const SUPPLY: Record<string, Supply> = {
+  makola: { factor: 0.68, goods: ["tomatoes", "shito", "shea", "cases", "ankara", "kente", "rice"] },
+  "osu-night-market": { factor: 0.82, goods: ["tomatoes", "shito", "shea"] },
+  "kaneshie-market": { factor: 0.7, goods: ["tomatoes", "shito", "shea", "rice"] },
+  madina: { factor: 0.76, goods: ["tomatoes", "shito", "shea", "rice"] },
+  kantamanto: { factor: 0.62, goods: ["bale", "ankara", "cases"] },
+  tema: { factor: 0.6, goods: ["rice", "cases", "bale"] },
+  elmina: { factor: 0.55, goods: ["fish"] },
+};
+
+const RICH = new Set(["mall", "hotel", "kempinski", "movenpick", "polo-club", "golf", "skybar25", "mad-club", "spintex"]);
 
 function seed(text: string) {
   let hash = 2166136261;
@@ -116,17 +130,19 @@ function today(life: Life) {
 }
 
 export function isSupply(spotId: string) {
-  return SUPPLY.has(spotId);
+  return spotId in SUPPLY;
 }
 
 export function buyPrice(good: Good, spotId: string, day: number) {
-  if (good.farm || !SUPPLY.has(spotId) || (spotId !== "makola" && !good.food)) return null;
-  const factor = (spotId === "makola" ? 0.68 : 0.82) + seed(`buy-${good.id}-${spotId}-${day}`) * 0.14;
+  const supply = SUPPLY[spotId];
+  if (good.farm || !supply) return null;
+  if (supply.goods ? !supply.goods.includes(good.id) : supply.food && !good.food) return null;
+  const factor = supply.factor + seed(`buy-${good.id}-${spotId}-${day}`) * 0.14;
   return Math.max(1, Math.round(good.base * factor));
 }
 
 export function sellPrice(life: Life, good: Good, spotId: string) {
-  if (spotId === "home" || SUPPLY.has(spotId)) return null;
+  if (spotId === "home" || spotId in SUPPLY) return null;
   const day = today(life);
   const factor = 0.86 + seed(`sell-${good.id}-${spotId}-${day}`) * 0.32 + (RICH.has(spotId) && !good.food ? 0.08 : 0);
   const sold = life.soldToday?.day === day ? (life.soldToday.spots[spotId] ?? 0) : 0;
@@ -141,7 +157,7 @@ export function bagCount(life: Life) {
 export function buyGood(life: Life, goodId: string): StepResult {
   const good = GOODS.find((item) => item.id === goodId);
   const price = good ? buyPrice(good, life.where, today(life)) : null;
-  if (!good || price == null) return { life, notes: [], error: "Nobody sells that here. Try Makola." };
+        if (!good || price == null) return { life, notes: [], error: "Nobody sells that here. Try another market." };
   if (bagCount(life) >= BAG_LIMIT) return { life, notes: [], error: `Your bag holds ${BAG_LIMIT}. Sell something first.` };
   if (life.cash < price) return { life, notes: [], error: `You need ${cedis(price)}.` };
   const next = copy(life);

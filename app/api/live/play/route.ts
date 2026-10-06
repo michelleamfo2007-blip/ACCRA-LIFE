@@ -25,6 +25,7 @@ import {
   shareCrewBank,
 } from "@/lib/server/play";
 import { CLOUD_COOKIE, readSessionToken } from "@/lib/server/session";
+import { chartView, chopsAt, claimChart, eatAtChop, publishChop, weeklyView } from "@/lib/server/city";
 import {
   buyListing,
   cancelListing,
@@ -105,6 +106,12 @@ export async function GET(request: Request) {
   if (view === "market") return NextResponse.json(await marketView(username));
   if (view === "fc") return NextResponse.json({ matches: await fcView(username) });
   if (view === "election") return NextResponse.json(await electionView(username));
+  if (view === "chart") return NextResponse.json(await chartView(username));
+  if (view === "weekly") return NextResponse.json(await weeklyView());
+  if (view === "chops") {
+    const spot = String(new URL(request.url).searchParams.get("spot") ?? "").slice(0, 40);
+    return NextResponse.json({ spot, chops: await chopsAt(username, spot) });
+  }
   return reply("Unknown view.");
 }
 
@@ -176,6 +183,12 @@ export async function POST(request: Request) {
       return reply(await castVote(username, handle(body?.to)));
     case "vote-stipend":
       return reply(await claimStipend(username));
+    case "chart-claim":
+      return reply(await claimChart(username));
+    case "chop-publish":
+      return life ? reply(await publishChop(username, life)) : reply("Log in again.");
+    case "chop-eat":
+      return life && HANDLE.test(handle(body?.owner)) ? done(await eatAtChop(username, handle(body?.owner), String(body?.dish ?? "").slice(0, 20), life)) : reply("That chop bar is closed.");
     default:
       return reply("Unknown action.");
   }

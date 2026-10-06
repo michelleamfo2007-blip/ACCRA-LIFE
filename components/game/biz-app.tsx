@@ -80,7 +80,7 @@ export function BizApp({ life, onBack, onApply }: { life: Life; onBack: () => vo
             );
           })
         ) : (
-          <p className="text-sm text-[#5c6b82]">Empty. Buy goods cheap at Makola Market and sell them at other spots across town.</p>
+          <p className="text-sm text-[#5c6b82]">Empty. Buy goods cheap at a market (Makola, Kaneshie, Madina, Kantamanto, Tema Port, Elmina) and sell them at other spots across town.</p>
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { ACCRA_SPOTS } from "@/lib/game/accra-spots";
+import { MORE_SPOTS, TRIP_IDS } from "@/lib/game/more-spots";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
 
@@ -84,6 +85,23 @@ export type Life = {
   community?: Community;
   guide?: string[];
   seenParcels?: string[];
+  stamps?: string[];
+  checkins?: string[];
+  weekly?: { week: number; streak: number; count: number };
+  chop?: ChopBar | null;
+};
+
+export type ChopBar = {
+  name: string;
+  spot: string;
+  openedAt: number;
+  menu: { dish: string; price: number }[];
+  stock: Record<string, number>;
+  cooks: { id: string; name: string; hired: number }[];
+  lastServe: number;
+  lastWages: number;
+  rating: number;
+  served: number;
 };
 
 export type Bank = { savings: number; lastInterest: number; loan: number; loanDue: number; score: number };
@@ -95,8 +113,8 @@ export type Community = { faith?: "church" | "mosque" | null; standing: number; 
 
 export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
-export type Song = { id: string; title: string; at: number; quality: number; paid: number };
-export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number };
+export type Song = { id: string; title: string; at: number; quality: number; paid: number; video?: boolean };
+export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number; lastShow?: number; shows?: number };
 export type Schooling = { certs: string[]; course?: string | null; done?: number; lastClass?: number };
 export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number };
 export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
@@ -157,9 +175,10 @@ export type Spot = {
   emoji: string;
   x: number;
   y: number;
-  group: "home" | "hang" | "sea" | "civic" | "work" | "soon";
+  group: "home" | "hang" | "sea" | "civic" | "work" | "trip" | "soon";
   blurb: string;
   soon?: boolean;
+  far?: number;
   actions: Verb[];
 };
 
@@ -403,6 +422,18 @@ export const JOBS: { id: string; place: string; title: string; verb: Verb }[] = 
     place: "joy",
     title: "Joy FM runner",
     verb: eat({ id: "job-joy", label: "Studio runner", detail: "Cues, water, and standing very still while the mics are hot.", minutes: 240, earn: 90, effects: { energy: -16, fun: 8 }, skill: "music", job: true }),
+  },
+  {
+    id: "kotoka-crew",
+    place: "kotoka",
+    title: "Kotoka ground crew",
+    verb: eat({ id: "job-kotoka", label: "Ground crew shift", detail: "Hi-vis vest, ear defenders, and suitcases that weigh more than they should.", minutes: 300, earn: 110, effects: { energy: -26, hunger: -12, hygiene: -10 }, skill: "career", job: true }),
+  },
+  {
+    id: "tema-dock",
+    place: "tema",
+    title: "Tema dockhand",
+    verb: eat({ id: "job-tema", label: "Dock shift", detail: "Lashing containers while the cranes swing overhead.", minutes: 300, earn: 95, effects: { energy: -30, hunger: -14, hygiene: -14 }, skill: "fitness", job: true }),
   },
 ];
 
@@ -764,8 +795,7 @@ export const SPOTS: Spot[] = [
     ],
   },
   ...ACCRA_SPOTS,
-  { id: "kotoka", name: "Kotoka Airport", emoji: "✈️", x: 180, y: 520, group: "soon", blurb: "Coming soon.", soon: true, actions: [] },
-  { id: "tema", name: "Tema Port", emoji: "🚢", x: 140, y: 1160, group: "soon", blurb: "Coming soon.", soon: true, actions: [] },
+  ...MORE_SPOTS,
 ];
 
 export const SHOP_CATEGORIES = [
@@ -1262,20 +1292,54 @@ export const RIDES: Ride[] = [
   { id: "taxi", label: "Taxi", cost: 28, minutes: 12 },
 ];
 
-export function goTo(life: Life, placeId: string, ride: Ride = RIDES[1]): StepResult {
+export const STAMP_BONUS = 300;
+
+export function distanceOf(from: string, to: string) {
+  return Math.max(spotById(from).far ?? 0, spotById(to).far ?? 0);
+}
+
+export function farRide<T extends Ride>(ride: T, from: string, to: string): T & { blocked?: string; fuel?: number } {
+  const far = from === to ? 0 : distanceOf(from, to);
+  if (!far) return ride;
+  if (ride.id === "trek") return { ...ride, blocked: "Too far to walk. Take a trotro or a taxi." };
+  if (ride.id === "okada") return { ...ride, blocked: "Okada riders do not go out of town." };
+  if (ride.id === "train") return { ...ride, blocked: "No train runs that way yet." };
+  if (ride.id === "taxi") return { ...ride, label: "Taxi", cost: Math.round(far * 1.6), minutes: Math.round(far * 0.75) };
+  if (ride.id === "car") return { ...ride, cost: 0, minutes: Math.round(far * 0.8), fuel: FUEL_PER_TRIP * Math.ceil(far / 45) };
+  return { ...ride, label: "Intercity bus", cost: Math.round(far / 3), minutes: far };
+}
+
+function stampTrip(life: Life, placeId: string, notes: string[]) {
+  if (!TRIP_IDS.includes(placeId) || (life.stamps ?? []).includes(placeId)) return;
+  life.stamps = [...(life.stamps ?? []), placeId];
+  const got = TRIP_IDS.filter((id) => life.stamps!.includes(id)).length;
+  notes.push(`New stamp in your travel book: ${spotById(placeId).name} (${got}/${TRIP_IDS.length}).`);
+  if (got === TRIP_IDS.length) {
+    life.cash += STAMP_BONUS;
+    const line = `Travel book complete. You have seen Ghana beyond Accra. +${cedis(STAMP_BONUS)}.`;
+    notes.push(line);
+    pushLog(life, line);
+  }
+}
+
+export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepResult {
   if (life.where === placeId) return { life, notes: [] };
+  const ride = farRide(base, life.where, placeId);
+  if (ride.blocked) return { life, notes: [], error: ride.blocked };
+  const fuel = ride.fuel ?? FUEL_PER_TRIP;
   if (ride.cost > 0 && life.cash < ride.cost) return { life, notes: [], error: `You need ${cedis(ride.cost)} for ${ride.label.toLowerCase()}.` };
   if (ride.id === "car") {
     if (!life.car) return { life, notes: [], error: "You do not have a car yet." };
-    if (life.car.fuel < FUEL_PER_TRIP) return { life, notes: [], error: "The tank is nearly empty. Fill up in the Garage app." };
+    if (life.car.fuel < fuel) return { life, notes: [], error: fuel > FUEL_PER_TRIP ? `A trip that far needs ${fuel} litres. Fill up in the Garage app.` : "The tank is nearly empty. Fill up in the Garage app." };
   }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
   timed.life.where = placeId;
   bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}`);
+  stampTrip(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
-    timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - FUEL_PER_TRIP };
+    timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel };
     if (Math.random() < 0.15) {
       if (timed.life.car.insuredUntil > timed.life.minutes) timed.notes.push("Police checkpoint. Papers in order, waved through.");
       else {

@@ -4,6 +4,7 @@ import { bizKind } from "@/lib/game/biz-table";
 import { applyMove, rollDie, startBoard, type GameKind, type Move } from "@/lib/game/boards";
 import { vehicleOf } from "@/lib/game/fleet";
 import { carOf } from "@/lib/game/garage";
+import { CHOP_OPEN } from "@/lib/game/kitchen";
 import { CODE_LABEL, EVENT_INFO, crewGoal, crewWeek, type Crew, type EventKind, type LifeEvent, type Match, type NetRef } from "@/lib/game/net";
 import { SPOTS, cedis, type Life } from "@/lib/game/world";
 import { chargePlayer, creditPlayer, readPlayer, sendChat, updateLife } from "@/lib/server/live";
@@ -399,7 +400,8 @@ function worthOf(life: Life) {
   const car = (carOf(life.car?.id)?.price ?? 0) * 0.6;
   const fleet = (life.fleet ?? []).reduce((sum, item) => sum + vehicleOf(item.kind).price * 0.5, 0);
   const bank = (life.bank?.savings ?? 0) - (life.bank?.loan ?? 0);
-  return Math.round(life.cash + plots + shops + car + fleet + bank);
+  const chop = life.chop ? CHOP_OPEN * 0.5 : 0;
+  return Math.round(life.cash + plots + shops + car + fleet + bank + chop);
 }
 
 export type BoardRow = { username: string; name: string; value: number };

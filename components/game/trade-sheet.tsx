@@ -54,7 +54,7 @@ export function TradeSheet({ life, onBuy, onSell, onClose }: { life: Life; onBuy
             </div>
           );
         })}
-        {!supply && count === 0 ? <p className="text-sm text-[#5c6b82]">Your bag is empty. Buy goods at Makola Market first.</p> : null}
+        {!supply && count === 0 ? <p className="text-sm text-[#5c6b82]">Your bag is empty. Buy goods at Makola, Kaneshie, Madina, Kantamanto, Tema Port or Elmina first.</p> : null}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
@@ -40,10 +40,12 @@ export function VenueFloor({
   me = "",
   onMove,
   onTrade,
+  children,
 }: {
   life: Life;
   people: Peer[];
   me?: string;
+  children?: ReactNode;
   onMove?: (x: number, y: number) => void;
   onTrade?: () => void;
   onHome: () => void;
@@ -282,6 +284,7 @@ export function VenueFloor({
               <span className="text-[#006B3F]">Open</span>
             </button>
           ) : null}
+          {children}
           <ActionDeck verbs={[...extra, ...spot.actions]} here focus={focus} onPay={(verb, offer) => onAct(payVerb(verb, offer))} />
           <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
             Head home · {cedis(homeFare)}

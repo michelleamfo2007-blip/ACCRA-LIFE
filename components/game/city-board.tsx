@@ -39,6 +39,13 @@ const AREAS = [
   [280, 760, "MAKOLA"],
   [900, 470, "CANTONMENTS"],
   [980, 1040, "LABADI"],
+  [1580, 1158, "TESHIE"],
+  [1800, 1158, "NUNGUA"],
+  [1050, 112, "MADINA"],
+  [590, 112, "ACHIMOTA"],
+  [420, 636, "KANESHIE"],
+  [240, 1132, "DANSOMAN"],
+  [1600, 982, "SPINTEX"],
 ];
 
 export function CityBoard({
@@ -225,6 +232,8 @@ export function CityBoard({
               <line x1={x} y1="44" x2={x} y2="1168" stroke="white" strokeWidth="2" strokeDasharray="16 14" />
             </g>
           ))}
+          <Highway x={0} label="N1 WEST · CAPE COAST · ELMINA · KAKUM" />
+          <Highway x={1904} label="MOTORWAY EAST · SHAI HILLS · AKOSOMBO · ADA" />
           <circle cx="780" cy="620" r="36" fill="#e7ebf2" />
           <circle cx="780" cy="620" r="16" fill="#b7d48c" />
           <rect x="40" y="458" width="230" height="14" rx="2" fill="#d5dae3" />
@@ -263,7 +272,7 @@ export function CityBoard({
         </svg>
         {SPOTS.map((spot) => {
           const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
-          const showName = view.z >= 0.92 || spot.soon;
+          const showName = view.z >= 0.92 || spot.soon || (spot.far && view.z >= 0.5);
           return (
             <button
               key={spot.id}
@@ -274,7 +283,11 @@ export function CityBoard({
               style={{ left: spot.x, top: spot.y }}
             >
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)]">{spot.emoji}</span>
-              {showName ? <span className={`mt-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow ${spot.soon ? "bg-[#f5c542] text-[#121212]" : "bg-white text-[#121212]"}`}>{spot.soon ? `${spot.name} · Coming soon` : spot.name}</span> : null}
+              {showName ? (
+                <span className={`mt-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold shadow ${spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : "bg-white text-[#121212]"}`}>
+                  {spot.soon ? `${spot.name} · Coming soon` : spot.far ? `${spot.name} · ${Math.round(spot.far / 60)}h` : spot.name}
+                </span>
+              ) : null}
             </button>
           );
         })}
@@ -408,6 +421,20 @@ function Building({ building, night }: { building: Bld; night: boolean }) {
         <line x1={x - hw * 0.72} y1={top + roofDrop + 10} x2={x - hw * 0.12} y2={top + roofDrop * 1.55 + 10} stroke={night ? "#ffe7a3" : "white"} strokeOpacity="0.7" strokeWidth="1.6" />
       ) : null}
       {kind === "shop" ? <polygon points={`${x - hw},${top + roofDrop + 4} ${x},${top + roofDrop * 2 + 4} ${x},${top + roofDrop * 2 + 8} ${x - hw},${top + roofDrop + 8}`} fill={hue % 2 ? "#e5484d" : "#f5c542"} /> : null}
+    </g>
+  );
+}
+
+function Highway({ x, label }: { x: number; label: string }) {
+  const mid = x + 48;
+  return (
+    <g>
+      <rect x={x} y="0" width="96" height="1190" fill="#c9d9a6" />
+      <rect x={mid - 15} y="0" width="30" height="1190" fill="#9aa3ad" />
+      <line x1={mid} y1="0" x2={mid} y2="1190" stroke="#FCD116" strokeWidth="2" strokeDasharray="22 16" />
+      <text x={mid} y="595" transform={`rotate(-90 ${mid} 595)`} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="13" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
+        {label}
+      </text>
     </g>
   );
 }

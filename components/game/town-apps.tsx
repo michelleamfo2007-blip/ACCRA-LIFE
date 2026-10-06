@@ -15,6 +15,7 @@ import { sellables } from "@/lib/game/market";
 import { POST_LABEL, RUN_FEE, RUN_STANDING, STIPEND, type FcMatch, type Listing, type PostKind } from "@/lib/game/net";
 import { FEED_GAP, PETS, adoptPet, checkGoats, eggsDue, feedPets, gatherEggs, hungry, kidReady, petOf, playCat, sellPet, starving, walkDog } from "@/lib/game/pets";
 import { STORIES, advanceStory, chapterOf, goalMet, goalText } from "@/lib/game/story";
+import { CHECKIN_BASE, CHECKIN_STEP, CHECKIN_STREAK_MAX, weeklyNext } from "@/lib/game/weekly";
 import { FLEET_WAGES, cedis, spotById, type Life, type StepResult } from "@/lib/game/world";
 
 type Apply = (result: StepResult) => void;
@@ -35,6 +36,8 @@ export function CalendarApp({ life, onBack, onGo }: { life: Life; onBack: () => 
   const today = new Date(life.minutes * 60000);
   const season = seasonOf(today);
   const coming = upcomingEvents(today, 200).slice(0, 12);
+  const clock = useClock();
+  const weekly = clock ? weeklyNext(new Date(clock)) : [];
   return (
     <Screen title="Accra calendar" life={life} color="#7a3b0c" onBack={onBack}>
       <Card tone="good">
@@ -42,6 +45,24 @@ export function CalendarApp({ life, onBack, onGo }: { life: Life; onBack: () => 
         <p className="mt-1 font-display text-2xl">{season.label}</p>
         <p className="mt-1 text-sm text-[#5c6b82]">{season.detail}</p>
       </Card>
+      {weekly.length ? <Label>EVERY WEEK</Label> : null}
+      {weekly.length ? <p className="-mt-1 text-xs text-[#5c6b82]">Check in while it is on for {cedis(CHECKIN_BASE)}. Come back every week and the streak pays up to {cedis(CHECKIN_BASE + CHECKIN_STEP * (CHECKIN_STREAK_MAX - 1))}.</p> : null}
+      {weekly.map(({ event, start, live }) => (
+        <Card key={event.id} tone={live ? "good" : undefined}>
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#fff4c2] text-xl">{event.emoji}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{event.title}</span>
+              <span className="block text-[11px] font-bold text-[#7a3b0c]">
+                {live ? "On now" : `${dayLabel(new Date(start))} · ${String(event.start).padStart(2, "0")}:00`} · {spotById(event.spot).name}
+              </span>
+            </span>
+            <Btn kind={live ? "green" : "light"} onClick={() => onGo(event.spot)}>
+              Go
+            </Btn>
+          </div>
+        </Card>
+      ))}
       <Label>COMING UP</Label>
       {coming.map((event) => (
         <Card key={event.id}>

@@ -93,7 +93,11 @@ export type FcStatus = "waiting" | "done" | "declined";
 
 export type FcMatch = { id: string; a: string; b: string; aTeam: string; bTeam: string; stake: number; status: FcStatus; score?: [number, number]; at: string };
 
+export type ChopSign = { name: string; spot: string; menu: { dish: string; price: number }[]; guests?: number; takings?: number };
+
 export type Net = {
+  chop?: ChopSign | null;
+  chartPaid?: number;
   posts?: Post[];
   following?: string[];
   listings?: Listing[];

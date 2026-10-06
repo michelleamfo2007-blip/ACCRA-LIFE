@@ -1,3 +1,4 @@
+import { weeklyNow } from "@/lib/game/weekly";
 import type { Ride, Verb } from "@/lib/game/world";
 
 export type CityEvent = {
@@ -268,6 +269,11 @@ export function matchVerb(game: Match): Verb {
 
 export function cityNow(at = new Date()): City {
   const events = calendar(at);
+  const weekly = weeklyNow(at);
+  if (weekly) {
+    const [first, ...rest] = weekly.event.verbs;
+    events.unshift({ id: weekly.key, title: weekly.event.title, emoji: weekly.event.emoji, detail: `${weekly.event.detail} Check in for a reward.`, spots: [weekly.event.spot], verb: first, more: rest });
+  }
   const sky = weather(at);
   const game = match(at);
   let headline = "A normal Accra day. The city is moving.";

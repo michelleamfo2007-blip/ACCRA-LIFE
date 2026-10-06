@@ -92,6 +92,101 @@ export function playGig(life: Life): StepResult {
   return { life: timed, notes: [line] };
 }
 
+export const VIDEO_FEE = 800;
+export const SHOW_GAP = 4320;
+
+export type Venue = { id: string; label: string; capacity: number; hire: number; minFans: number };
+
+export const VENUES: Venue[] = [
+  { id: "republic", label: "Republic Bar & Grill", capacity: 150, hire: 100, minFans: 200 },
+  { id: "plus233", label: "+233 Jazz Bar", capacity: 220, hire: 200, minFans: 500 },
+  { id: "afrikiko", label: "Afrikiko open air", capacity: 800, hire: 600, minFans: 1500 },
+  { id: "theatre", label: "National Theatre", capacity: 1500, hire: 2000, minFans: 6000 },
+  { id: "stadium", label: "Accra Stadium", capacity: 12000, hire: 8000, minFans: 25000 },
+];
+
+export const TICKETS = [20, 50, 120];
+export const SHOW_CUT = 0.2;
+
+export function showWait(life: Life) {
+  return Math.max(0, (musicOf(life).lastShow ?? -1e9) + SHOW_GAP - life.minutes);
+}
+
+export function venueOf(id: string) {
+  return VENUES.find((venue) => venue.id === id) ?? null;
+}
+
+export function crowdFor(life: Life, venue: Venue, price: number) {
+  const music = musicOf(life);
+  const pull = price <= 20 ? 0.2 : price <= 50 ? 0.1 : 0.04;
+  const best = music.songs.reduce((top, song) => Math.max(top, song.quality + (song.video ? 10 : 0)), 0);
+  return Math.min(venue.capacity, Math.round(music.fans * pull * (0.6 + best / 200)));
+}
+
+export function holdShow(life: Life, venueId: string, price: number): StepResult {
+  const venue = venueOf(venueId);
+  if (!venue) return { life, notes: [], error: "Pick a venue." };
+  if (!TICKETS.includes(price)) return { life, notes: [], error: "Pick a ticket price." };
+  if (life.where !== venue.id) return { life, notes: [], error: `Go to ${venue.label} to put on the show.` };
+  const music = musicOf(life);
+  if (!music.songs.length) return { life, notes: [], error: "Record some songs first. A show needs a setlist." };
+  if (music.fans < venue.minFans) return { life, notes: [], error: `${venue.label} books artists with ${venue.minFans.toLocaleString("en-GH")} fans or more.` };
+  const wait = showWait(life);
+  if (wait > 0) return { life, notes: [], error: `Rest the band. Next show in ${Math.ceil(wait / 60)}h.` };
+  if (life.cash < venue.hire) return { life, notes: [], error: `Hiring ${venue.label} costs ${cedis(venue.hire)}.` };
+  if (life.needs.energy < 25) return { life, notes: [], error: "Too tired to perform. Sleep first." };
+  const timed = passTime(cloneLife(life), 180).life;
+  const crowd = Math.max(0, Math.round(crowdFor(life, venue, price) * (0.8 + Math.random() * 0.3)));
+  const takings = crowd * price;
+  const cut = Math.round(takings * SHOW_CUT);
+  const gained = Math.round(crowd * 0.25 + timed.skills.music * 10);
+  timed.cash += cut - venue.hire;
+  timed.music = { ...musicOf(timed), fans: music.fans + gained, lastShow: timed.minutes, shows: (music.shows ?? 0) + 1 };
+  timed.skills.music = Math.min(10, timed.skills.music + (Math.random() < 0.35 ? 1 : 0));
+  timed.needs.energy = Math.max(0, timed.needs.energy - 30);
+  timed.needs.fun = Math.min(100, timed.needs.fun + 24);
+  timed.needs.social = Math.min(100, timed.needs.social + 24);
+  timed.stats = { ...timed.stats, gigs: (timed.stats?.gigs ?? 0) + 1 };
+  const full = crowd >= venue.capacity ? " Sold out!" : "";
+  const line = `${crowd.toLocaleString("en-GH")} people at ${venue.label}.${full} Tickets ${cedis(takings)}, your cut ${cedis(cut)} after the promoter, hire ${cedis(venue.hire)}, ${gained} new fans.`;
+  logLine(timed, line);
+  return { life: timed, notes: [line] };
+}
+
+export function shootVideo(life: Life, songId: string): StepResult {
+  const music = musicOf(life);
+  const song = music.songs.find((item) => item.id === songId);
+  if (!song) return { life, notes: [], error: "That song is gone." };
+  if (song.video) return { life, notes: [], error: "That song already has a video." };
+  if (life.cash < VIDEO_FEE) return { life, notes: [], error: `A video shoot costs ${cedis(VIDEO_FEE)}.` };
+  const timed = passTime(cloneLife(life), 240).life;
+  timed.cash -= VIDEO_FEE;
+  const boost = 8 + Math.floor(Math.random() * 7);
+  timed.music = {
+    ...musicOf(timed),
+    fans: music.fans + 40 + Math.round(song.quality / 2),
+    songs: music.songs.map((item) => (item.id === songId ? { ...item, video: true, quality: Math.min(100, item.quality + boost) } : item)),
+  };
+  timed.needs.energy = Math.max(0, timed.needs.energy - 18);
+  timed.needs.fun = Math.min(100, timed.needs.fun + 14);
+  const line = `The video for "${song.title}" is out. Jamestown walls, a drone shot over Osu, and the song is up to ${Math.min(100, song.quality + boost)}/100.`;
+  logLine(timed, line);
+  return { life: timed, notes: [line] };
+}
+
+export type ChartSong = { title: string; artist: string; username: string; streams: number; quality: number; video: boolean };
+
+export function chartWindow(week: number) {
+  const start = (week * 7 - 3) * 1440;
+  return { start, end: start + 7 * 1440 };
+}
+
+export function streamsBetween(song: Song, fans: number, from: number, to: number) {
+  return Math.max(0, streamsOf(song, to, fans) - streamsOf(song, from, fans));
+}
+
+export const CHART_PRIZES = [1000, 600, 400, 150, 150, 150, 150, 150, 150, 150];
+
 export type Course = { id: string; label: string; fee: number; sessions: number; needs: string | null; perk: string; skill?: keyof Skills };
 
 export const COURSES: Course[] = [

@@ -8,6 +8,7 @@ import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp
 import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
 import { AlertsApp, BankApp, CalendarApp, CommunityApp, FeedApp, FleetApp, FootballApp, GuideApp, MarketApp, PetsApp, StoriesApp } from "@/components/game/town-apps";
+import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
@@ -75,9 +76,12 @@ type AppId =
   | "guide"
   | "alerts"
   | "feed"
-  | "trade";
+  | "trade"
+  | "trips"
+  | "chop"
+  | "charts";
 
-const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade"];
+const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts"];
 
 export function Handset({
   life,
@@ -370,7 +374,7 @@ export function Handset({
               {app === "games" ? <GamesApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
               {app === "land" ? <LandApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "family" ? <FamilyApp life={life} married={married} onBack={() => setApp("home")} onApply={onSocial} /> : null}
-              {app === "studio" ? <StudioApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "studio" ? <StudioApp life={life} onBack={() => setApp("home")} onApply={onSocial} onGo={onGo} /> : null}
               {app === "school" ? <SchoolApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "garage" ? <GarageApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "farm" ? <FarmApp life={life} raining={raining} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -391,6 +395,9 @@ export function Handset({
               {app === "alerts" ? <AlertsApp life={life} onBack={() => setApp("home")} onOpen={openApp} /> : null}
               {app === "feed" ? <FeedApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
               {app === "trade" ? <MarketApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
+              {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} /> : null}
+              {app === "chop" ? <ChopApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "charts" ? <ChartsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -521,6 +528,9 @@ function HomeScreen({
         <AppIcon label="Garage" color="#243044" onClick={() => onOpen("garage")}>
           <span className="text-2xl">🚗</span>
         </AppIcon>
+        <AppIcon label="Trips" color="#8a4b1c" onClick={() => onOpen("trips")}>
+          <span className="text-2xl">🧳</span>
+        </AppIcon>
         <AppIcon label="Ride" color="#f0b429" onClick={onRide}>
           <Van />
         </AppIcon>
@@ -543,6 +553,9 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Business" color="#121212" onClick={() => onOpen("biz")}>
           <span className="text-2xl">🏪</span>
+        </AppIcon>
+        <AppIcon label="Chop bar" color="#CE1126" onClick={() => onOpen("chop")}>
+          <span className="text-2xl">🍲</span>
         </AppIcon>
         <AppIcon label="Market" color="#006B3F" onClick={onMarket}>
           <Basket />
@@ -595,6 +608,9 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Studio" color="#3b1f5c" onClick={() => onOpen("studio")}>
           <span className="text-2xl">🎙️</span>
+        </AppIcon>
+        <AppIcon label="Charts" color="#0b3d6b" onClick={() => onOpen("charts")}>
+          <span className="text-2xl">📈</span>
         </AppIcon>
         <AppIcon label="Radio" color="#1c1c1c" onClick={() => onOpen("radio")}>
           <Disc />
