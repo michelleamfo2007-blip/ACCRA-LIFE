@@ -8,11 +8,13 @@ export function ActionDeck({
   here,
   onPay,
   focus = null,
+  busy = false,
 }: {
   verbs: Verb[];
   here: boolean;
   onPay: (verb: Verb, offer: Offer) => void;
   focus?: string | null;
+  busy?: boolean;
 }) {
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
@@ -49,11 +51,11 @@ export function ActionDeck({
                     <p className="mt-1 text-[11px] text-[#8b97ab]">{offer.minutes} min</p>
                     <button
                       type="button"
-                      disabled={!here}
+                      disabled={!here || busy}
                       onClick={() => onPay(verb, offer)}
                       className="mt-2 w-full rounded-full bg-[#006B3F] py-2.5 text-sm font-bold text-white disabled:opacity-40"
                     >
-                      {here ? (offer.cost ? `Pay ${cedis(offer.cost)}` : "Do it") : "Get there first"}
+                      {!here ? "Get there first" : busy ? "Doing it…" : offer.cost ? `Pay ${cedis(offer.cost)} · go` : "Do it"}
                     </button>
                   </div>
                 ))}

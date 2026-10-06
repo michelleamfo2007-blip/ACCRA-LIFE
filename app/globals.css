@@ -604,6 +604,84 @@ body {
 .venue-scroll::-webkit-scrollbar {
   display: none;
 }
+.venue-haze {
+  mix-blend-mode: soft-light;
+  background:
+    radial-gradient(ellipse at 55% 18%, rgba(255, 210, 140, 0.28), transparent 55%),
+    radial-gradient(ellipse at 50% 100%, rgba(20, 12, 8, 0.22), transparent 50%);
+}
+.venue-haze-night {
+  background:
+    radial-gradient(ellipse at 30% 10%, rgba(255, 120, 70, 0.18), transparent 45%),
+    radial-gradient(ellipse at 70% 20%, rgba(120, 80, 180, 0.16), transparent 50%),
+    radial-gradient(ellipse at 50% 100%, rgba(0, 0, 0, 0.35), transparent 55%);
+}
+.venue-haze-club {
+  background:
+    radial-gradient(ellipse at 25% 30%, rgba(255, 45, 149, 0.2), transparent 40%),
+    radial-gradient(ellipse at 70% 25%, rgba(124, 92, 255, 0.22), transparent 42%),
+    radial-gradient(ellipse at 50% 80%, rgba(34, 211, 238, 0.1), transparent 45%),
+    radial-gradient(ellipse at 50% 100%, rgba(0, 0, 0, 0.4), transparent 50%);
+}
+.venue-dust {
+  overflow: hidden;
+}
+.venue-mote {
+  position: absolute;
+  top: 110%;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 236, 190, 0.55);
+  box-shadow: 0 0 6px rgba(255, 220, 150, 0.35);
+  animation: venue-mote-rise linear infinite;
+}
+.venue-vignette {
+  background: radial-gradient(ellipse at 48% 42%, transparent 42%, rgba(8, 6, 4, 0.38) 100%);
+}
+.venue-beam {
+  background:
+    linear-gradient(115deg, transparent 35%, rgba(255, 45, 149, 0.08) 48%, transparent 58%),
+    linear-gradient(70deg, transparent 40%, rgba(124, 92, 255, 0.1) 52%, transparent 62%);
+  animation: venue-beam-sweep 7s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+.venue-neon {
+  animation: venue-neon-pulse 2.4s ease-in-out infinite alternate;
+}
+@keyframes venue-mote-rise {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  to {
+    transform: translate3d(12px, -120vh, 0);
+    opacity: 0;
+  }
+}
+@keyframes venue-beam-sweep {
+  from {
+    opacity: 0.45;
+    transform: translateX(-2%) rotate(-1deg);
+  }
+  to {
+    opacity: 0.9;
+    transform: translateX(3%) rotate(1.5deg);
+  }
+}
+@keyframes venue-neon-pulse {
+  from {
+    opacity: 0.75;
+    filter: brightness(0.92);
+  }
+  to {
+    opacity: 1;
+    filter: brightness(1.18);
+  }
+}
 .venue-dance {
   animation: venue-dance 0.9s ease-in-out infinite alternate;
 }
@@ -618,7 +696,10 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .venue-dance {
+  .venue-dance,
+  .venue-beam,
+  .venue-neon,
+  .venue-mote {
     animation: none;
   }
 }
