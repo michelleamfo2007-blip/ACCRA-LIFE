@@ -411,7 +411,7 @@ function Thread({
         )}
       </div>
       <form
-        className="flex items-center gap-2 px-3 pb-6 pt-2"
+        className="relative z-30 flex items-center gap-2 border-t border-black/5 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
         onSubmit={(event) => {
           event.preventDefault();
           submit(draft);

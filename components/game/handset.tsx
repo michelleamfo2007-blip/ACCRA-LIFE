@@ -186,6 +186,10 @@ export function Handset({
     onLaunchConsumed();
   }, [launch, onLaunchConsumed]);
   useEffect(() => {
+    if (!openTo || !APP_IDS.includes(openTo as AppId)) return;
+    setApp(openTo as AppId);
+  }, [openTo]);
+  useEffect(() => {
     onAir(app === "radio");
   }, [app, onAir]);
   useEffect(() => {
@@ -199,7 +203,16 @@ export function Handset({
         .then((payload: { messages?: ChatMsg[]; group?: { messages: { who: "me" | "them"; from: string; text: string; time: string }[] } }) => {
           const lines = room ? payload.group?.messages.map((mail) => ({ who: mail.who, time: mail.time, text: mail.who === "me" ? mail.text : `@${mail.from}: ${mail.text}` })) : payload.messages;
           if (stop || !Array.isArray(lines)) return;
-          setChats((current) => ({ ...current, [thread]: lines }));
+          setChats((current) => {
+            const local = current[thread] ?? [];
+            // Keep optimistic local sends if the server list is still catching up.
+            if (local.length > lines.length) {
+              const remoteTexts = new Set(lines.map((line) => `${line.who}:${line.text}`));
+              const pending = local.filter((line) => line.who === "me" && !remoteTexts.has(`${line.who}:${line.text}`));
+              return { ...current, [thread]: [...lines, ...pending] };
+            }
+            return { ...current, [thread]: lines };
+          });
           readRef.current(thread);
         })
         .catch(() => {});
@@ -456,8 +469,13 @@ export function Handset({
                 <SettingsApp email={email} onBack={() => setApp("home")} onEmail={onEmail} onLogout={onLogout} onMenu={onClose} onNewLife={onNewLife} />
               ) : null}
             </div>
-            <button type="button" onClick={homeBar} className={`absolute bottom-2 left-1/2 z-20 h-1.5 w-28 -translate-x-1/2 rounded-full ${inApp ? "bg-black/30" : "bg-white/90"}`} aria-label={app === "home" && !thread ? "Put the phone down" : "Back"} />
           </div>
+          <button
+            type="button"
+            onClick={homeBar}
+            className="mx-auto mt-2 mb-0.5 h-1.5 w-28 shrink-0 rounded-full bg-white/35"
+            aria-label={app === "home" && !thread ? "Put the phone down" : "Back"}
+          />
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { TourCoach } from "@/components/game/tour-coach";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
+import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
 import { TradeSheet } from "@/components/game/trade-sheet";
 import { buyGood, sellGood } from "@/lib/game/trade";
 import { syncBadges } from "@/lib/game/badges";
@@ -449,6 +450,7 @@ function Guest({
         filter={filter}
         boards={boards}
         active={spotId}
+        at={new Date()}
         onSelect={(id) => {
           const next = spotById(id);
           if (next.soon) {
@@ -1085,6 +1087,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           boards={boards}
           ads={ads}
           active={placeId}
+          at={now ? new Date(now) : new Date()}
           onBoard={setBoardId}
           onSelect={(id) => {
             const spot = spotById(id);
@@ -1124,7 +1127,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onMove={shareSpot}
           onTrade={() => setTradeOpen(true)}
           focus={menuFocus}
-          extra={[...playerVerbs(life.where, playerEvents, life, now), ...eventVerbs(life.where, city)]}
+          lively={(() => {
+            const heat = happeningsAt(life.where, now ? new Date(now) : new Date())[0]?.heat ?? "quiet";
+            if (heat === "packed") return true;
+            const group = spotById(life.where).group;
+            return heat === "busy" && (group === "hang" || group === "sea");
+          })()}
+          extra={[...playerVerbs(life.where, playerEvents, life, now), ...eventVerbs(life.where, city), ...happeningVerbs(life.where, now ? new Date(now) : new Date())]}
           homeFare={homeRide.cost}
           onHome={() => setTrip({ name: "Home", placeId: "home", ride: homeRide })}
           onAct={(verb, person) => actHere(verb, person)}
@@ -1134,6 +1143,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setTab("phone");
           }}
         >
+          <HappeningBanner spotId={life.where} at={now ? new Date(now) : new Date()} people={herePeople.length} />
           <WeeklyCard life={life} spotId={life.where} here cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
           <PlayerChops spotId={life.where} here cloud={Boolean(account.cloud)} onNet={netAction} />
         </VenueFloor>
@@ -1407,7 +1417,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           rideId={rideId}
           sky={city.weather}
           car={car}
-          extra={[...playerVerbs(place.id, playerEvents, life, now), ...eventVerbs(place.id, city)]}
+          extra={[...playerVerbs(place.id, playerEvents, life, now), ...eventVerbs(place.id, city), ...happeningVerbs(place.id, now ? new Date(now) : new Date())]}
           onRide={setRideId}
           onClose={() => setPlaceId(null)}
           onGo={() => {
@@ -1428,6 +1438,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
           onGem={gemSpotId(life.minutes) === place.id ? () => apply(huntGem(life)) : null}
         >
+          <HappeningBanner spotId={place.id} at={now ? new Date(now) : new Date()} people={sheetPeople.length} />
           <WeeklyCard life={life} spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
           <PlayerChops spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onNet={netAction} />
         </PlaceSheet>
@@ -1840,6 +1851,28 @@ function DoSheet({ name, look, onClose, onPick }: { name: string; look: Look; on
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function HappeningBanner({ spotId, at, people }: { spotId: string; at: Date; people: number }) {
+  const live = happeningsAt(spotId, at);
+  if (!live.length) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      {live.map((item, index) => {
+        const heatTone = item.heat === "packed" ? "bg-[#121212] text-[#FCD116]" : item.heat === "busy" ? "bg-[#fff4c2] text-[#7a3b0c]" : "bg-[#f4f7fb] text-[#5c6b82]";
+        return (
+          <div key={item.id} className="rounded-2xl bg-[#fff8ea] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-lg leading-none">{item.emoji}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${heatTone}`}>{heatLabel(item.heat)}</span>
+              {index === 0 && people > 0 ? <span className="text-[10px] font-semibold text-[#5c6b82]">{people} here</span> : null}
+            </div>
+            <p className="mt-1.5 text-sm leading-5 text-[#3d4a5c]">{item.line}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }

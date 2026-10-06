@@ -40,6 +40,7 @@ export function VenueFloor({
   me = "",
   onMove,
   onTrade,
+  lively = false,
   children,
 }: {
   life: Life;
@@ -55,6 +56,7 @@ export function VenueFloor({
   focus?: string | null;
   extra?: Verb[];
   homeFare?: number;
+  lively?: boolean;
 }) {
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
@@ -77,7 +79,7 @@ export function VenueFloor({
   const scroller = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const stopTimer = useRef<number | null>(null);
-  const party = BEACHES.has(spot.id) || CLUB_IDS.has(spot.id);
+  const party = lively || BEACHES.has(spot.id) || CLUB_IDS.has(spot.id);
   const staff = staffFor(spot);
   const stands = [
     { left: "50%", top: "46%" },
@@ -277,7 +279,11 @@ export function VenueFloor({
             </button>
           </div>
           <p className="text-sm text-[#5c6b82]">{spot.blurb}</p>
-          {party ? <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">Party on. Highlife, and the floor is already full.</p> : null}
+          {party ? (
+            <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">
+              {lively && !(BEACHES.has(spot.id) || CLUB_IDS.has(spot.id)) ? "Packed right now. Accra showed up." : "Party on. Highlife, and the floor is already full."}
+            </p>
+          ) : null}
           {onTrade && (isSupply(spot.id) || bagCount(life) > 0) ? (
             <button type="button" onClick={onTrade} className="mt-2 flex w-full items-center justify-between rounded-2xl bg-[#fff4c2] px-3 py-2.5 text-left text-sm font-semibold">
               <span>🧺 {isSupply(spot.id) ? "Buy goods to trade" : `Sell from your bag (${bagCount(life)})`}</span>

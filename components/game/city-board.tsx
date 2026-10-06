@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, memo, type PointerEvent as ReactPointerEvent } from "react";
+import { happeningsAt, heatLabel } from "@/lib/game/happenings";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -54,6 +55,7 @@ export function CityBoard({
   night = false,
   ads = {},
   active = null,
+  at,
   onSelect,
   onBoard,
 }: {
@@ -62,6 +64,7 @@ export function CityBoard({
   night?: boolean;
   ads?: Record<string, string>;
   active?: string | null;
+  at?: Date;
   onSelect: (id: string) => void;
   onBoard?: (id: string) => void;
 }) {
@@ -233,13 +236,20 @@ export function CityBoard({
         {SPOTS.map((spot) => {
           const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
           const open = active === spot.id;
-          const tag = spot.soon ? `${spot.name} · Coming soon` : spot.far ? `${spot.name} · ${Math.round(spot.far / 60)}h` : spot.name;
+          const vibe = spot.soon || spot.id === "home" ? null : happeningsAt(spot.id, at)[0];
+          const tag = spot.soon
+            ? `${spot.name} · Coming soon`
+            : spot.far
+              ? `${spot.name} · ${Math.round(spot.far / 60)}h`
+              : vibe && vibe.heat !== "quiet"
+                ? `${spot.name} · ${heatLabel(vibe.heat)}`
+                : spot.name;
           return (
             <button
               key={spot.id}
               type="button"
               onClick={() => onSelect(spot.id)}
-              title={spot.name}
+              title={vibe ? `${spot.name} — ${vibe.line}` : spot.name}
               aria-label={spot.name}
               aria-pressed={open}
               className={`absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center ${faded ? "opacity-30" : ""} ${open ? "z-20" : ""}`}
@@ -247,19 +257,30 @@ export function CityBoard({
             >
               {open ? (
                 <span
-                  className={`flex max-w-[12rem] items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold shadow-[0_8px_20px_rgba(22,32,60,.22)] ${
-                    spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : "bg-white text-[#121212]"
+                  className={`flex max-w-[14rem] items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-semibold shadow-[0_8px_20px_rgba(22,32,60,.22)] ${
+                    spot.soon ? "bg-[#f5c542] text-[#121212]" : spot.far ? "bg-[#7a3b0c] text-white" : vibe?.heat === "packed" ? "bg-[#121212] text-[#FCD116]" : "bg-white text-[#121212]"
                   }`}
                 >
-                  <span className="text-base leading-none">{spot.emoji}</span>
+                  <span className="text-base leading-none">{vibe?.emoji ?? spot.emoji}</span>
                   <span className="truncate">{tag}</span>
                 </span>
               ) : (
                 <>
-                  <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ring-white/80">{spot.emoji}</span>
+                  <span
+                    className={`grid h-8 w-8 place-items-center rounded-full text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ${
+                      vibe?.heat === "packed" ? "bg-[#121212] text-lg ring-[#FCD116]" : vibe?.heat === "busy" ? "bg-[#fff4c2] ring-[#f5c542]" : "bg-white ring-white/80"
+                    }`}
+                  >
+                    {spot.emoji}
+                  </span>
                   <span className="mt-1 max-w-[6.5rem] truncate rounded-full bg-[#121212]/78 px-2 py-0.5 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
                     {spot.name}
                   </span>
+                  {vibe && vibe.heat !== "quiet" ? (
+                    <span className={`mt-0.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide ${vibe.heat === "packed" ? "bg-[#FCD116] text-[#121212]" : "bg-white/90 text-[#7a3b0c]"}`}>
+                      {heatLabel(vibe.heat)}
+                    </span>
+                  ) : null}
                 </>
               )}
             </button>
