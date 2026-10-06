@@ -14,8 +14,10 @@ import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
 import { askPromotion, nextRank } from "@/lib/game/ladder";
+import { callPerson, cloutLabel, cloutOf, postClout, textPerson, weatherBrief, type CallKind } from "@/lib/game/phone-life";
 import { storyReady } from "@/lib/game/story";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
+import type { Weather } from "@/lib/game/sky";
 import {
   CLOTHES,
   CLOTHS,
@@ -32,6 +34,7 @@ import {
   handleOf,
   hasCurrent,
   homeById,
+  hourOf,
   invitePerson,
   rankOf,
   spareChange,
@@ -46,6 +49,8 @@ import {
 type AppId =
   | "home"
   | "messages"
+  | "calls"
+  | "memories"
   | "work"
   | "goals"
   | "momo"
@@ -89,7 +94,7 @@ type AppId =
   | "turf"
   | "invite";
 
-const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite"];
+const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite"];
 
 export function Handset({
   life,
@@ -120,6 +125,7 @@ export function Handset({
   friends,
   married,
   raining,
+  sky,
   onGo,
   onFly,
   openTo,
@@ -127,6 +133,7 @@ export function Handset({
   openTo?: string | null;
   married: boolean;
   raining: boolean;
+  sky: Weather;
   onGo: (spot: string) => void;
   onFly: (routeId: string, cabin: string) => void;
   friends: { username: string; name: string }[];
@@ -229,6 +236,8 @@ export function Handset({
   const battery = Math.max(8, Math.min(100, life.needs.energy));
   const inApp = app !== "home" || Boolean(thread);
   const unreadTotal = Object.values(unread).reduce((sum, count) => sum + count, 0);
+  const clout = cloutOf(life);
+  const weatherLine = weatherBrief(sky, hourOf(life.minutes));
 
   function openApp(id: string) {
     setApp(APP_IDS.includes(id as AppId) ? (id as AppId) : "home");
@@ -285,8 +294,27 @@ export function Handset({
             <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
               {app === "home" && !thread ? (
-                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} daily={now != null && !streakState(life, now).claimed} sick={Boolean(life.health?.sick)} alerts={alertsFor(life).length} stories={storyReady(life)} guide={guideLeft(life).filter((step) => step.done(life)).length} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
+                <HomeScreen
+                  date={now == null ? "Accra" : longDate(new Date(now))}
+                  time={time || "--:--"}
+                  inbox={unreadTotal}
+                  asks={asks}
+                  daily={now != null && !streakState(life, now).claimed}
+                  sick={Boolean(life.health?.sick)}
+                  alerts={alertsFor(life).length}
+                  stories={storyReady(life)}
+                  guide={guideLeft(life).filter((step) => step.done(life)).length}
+                  weather={weatherLine}
+                  clout={clout}
+                  cloutTag={cloutLabel(clout)}
+                  onOpen={setApp}
+                  onRide={onRide}
+                  onMarket={onMarket}
+                  onPost={() => onSocial(postClout(life, spotById(life.where).name))}
+                />
               ) : null}
+              {app === "calls" ? <CallsScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "memories" ? <MemoriesScreen life={life} onBack={() => setApp("home")} /> : null}
               {app === "messages" ? (
                 <MessagesApp
                   life={life}
@@ -539,9 +567,13 @@ function HomeScreen({
   alerts,
   stories,
   guide,
+  weather,
+  clout,
+  cloutTag,
   onOpen,
   onRide,
   onMarket,
+  onPost,
 }: {
   date: string;
   time: string;
@@ -552,14 +584,32 @@ function HomeScreen({
   alerts: number;
   stories: number;
   guide: number;
+  weather: string;
+  clout: number;
+  cloutTag: string;
   onOpen: (app: AppId) => void;
   onRide: () => void;
   onMarket: () => void;
+  onPost: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-8 pt-3 text-white">
       <p className="text-center text-[52px] font-semibold leading-none tracking-tight">{time}</p>
       <p className="mt-1 text-center text-[13px] text-white/85">{date}</p>
+      <button type="button" onClick={() => onOpen("news")} className="mt-3 rounded-2xl bg-black/25 px-3 py-2 text-left text-[11px] leading-4 text-white/95 backdrop-blur">
+        {weather}
+      </button>
+      <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-white/15 px-3 py-2 backdrop-blur">
+        <button type="button" onClick={onPost} className="text-left">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">Clout</p>
+          <p className="text-sm font-semibold">
+            {clout} · {cloutTag}
+          </p>
+        </button>
+        <button type="button" onClick={onPost} className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-[#121212]">
+          Post
+        </button>
+      </div>
       <div className="mt-4 grid grid-cols-4 gap-x-1 gap-y-4">
         <AppIcon label="Alerts" color="#243044" badge={alerts} onClick={() => onOpen("alerts")}>
           <span className="text-2xl">🔔</span>
@@ -567,11 +617,11 @@ function HomeScreen({
         <AppIcon label="Messages" color="#5b8def" badge={inbox} onClick={() => onOpen("messages")}>
           <Bubble />
         </AppIcon>
-        <AppIcon label="Guide" color="#006B3F" badge={guide} onClick={() => onOpen("guide")}>
-          <span className="text-2xl">🧭</span>
+        <AppIcon label="Calls" color="#25d366" onClick={() => onOpen("calls")}>
+          <PhoneMark />
         </AppIcon>
-        <AppIcon label="Calendar" color="#7a3b0c" onClick={() => onOpen("calendar")}>
-          <span className="text-2xl">📅</span>
+        <AppIcon label="Memories" color="#7a3b0c" onClick={() => onOpen("memories")}>
+          <span className="text-2xl">📔</span>
         </AppIcon>
       </div>
       <Section title="Life">
@@ -616,6 +666,12 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Light" color="#fff4c2" onClick={() => onOpen("light")}>
           <Bulb />
+        </AppIcon>
+        <AppIcon label="Guide" color="#006B3F" badge={guide} onClick={() => onOpen("guide")}>
+          <span className="text-2xl">🧭</span>
+        </AppIcon>
+        <AppIcon label="Calendar" color="#7a3b0c" onClick={() => onOpen("calendar")}>
+          <span className="text-2xl">📅</span>
         </AppIcon>
       </Section>
       <Section title="Money">
@@ -709,15 +765,75 @@ function HomeScreen({
         <AppIcon label="Messages" color="#25d366" onClick={() => onOpen("messages")}>
           <Bubble />
         </AppIcon>
-        <AppIcon label="MoMo" color="#111" onClick={() => onOpen("momo")}>
-          <WalletMark />
+        <AppIcon label="Calls" color="#111" onClick={() => onOpen("calls")}>
+          <PhoneMark />
         </AppIcon>
-        <AppIcon label="Jobs" color="#121212" onClick={() => onOpen("work")}>
-          <Briefcase />
+        <AppIcon label="MoMo" color="#f5c542" onClick={() => onOpen("momo")}>
+          <WalletMark />
         </AppIcon>
         <AppIcon label="Ride" color="#e23d3d" onClick={onRide}>
           <Van />
         </AppIcon>
+      </div>
+    </div>
+  );
+}
+
+function CallsScreen({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: (result: StepResult) => void }) {
+  const people = [...life.relations].sort((a, b) => b.score - a.score).slice(0, 12);
+  const kinds: { id: CallKind; label: string }[] = [
+    { id: "gist", label: "Gist" },
+    { id: "plan", label: "Plan" },
+    { id: "come-home", label: "Come over" },
+    { id: "check", label: "Check" },
+  ];
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
+      <AppHeader title="Calls" onBack={onBack} />
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 py-3">
+        {!people.length ? <p className="px-1 text-sm text-[#5c6b82]">Meet people outside, then call them here.</p> : null}
+        {people.map((person) => (
+          <div key={person.name} className="rounded-2xl bg-white px-3 py-3 shadow-sm">
+            <p className="font-semibold">
+              {person.name} <span className="text-xs font-normal text-[#8b97ab]">· {person.score}</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {kinds.map((kind) => (
+                <button
+                  key={kind.id}
+                  type="button"
+                  onClick={() => onApply(callPerson(life, person.name, kind.id))}
+                  className="rounded-full bg-[#121212] px-3 py-1.5 text-[11px] font-bold text-white"
+                >
+                  {kind.label}
+                </button>
+              ))}
+              <button type="button" onClick={() => onApply(textPerson(life, person.name, "hi"))} className="rounded-full bg-[#25d366] px-3 py-1.5 text-[11px] font-bold text-white">
+                Text
+              </button>
+              <button type="button" onClick={() => onApply(textPerson(life, person.name, "come"))} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-[11px] font-bold text-white">
+                Text come
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MemoriesScreen({ life, onBack }: { life: Life; onBack: () => void }) {
+  const lines = life.log.length ? life.log : ["Nothing written yet. Live a day in Accra — calls, cooks, rides — and it lands here."];
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
+      <AppHeader title="Memories" onBack={onBack} />
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto px-4 py-4">
+        <p className="text-xs text-[#8b97ab]">Your Accra diary. Newest first.</p>
+        {lines.map((line, index) => (
+          <p key={`${index}-${line.slice(0, 24)}`} className="rounded-2xl bg-white px-4 py-3 text-sm leading-6 shadow-sm">
+            {line}
+          </p>
+        ))}
       </div>
     </div>
   );

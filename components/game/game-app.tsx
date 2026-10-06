@@ -14,6 +14,8 @@ import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { TourCoach } from "@/components/game/tour-coach";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
+import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { postClout } from "@/lib/game/phone-life";
 import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
 import { TradeSheet } from "@/components/game/trade-sheet";
 import { buyGood, sellGood } from "@/lib/game/trade";
@@ -964,7 +966,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const sick = sickness(life);
   const guide = guideNext(life);
   const showGem = life.gemDay !== Math.floor(life.minutes / 1440) && quest.title !== "Daily gem hunt";
-  const showCity = Boolean(city.events.length || city.match || city.weather.rain);
+  const showCity = Boolean(city.events.length || city.match || city.weather.rain || city.weather.harmattan);
   const showGuide = Boolean(guide && (guide.done(life) || guide.title !== quest.title));
   const extraHints = [showGem, showCity, life.dumsor, showGuide, Boolean(sick)].filter(Boolean).length;
   const phoneHint = hintsOpen ? "" : "hidden sm:block";
@@ -990,6 +992,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   }
 
   function actHere(verb: Verb, person?: string) {
+    if (verb.id === "phone-post") {
+      apply(postClout(life!, spotById(life!.where).name));
+      return;
+    }
     const event = verb.id.startsWith("pev-") ? playerEvents.find((item) => eventVerbId(item) === verb.id) : null;
     const result = person ? runVerb(life!, verb, life!.where, person) : payOffer(life!, verb, offerFrom(verb), life!.where);
     apply(result);
@@ -1161,7 +1167,25 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             const group = spotById(life.where).group;
             return heat === "busy" && (group === "hang" || group === "sea");
           })()}
-          extra={[...playerVerbs(life.where, playerEvents, life, now), ...eventVerbs(life.where, city), ...happeningVerbs(life.where, now ? new Date(now) : new Date())]}
+          extra={[
+            ...playerVerbs(life.where, playerEvents, life, now),
+            ...eventVerbs(life.where, city),
+            ...happeningVerbs(life.where, now ? new Date(now) : new Date()),
+            ...(CLUB_IDS.has(life.where) || spotById(life.where).group === "hang" || spotById(life.where).group === "sea"
+              ? [
+                  {
+                    id: "phone-post",
+                    label: "Post a story",
+                    detail: "Snap the night. Accra sees it on your phone.",
+                    minutes: 5,
+                    cost: 5,
+                    earn: 0,
+                    effects: { fun: 6, social: 4 },
+                    emoji: "📸",
+                  } satisfies Verb,
+                ]
+              : []),
+          ]}
           homeFare={homeRide.cost}
           onHome={() => setTrip({ name: "Home", placeId: "home", ride: homeRide })}
           onAct={(verb, person) => actHere(verb, person)}
@@ -1179,6 +1203,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <div className="h-full bg-[#fff6df]" />
       )}
       {city.weather.rain && !(tab === "home" && life.where === "home") ? <div className={`rain-layer pointer-events-none absolute inset-0 z-10 ${city.weather.flood ? "rain-heavy" : ""}`} aria-hidden /> : null}
+      {city.weather.harmattan && !city.weather.rain && !(tab === "home" && life.where === "home") ? <div className="harmattan-layer pointer-events-none absolute inset-0 z-10" aria-hidden /> : null}
       {clean ? (
         <button type="button" className="absolute bottom-4 left-4 z-30 rounded-full bg-white px-4 py-2 text-sm font-semibold shadow" onClick={() => setClean(false)}>
           Show screen
@@ -1249,7 +1274,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             {showCity ? (
               <button
                 type="button"
-                className={`w-full rounded-2xl px-3 py-2 text-left text-white shadow ${phoneHint} ${city.weather.flood ? "bg-[#1f4e79]" : city.match?.live ? "bg-[#CE1126]" : "bg-[#006B3F]"}`}
+                className={`w-full rounded-2xl px-3 py-2 text-left text-white shadow ${phoneHint} ${city.weather.flood ? "bg-[#1f4e79]" : city.weather.harmattan && !city.weather.rain ? "bg-[#8a6a3c]" : city.match?.live ? "bg-[#CE1126]" : "bg-[#006B3F]"}`}
                 onClick={() => {
                   const target = eventSpot(city);
                   if (!target) return;
@@ -1259,6 +1284,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               >
                 <p className="line-clamp-2 text-xs font-bold">{city.headline}</p>
                 {city.weather.rain && !city.weather.flood ? <p className="text-[11px] opacity-90">🌧️ {city.weather.label} Rides are slower and cost a bit more.</p> : null}
+                {city.weather.harmattan && !city.weather.rain ? <p className="text-[11px] opacity-90">🌫️ {city.weather.label}</p> : null}
               </button>
             ) : null}
             {life.dumsor ? <p className={`w-full rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white ${phoneHint}`}>Dumsor. The lights are out.</p> : null}
@@ -1693,6 +1719,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onNet={netAction}
           married={inbox.social?.bond?.stage === "married"}
           raining={city.weather.rain}
+          sky={city.weather}
           onGo={(spot) => {
             setTab("map");
             setPlaceId(spot);

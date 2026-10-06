@@ -2,6 +2,7 @@ import { ACCRA_SPOTS } from "@/lib/game/accra-spots";
 import { MORE_SPOTS, TRIP_IDS } from "@/lib/game/more-spots";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
+import { weatherAt, weatherStress } from "@/lib/game/sky";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -1423,7 +1424,8 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   timed.life.where = placeId;
   bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
-  timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}`);
+  const noteExtra = "note" in ride && typeof (ride as { note?: string }).note === "string" ? ` (${(ride as { note?: string }).note})` : "";
+  timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}${noteExtra}`);
   collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
     timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel };
@@ -1435,6 +1437,14 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
       }
     }
   }
+  // Traffic / rain / harmattan hits mood after the ride.
+  const hour = hourOf(timed.life.minutes);
+  const hit = weatherStress(weatherAt(), hour);
+  timed.life.needs.fun = clampNeed(timed.life.needs.fun + hit.fun);
+  timed.life.needs.energy = clampNeed(timed.life.needs.energy + hit.energy);
+  timed.life.needs.hygiene = clampNeed(timed.life.needs.hygiene + hit.hygiene);
+  if (hit.fun <= -3 || hit.energy <= -3) timed.notes.push("The road wore you out.");
+  else if (hit.hygiene <= -2) timed.notes.push("Dust on your lips. Harmattan is in.");
   return timed;
 }
 

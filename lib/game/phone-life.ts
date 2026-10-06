@@ -1,0 +1,121 @@
+import { seasonOf, type Weather } from "@/lib/game/sky";
+import { trafficFactor } from "@/lib/game/roads";
+import { cloneLife, invitePerson, moodOf, type Life, type StepResult } from "@/lib/game/world";
+
+/** Soft Accra clout — one number for the phone home screen. */
+export function cloutOf(life: Life) {
+  const friends = life.relations.filter((person) => person.score >= 25).length;
+  const close = life.relations.filter((person) => person.score >= 50).length;
+  const fans = life.music?.fans ?? 0;
+  const standing = life.community?.standing ?? 0;
+  const credit = life.bank?.score ?? 50;
+  const badges = life.badges?.length ?? 0;
+  const cash = Math.min(40, Math.floor(life.cash / 500));
+  return Math.min(
+    99,
+    Math.round(friends * 2 + close * 4 + Math.min(25, fans / 40) + standing / 4 + credit / 5 + badges * 3 + cash + (life.stats?.cooked ?? 0) / 5 + (life.stats?.sleepovers ?? 0) * 2),
+  );
+}
+
+export function cloutLabel(score: number) {
+  if (score >= 80) return "City known";
+  if (score >= 55) return "Respected";
+  if (score >= 30) return "Getting known";
+  if (score >= 12) return "Around town";
+  return "Unknown";
+}
+
+export function weatherBrief(sky: Weather, hour: number) {
+  const season = seasonOf();
+  const rush = trafficFactor(hour) > 1.4;
+  const bits = [sky.label];
+  if (rush) bits.push("Rush hour — roads are thick");
+  if (sky.flood) bits.push("Circle is flooding. Okada parked.");
+  else if (sky.rain) bits.push("Carry an umbrella. Fares go up.");
+  if (sky.harmattan) bits.push("Harmattan — dust and dry lips");
+  bits.push(`${season.emoji} ${season.label}`);
+  return bits.join(" · ");
+}
+
+export type CallKind = "gist" | "plan" | "come-home" | "check" | "work";
+
+export function callPerson(life: Life, name: string, kind: CallKind = "gist"): StepResult {
+  const next = cloneLife(life);
+  const known = next.relations.find((person) => person.name === name);
+  const score = known?.score ?? 0;
+  if (score < 5 && kind !== "check") {
+    return { life, notes: [], error: `${name} no pick. Call again when you know them better.` };
+  }
+  next.minutes += kind === "gist" ? 12 : kind === "plan" ? 8 : 6;
+  next.needs.social = Math.min(100, next.needs.social + (kind === "gist" ? 10 : 6));
+  next.needs.energy = Math.max(0, next.needs.energy - 2);
+  if (known) known.score = Math.min(100, known.score + (kind === "come-home" ? 4 : kind === "gist" ? 5 : 3));
+  else next.relations.push({ name, score: 8 });
+
+  let line = `You called ${name}.`;
+  if (kind === "gist") line = `Phone gist with ${name}. Story long.`;
+  if (kind === "plan") line = `You and ${name} made a plan. See them outside.`;
+  if (kind === "check") line = `You checked on ${name}. They are fine.`;
+  if (kind === "work") {
+    next.needs.fun = Math.min(100, next.needs.fun + 2);
+    line = `Work call with ${name}. Something might come.`;
+  }
+  if (kind === "come-home") {
+    const invited = invitePerson(next, name);
+    if (invited.error) return invited;
+    invited.life.log = [`${name}: "I dey come. Make the door open."`, ...invited.life.log].slice(0, 14);
+    invited.life.inbox = [`${name} is coming over after your call.`, ...invited.life.inbox].slice(0, 20);
+    invited.life.stats = { ...(invited.life.stats ?? {}), calls: ((invited.life.stats ?? {}).calls ?? 0) + 1 };
+    return { life: invited.life, notes: [`${name} is coming over.`] };
+  }
+
+  next.log = [line, ...next.log].slice(0, 14);
+  next.inbox = [line, ...next.inbox].slice(0, 20);
+  next.stats = { ...(next.stats ?? {}), calls: ((next.stats ?? {}).calls ?? 0) + 1 };
+  if (moodOf(next.needs).label === "Drained" || moodOf(next.needs).label === "Stressed") {
+    next.needs.fun = Math.min(100, next.needs.fun + 4);
+  }
+  return { life: next, notes: [line] };
+}
+
+export function textPerson(life: Life, name: string, kind: "hi" | "plan" | "come" | "thanks" = "hi"): StepResult {
+  const next = cloneLife(life);
+  next.minutes += 2;
+  next.needs.social = Math.min(100, next.needs.social + 4);
+  const known = next.relations.find((person) => person.name === name);
+  if (known) known.score = Math.min(100, known.score + 2);
+  else next.relations.push({ name, score: 6 });
+
+  if (kind === "come") {
+    const invited = invitePerson(next, name);
+    if (invited.error) return invited;
+    invited.life.stats = { ...(invited.life.stats ?? {}), texts: ((invited.life.stats ?? {}).texts ?? 0) + 1 };
+    return { life: invited.life, notes: [`Texted ${name}: "You dey home? I wan pass."`] };
+  }
+
+  const line =
+    kind === "plan"
+      ? `You texted ${name} a plan.`
+      : kind === "thanks"
+        ? `You texted ${name} thanks.`
+        : `You texted ${name}: "Chale, how far?"`;
+  next.log = [line, ...next.log].slice(0, 14);
+  next.stats = { ...(next.stats ?? {}), texts: ((next.stats ?? {}).texts ?? 0) + 1 };
+  return { life: next, notes: [line] };
+}
+
+export function postClout(life: Life, place: string): StepResult {
+  const next = cloneLife(life);
+  if (life.cash < 5) return { life, notes: [], error: "Data money no dey." };
+  next.cash -= 5;
+  next.minutes += 5;
+  next.needs.fun = Math.min(100, next.needs.fun + 6);
+  next.needs.social = Math.min(100, next.needs.social + 4);
+  if (!next.community) next.community = { standing: 8, projects: [] };
+  next.community.standing = Math.min(100, (next.community.standing ?? 0) + 2);
+  const likes = 8 + Math.floor(Math.random() * 40) + Math.floor(cloutOf(life) / 3);
+  const line = `Posted from ${place}. ${likes} likes. Accra dey notice.`;
+  next.log = [line, ...next.log].slice(0, 14);
+  next.stats = { ...(next.stats ?? {}), posts: ((next.stats ?? {}).posts ?? 0) + 1 };
+  return { life: next, notes: [line] };
+}

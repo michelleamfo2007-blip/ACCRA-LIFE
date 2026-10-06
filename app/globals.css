@@ -1016,6 +1016,14 @@ body {
     background-position: -30px 160px, 0 0;
   }
 }
+.harmattan-layer {
+  background:
+    radial-gradient(ellipse at 40% 20%, rgba(210, 170, 110, 0.35), transparent 55%),
+    radial-gradient(ellipse at 70% 60%, rgba(180, 140, 90, 0.22), transparent 50%),
+    linear-gradient(rgba(160, 130, 90, 0.18), rgba(120, 95, 60, 0.12));
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .rain-layer {
     animation: none;

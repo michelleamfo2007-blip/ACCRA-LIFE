@@ -1,4 +1,5 @@
 import { pathLength, pointOnPath, roadPath, trafficFactor, type Point } from "@/lib/game/roads";
+import { weatherAt, type Weather } from "@/lib/game/sky";
 import { spotById } from "@/lib/game/world";
 
 export type NpcTrait = "hustler" | "laid-back" | "social" | "homebody" | "night-owl" | "early-riser";
@@ -182,25 +183,43 @@ function progressIn(win: Window, stamp: number) {
   return Math.min(1, Math.max(0, (stamp - win.start) / span));
 }
 
-function moodFor(npc: NpcDef, phase: NpcPhase, hour: number): NpcMood {
+function moodFor(npc: NpcDef, phase: NpcPhase, hour: number, sky: Weather): NpcMood {
   if (phase === "commute_work" || phase === "commute_home") {
+    if (sky.flood || (sky.rain && trafficFactor(hour) > 1.2)) return "stressed";
     if (trafficFactor(hour) > 1.4) return "stressed";
     return "ok";
   }
-  if (phase === "night_out") return "excited";
+  if (phase === "night_out") {
+    if (sky.flood) return "tired";
+    if (sky.rain) return "ok";
+    return "excited";
+  }
   if (phase === "sleep" || (phase === "home" && hour < 8)) return "tired";
+  if (sky.harmattan && phase === "home" && hour < 10) return "tired";
   if (npc.trait === "hustler" && phase === "work") return "ok";
   if (phase === "work" && hour >= 15) return "tired";
   return "ok";
 }
 
-function labelFor(npc: NpcDef, phase: NpcPhase, mood: NpcMood): string {
+function labelFor(npc: NpcDef, phase: NpcPhase, mood: NpcMood, sky: Weather): string {
   if (phase === "sleep") return "Sleeping";
-  if (phase === "commute_work") return mood === "stressed" ? "Traffic · to work" : "Heading to work";
+  if (phase === "commute_work") {
+    if (sky.flood) return "Flood · to work";
+    if (sky.rain) return mood === "stressed" ? "Rain traffic · work" : "Wet commute · work";
+    return mood === "stressed" ? "Traffic · to work" : "Heading to work";
+  }
   if (phase === "work") return npc.jobTitle;
-  if (phase === "commute_home") return mood === "stressed" ? "Traffic · home" : "Heading home";
-  if (phase === "night_out") return "Out tonight";
-  if (phase === "home" && mood === "tired") return "Home · recovering";
+  if (phase === "commute_home") {
+    if (sky.flood) return "Flood · home";
+    if (sky.rain) return mood === "stressed" ? "Rain traffic · home" : "Wet commute · home";
+    return mood === "stressed" ? "Traffic · home" : "Heading home";
+  }
+  if (phase === "night_out") {
+    if (sky.flood) return "Stayed in · flood";
+    if (sky.rain) return "Under a shed · rain";
+    return "Out tonight";
+  }
+  if (phase === "home" && mood === "tired") return sky.harmattan ? "Home · harmattan" : "Home · recovering";
   return npc.sideHustle.includes("credit") ? "Home · side hustle" : "Home";
 }
 
@@ -220,12 +239,18 @@ function commutePath(npc: NpcDef, phase: NpcPhase) {
 /** Live positions for all hustle NPCs at Accra wall time `at`. */
 export function npcsAt(at: Date = new Date()): NpcLive[] {
   const { hour, stamp } = hourStamp(at);
-  const rush = trafficFactor(Math.floor(hour % 24));
+  const sky = weatherAt(at);
+  const rush = trafficFactor(Math.floor(hour % 24)) * (sky.flood ? 1.35 : sky.rain ? 1.2 : 1);
   return NPCS.map((npc) => {
     const win = windowOf(npc, at);
     let phase = win.phase;
     let progress = progressIn(win, stamp);
-    // Stretch commute in rush hour so they stay on the road longer
+    // Rain / flood: fewer people out; cancel night_out for homebodies & flood
+    if (phase === "night_out" && (sky.flood || (sky.rain && (npc.trait === "homebody" || npc.trait === "early-riser")))) {
+      phase = "home";
+      progress = 1;
+    }
+    // Stretch commute in rush / rain so they stay on the road longer
     if ((phase === "commute_work" || phase === "commute_home") && rush > 1) {
       progress = Math.min(1, progress / (rush * 0.85));
     }
@@ -258,13 +283,13 @@ export function npcsAt(at: Date = new Date()): NpcLive[] {
       x += (wobble % 9) - 4;
       y += (Math.floor(wobble / 3) % 7) - 3;
     }
-    const mood = moodFor(npc, phase, Math.floor(hour % 24));
+    const mood = moodFor(npc, phase, Math.floor(hour % 24), sky);
     // Hide deep sleepers slightly (still show at home as a soft pin)
     return {
       id: npc.id,
       name: npc.name,
       phase,
-      label: labelFor(npc, phase, mood),
+      label: labelFor(npc, phase, mood, sky),
       mood,
       x,
       y,

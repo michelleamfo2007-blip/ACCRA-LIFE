@@ -1,5 +1,17 @@
 import { weeklyNow } from "@/lib/game/weekly";
-import type { Ride, Verb } from "@/lib/game/world";
+import type { Verb } from "@/lib/game/world";
+import {
+  seasonOf,
+  weatherAt,
+  type Season,
+  type Weather,
+  rideIn,
+  travelFactor,
+  weatherStress,
+} from "@/lib/game/sky";
+
+export type { Season, Weather };
+export { seasonOf, rideIn, travelFactor, weatherStress };
 
 export type CityEvent = {
   id: string;
@@ -10,18 +22,6 @@ export type CityEvent = {
   verb: Verb;
   more?: Verb[];
 };
-
-export type Season = { id: "harmattan" | "detty" | "major-rains" | "minor-rains" | "dry"; label: string; emoji: string; detail: string };
-
-export function seasonOf(at = new Date()): Season {
-  const month = at.getUTCMonth();
-  const day = at.getUTCDate();
-  if ((month === 11 && day >= 15) || (month === 0 && day <= 2)) return { id: "detty", label: "Detty December", emoji: "🎆", detail: "Returnees are home. Parties cost 30% more, rooms let for more, and the beaches never close." };
-  if (month === 11 || month === 0 || month === 1) return { id: "harmattan", label: "Harmattan", emoji: "🌫️", detail: "Dusty haze from the Sahara. You get dirty faster, colds go round, and the mornings are cool." };
-  if (month >= 3 && month <= 6) return { id: "major-rains", label: "Major rains", emoji: "🌧️", detail: "Afternoon storms and flooded roads around Circle. Malaria season, so sleep under a net." };
-  if (month === 8 || month === 9) return { id: "minor-rains", label: "Minor rains", emoji: "🌦️", detail: "Shorter showers, still enough for the farm and the mosquitoes." };
-  return { id: "dry", label: "Dry season", emoji: "☀️", detail: "Hot, bright and busy. Good days for the beach and the farm needs watering." };
-}
 
 export type Upcoming = { id: string; title: string; emoji: string; detail: string; date: Date; spots: string[] };
 
@@ -40,12 +40,6 @@ export function upcomingEvents(at = new Date(), days = 150): Upcoming[] {
   }
   return out;
 }
-
-export type Weather = {
-  rain: boolean;
-  flood: boolean;
-  label: string;
-};
 
 export type Match = {
   id: string;
@@ -67,7 +61,12 @@ export type City = {
   headline: string;
 };
 
-export const QUIET_CITY: City = { events: [], weather: { rain: false, flood: false, label: "Dry and bright" }, match: null, headline: "Accra is moving" };
+export const QUIET_CITY: City = {
+  events: [],
+  weather: { rain: false, flood: false, harmattan: false, label: "Dry and bright", season: "dry" },
+  match: null,
+  headline: "Accra is moving",
+};
 
 const PARTY_SPOTS = ["twist", "mad-club", "ace-tantra", "tantra", "duplex", "front-back", "embar", "one-percent", "zen-garden", "afrikiko", "beach", "bojo", "kokrobite"];
 const BAR_SPOTS = ["viewing", "stadium", "republic", "duncans", "purple-pub", "container", "plus233", "buka"];
@@ -221,22 +220,6 @@ function calendar(at: Date): CityEvent[] {
   return list;
 }
 
-function weather(at: Date): Weather {
-  const month = at.getUTCMonth();
-  const hour = at.getUTCHours();
-  const key = `${at.getUTCFullYear()}-${month}-${at.getUTCDate()}`;
-  const major = month >= 3 && month <= 6;
-  const minor = month === 8 || month === 9;
-  const harmattan = month === 11 || month === 0 || month === 1;
-  const chance = major ? 0.45 : minor ? 0.3 : harmattan ? 0.02 : 0.06;
-  if (seed(`rain-${key}`) >= chance) return { rain: false, flood: false, label: harmattan ? "Harmattan haze. Dusty and cool." : "Dry and bright" };
-  const start = 12 + Math.floor(seed(`start-${key}`) * 7);
-  const length = 2 + Math.floor(seed(`length-${key}`) * 4);
-  if (hour < start || hour >= start + length) return { rain: false, flood: false, label: `Rain due around ${start > 12 ? start - 12 : start}${start >= 12 ? "pm" : "am"}` };
-  const flood = major && seed(`flood-${key}`) < 0.35;
-  return { rain: true, flood, label: flood ? "Heavy rain. Roads around Circle are flooding." : "Rain in Accra." };
-}
-
 function match(at: Date): Match | null {
   const weekday = at.getUTCDay();
   const hour = at.getUTCHours();
@@ -274,7 +257,7 @@ export function cityNow(at = new Date()): City {
     const [first, ...rest] = weekly.event.verbs;
     events.unshift({ id: weekly.key, title: weekly.event.title, emoji: weekly.event.emoji, detail: `${weekly.event.detail} Check in for a reward.`, spots: [weekly.event.spot], verb: first, more: rest });
   }
-  const sky = weather(at);
+  const sky = weatherAt(at);
   const game = match(at);
   let headline = "A normal Accra day. The city is moving.";
   if (game?.live) headline = `⚽ ${game.title} is on now`;
@@ -282,6 +265,8 @@ export function cityNow(at = new Date()): City {
   else if (game) headline = `⚽ ${game.title} at ${game.startHour > 12 ? game.startHour - 12 : game.startHour}pm`;
   if (events[0]) headline = `${events[0].emoji} ${events[0].title}: ${events[0].detail}`;
   if (sky.flood) headline = `🌊 ${sky.label}`;
+  else if (sky.rain) headline = `🌧️ ${sky.label}`;
+  else if (sky.harmattan) headline = `🌫️ ${sky.label}`;
   return { events, weather: sky, match: game, headline };
 }
 
@@ -294,13 +279,4 @@ export function eventVerbs(spotId: string, city: City): Verb[] {
 export function eventSpot(city: City) {
   if (city.match && !city.match.over) return city.match.spots[0];
   return city.events[0]?.spots[0] ?? null;
-}
-
-export function rideIn(ride: Ride, sky: Weather): Ride & { blocked?: string; note?: string } {
-  if (!sky.rain || ride.id === "train") return ride;
-  if (sky.flood && ride.id === "okada") return { ...ride, blocked: "Okada riders have parked for the flood." };
-  if (ride.id === "trek") return { ...ride, minutes: ride.minutes + (sky.flood ? 25 : 15), note: "Wet walk" };
-  const slow = sky.flood ? 2 : 1.5;
-  const extra = ride.id === "car" ? 0 : ride.id === "taxi" ? (sky.flood ? 15 : 8) : sky.flood ? 4 : 2;
-  return { ...ride, minutes: Math.round(ride.minutes * slow), cost: ride.cost + extra, note: sky.flood ? "Flood fare" : "Rain fare" };
 }
