@@ -4,6 +4,16 @@ import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "re
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
+import {
+  bottleOf,
+  clubCrowdAt,
+  clubStateLabel,
+  clubVerbs,
+  isBottleVerb,
+  isNightlife,
+  type Bottle,
+  type ClubNpc,
+} from "@/lib/game/club-night";
 import { accraHour, cedis, spotById, type Life, type Look, type Offer, type Spot, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
@@ -74,6 +84,8 @@ export function VenueFloor({
   const [panel, setPanel] = useState(true);
   const [doing, setDoing] = useState<{ label: string; dance: boolean; sit?: boolean } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [bottleShow, setBottleShow] = useState<null | { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number }>(null);
+  const [empties, setEmpties] = useState<{ id: string; left: number; top: number; emoji: string }[]>([]);
   const [drift, setDrift] = useState<[number, number][]>([
     [0, 0],
     [0, 0],
@@ -85,7 +97,8 @@ export function VenueFloor({
   const stopTimer = useRef<number | null>(null);
   const actTimer = useRef<number | null>(null);
   const busy = useRef(false);
-  const party = lively || BEACHES.has(spot.id) || CLUB_IDS.has(spot.id);
+  const nightLife = isNightlife(spot.id, CLUB_IDS);
+  const party = lively || BEACHES.has(spot.id) || nightLife;
   const staff = staffFor(spot);
   const stands = [
     { left: "50%", top: "46%" },
@@ -113,6 +126,10 @@ export function VenueFloor({
     const first = startSpot(`${me}:${life.where}`);
     follow(first.left, "auto");
     moveRef.current?.(first.left, first.top);
+    setEmpties([]);
+    setBottleShow(null);
+    busy.current = false;
+    setDoing(null);
     return () => {
       if (stopTimer.current) window.clearTimeout(stopTimer.current);
       if (actTimer.current) window.clearTimeout(actTimer.current);
@@ -166,26 +183,53 @@ export function VenueFloor({
   const flavor = spotFlavor(spot);
 
   function performAction(verb: Verb, offer: Offer) {
-    if (busy.current || doing) return;
+    if (busy.current || doing || bottleShow) return;
     const paid = payVerb(verb, offer);
-    const target = zoneForVerb(paid, zones);
-    const dance = paid.tag === "party" || /dance|drum|party|highlife/i.test(`${paid.id} ${paid.label}`);
+    const bottle = bottleOf(paid);
+    const target = isBottleVerb(paid)
+      ? zones.find((zone) => zone.id === "booth" || zone.id === "tables" || zone.id === "cafe") ?? zoneForVerb(paid, zones)
+      : zoneForVerb(paid, zones);
+    const dance = paid.tag === "party" || /dance|drum|party|highlife|floor/i.test(`${paid.id} ${paid.label}`);
     const text = `${paid.id} ${paid.label}`;
-    const sitting = /sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table/i.test(text) && !dance && !/stroll|step outside|walk the/i.test(text);
+    const sitting = /sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table|vip/i.test(text) && !dance && !/stroll|step outside|walk the|bottle|hennessy|moët|moet|cîroc|ciroc|bucket|bitters/i.test(text);
     busy.current = true;
     setPanel(false);
     setWho(null);
-    setDoing({ label: paid.label, dance, sit: sitting });
-    const ms = walkTo(target.left + (Math.random() * 6 - 3), target.top + (Math.random() * 4 - 2));
+    setDoing({ label: paid.label, dance: dance && !isBottleVerb(paid), sit: sitting || Boolean(isBottleVerb(paid)) });
+    const left = target.left + (Math.random() * 6 - 3);
+    const top = target.top + (Math.random() * 4 - 2);
+    const ms = walkTo(left, top);
     if (actTimer.current) window.clearTimeout(actTimer.current);
     actTimer.current = window.setTimeout(() => {
       onAct(paid);
+      if (isBottleVerb(paid)) {
+        runBottlePop(bottle ?? { id: paid.id, label: paid.label, detail: paid.detail, cost: paid.cost, emoji: paid.emoji ?? "🍾", vibe: "mid" }, left, top);
+        return;
+      }
       const hold = Math.round(Math.max(1800, Math.min(5200, (paid.minutes || 20) * 70)));
       actTimer.current = window.setTimeout(() => {
         setDoing(null);
         busy.current = false;
       }, hold);
     }, ms);
+  }
+
+  function runBottlePop(bottle: Bottle, left: number, top: number) {
+    setBottleShow({ bottle, step: "walk", left, top });
+    const t = (step: "spark" | "pop" | "cheer", ms: number) =>
+      window.setTimeout(() => setBottleShow((current) => (current ? { ...current, step } : current)), ms);
+    t("spark", 900);
+    t("pop", 1600);
+    t("cheer", 2300);
+    actTimer.current = window.setTimeout(() => {
+      setEmpties((list) => [...list.slice(-5), { id: `${bottle.id}-${Date.now()}`, left: left + 2, top: top - 4, emoji: bottle.emoji }]);
+      setBottleShow(null);
+      setDoing({ label: `${bottle.label} on the table`, dance: false, sit: true });
+      actTimer.current = window.setTimeout(() => {
+        setDoing(null);
+        busy.current = false;
+      }, 3200);
+    }, 3800);
   }
 
   function sendShout() {
@@ -246,7 +290,19 @@ export function VenueFloor({
               }
             />
           ))}
-          {party
+          {nightLife ? <ClubCrowd spotId={spot.id} cheer={bottleShow?.step === "cheer" || bottleShow?.step === "pop"} /> : null}
+          {empties.map((item) => (
+            <span
+              key={item.id}
+              className="pointer-events-none absolute z-[8] -translate-x-1/2 -translate-y-1/2 text-lg opacity-90"
+              style={{ left: `${item.left}%`, top: `${item.top}%` }}
+              aria-hidden
+            >
+              {item.emoji}
+            </span>
+          ))}
+          {bottleShow ? <BottlePop show={bottleShow} /> : null}
+          {party && !nightLife
             ? [
                 { left: "52%", top: "40%" },
                 { left: "40%", top: "52%" },
@@ -325,13 +381,23 @@ export function VenueFloor({
           −
         </button>
       </div>
-      {doing ? (
+      {bottleShow ? (
+        <p className="pointer-events-none absolute left-1/2 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.6rem))] z-40 -translate-x-1/2 rounded-full bg-[#121212] px-4 py-1.5 text-xs font-bold text-[#FCD116] shadow-lg">
+          {bottleShow.step === "walk"
+            ? `Waiter bringing ${bottleShow.bottle.label}…`
+            : bottleShow.step === "spark"
+              ? "Sparklers up"
+              : bottleShow.step === "pop"
+                ? "🍾 Pop — Accra noticed"
+                : "The table cheers"}
+        </p>
+      ) : doing ? (
         <p className="pointer-events-none absolute left-1/2 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.6rem))] z-20 -translate-x-1/2 rounded-full bg-[#006B3F] px-4 py-1.5 text-xs font-bold text-white shadow-lg">
           {stride.moving ? `Heading over · ${doing.label}` : doing.sit ? `Sitting · ${doing.label}` : `${doing.label}…`}
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
-          Tap to walk · swipe to look around
+          {nightLife ? "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
         </p>
       )}
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
@@ -441,7 +507,11 @@ export function VenueFloor({
 
           {party ? (
             <p className="mt-3 rounded-full bg-[#121212] px-3 py-1.5 text-center text-xs font-semibold text-[#FCD116]">
-              {lively && !(BEACHES.has(spot.id) || CLUB_IDS.has(spot.id)) ? "Packed right now. Accra showed up." : "Party on. Highlife, and the floor is already full."}
+              {nightLife
+                ? "Night open · floor, bar, bottle service. Sparklers when you spend."
+                : lively
+                  ? "Packed right now. Accra showed up."
+                  : "Party on. Highlife, and the floor is already full."}
             </p>
           ) : null}
           {onTrade && (isSupply(spot.id) || bagCount(life) > 0) ? (
@@ -451,12 +521,80 @@ export function VenueFloor({
             </button>
           ) : null}
           {children}
-          <ActionDeck verbs={[...extra, ...spot.actions]} here focus={focus} busy={Boolean(doing)} onPay={performAction} />
+          <ActionDeck
+            verbs={[...(nightLife ? clubVerbs(spot.id) : []), ...extra, ...spot.actions]}
+            here
+            focus={focus}
+            busy={Boolean(doing) || Boolean(bottleShow)}
+            onPay={performAction}
+          />
           <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
             Head home · {cedis(homeFare)}
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ClubCrowd({ spotId, cheer }: { spotId: string; cheer: boolean }) {
+  const [crowd, setCrowd] = useState<ClubNpc[]>(() => clubCrowdAt(spotId));
+  useEffect(() => {
+    const pulse = () => setCrowd(clubCrowdAt(spotId));
+    pulse();
+    const id = window.setInterval(pulse, 4000);
+    return () => window.clearInterval(id);
+  }, [spotId]);
+  return (
+    <>
+      {crowd.map((npc) => {
+        const dancing = npc.state === "dance" || cheer;
+        return (
+          <PersonTag
+            key={npc.id}
+            name={npc.name}
+            tone="blue"
+            style={{ left: `${npc.left}%`, top: `${npc.top}%` }}
+            skin={npc.skin}
+            shirt={npc.shirt}
+            hair={npc.hair}
+            pants="#1c1917"
+            pose={dancing ? "act" : npc.state === "enter" || npc.state === "leave" ? "walk" : "idle"}
+            dance={dancing}
+            face={npc.face}
+            glide
+            bubble={cheer ? "🍾!!" : clubStateLabel(npc.state)}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number } }) {
+  const waiterLeft = show.step === "walk" ? show.left - 12 : show.left - 4;
+  const waiterTop = show.step === "walk" ? show.top + 8 : show.top;
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[25]" aria-hidden>
+      <div
+        className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center transition-[left,top] duration-700 ease-out"
+        style={{ left: `${waiterLeft}%`, top: `${waiterTop}%` }}
+      >
+        <span className="mb-1 rounded-full bg-[#121212] px-2 py-0.5 text-[10px] font-bold text-white">Waiter</span>
+        <IsoHuman skin="#8d5a3b" shirt="#1c1917" pants="#0f0f0f" hair="Low cut" pose="act" className="h-16 w-fit" />
+        <span className="mt-[-0.4rem] text-xl">{show.bottle.emoji}</span>
+      </div>
+      {show.step === "spark" || show.step === "pop" || show.step === "cheer" ? (
+        <div className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${show.left}%`, top: `${show.top - 8}%` }}>
+          <div className={`club-sparkler ${show.step === "pop" || show.step === "cheer" ? "club-sparkler-pop" : ""}`}>
+            {Array.from({ length: 10 }, (_, i) => (
+              <span key={i} className="club-spark" style={{ ["--i" as string]: i }} />
+            ))}
+          </div>
+          {(show.step === "pop" || show.step === "cheer") && <div className="club-pop-flash" />}
+        </div>
+      ) : null}
+      {show.step === "cheer" ? <div className="club-cheer-burst absolute inset-0" /> : null}
     </div>
   );
 }
@@ -531,7 +669,7 @@ function PersonTag({
   if (!onClick) {
     return (
       <div
-        className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ease-linear"
+        className={`pointer-events-none absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ${glide ? "transition-[left,top] duration-[2800ms] ease-in-out" : "ease-linear"}`}
         style={{ ...layer, transitionProperty: walk ? "left, top" : undefined, transitionDuration: walk ? `${walk}ms` : undefined }}
       >
         {body}
@@ -645,35 +783,35 @@ function payVerb(verb: Verb, offer: Offer): Verb {
 
 function staffFor(spot: Spot) {
   const shore = BEACHES.has(spot.id);
-  const club = CLUB_IDS.has(spot.id);
+  const club = isNightlife(spot.id, CLUB_IDS);
   const air = spot.id === "kotoka";
   return [
     {
-      role: air ? "Check-in" : shore ? "Beach usher" : club ? "Door" : "Manager",
+      role: air ? "Check-in" : shore ? "Beach usher" : club ? "Bouncer" : "Manager",
       line: air
         ? "Accra to Kumasi boards at gate B. Boarding pass ready?"
         : shore
           ? "The chairs are this way. The grill is already hot."
           : club
-            ? "List is at the door. The night is inside."
+            ? "List is at the door. Dress right. The night is inside."
             : `I run ${spot.name}. Tell me what you came for.`,
-      style: air ? { left: "26%", top: "46%" } : { left: "18%", top: "42%" },
+      style: air ? { left: "26%", top: "46%" } : club ? { left: "40%", top: "74%" } : { left: "18%", top: "42%" },
       skin: "#8d5a3b",
-      shirt: air ? "#1d4ed8" : "#006B3F",
+      shirt: air ? "#1d4ed8" : club ? "#121212" : "#006B3F",
       hair: "Bun",
     },
     {
-      role: air ? "Security" : shore || club ? "Floor" : "Cashier",
+      role: air ? "Security" : shore ? "Floor" : club ? "Bartender" : "Cashier",
       line: air
         ? "Laptops out. Liquids in the tray. The queue moves if you listen."
         : shore
           ? "Feet in the water is free. Kelewele is not."
           : club
-            ? "The floor is open. Drinks are at the bar."
+            ? "Bar is open. Bottles come with sparklers if you pay for them."
             : "I take the money. The price is on the menu.",
-      style: air ? { left: "68%", top: "40%" } : { left: "72%", top: "36%" },
+      style: air ? { left: "68%", top: "40%" } : club ? { left: "24%", top: "46%" } : { left: "72%", top: "36%" },
       skin: "#c68a62",
-      shirt: air ? "#FCD116" : "#FCD116",
+      shirt: air ? "#FCD116" : club ? "#CE1126" : "#FCD116",
       hair: "Afro",
     },
   ];
@@ -683,11 +821,14 @@ function zoneForVerb(verb: Verb, zones: { id: string; label: string; emoji: stri
   const text = `${verb.id} ${verb.label} ${verb.detail} ${verb.tag ?? ""}`.toLowerCase();
   const pick = (...ids: string[]) => zones.find((zone) => ids.some((id) => zone.id === id || zone.label.toLowerCase().includes(id)));
   if (/water|shore|swim|sea|feet|tide|canoe/.test(text)) return pick("shore", "water", "arrivals") ?? zones[0];
-  if (/sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table/.test(text) && !/stroll|step outside/.test(text))
-    return pick("chairs", "tables", "cafe", "booth", "sofa", "lounge", "departures") ?? zones[0];
-  if (/food|eat|kelewele|grill|chop|plate|waakye|buy|coconut|drink|sip|bar/.test(text) || verb.tag === "food") return pick("grill", "bar", "counter", "tables", "chairs") ?? zones[0];
-  if (/dance|drum|party|floor|band|highlife/.test(text) || verb.tag === "party") return pick("floor", "drums", "mats") ?? zones[0];
-  if (/pool|vip/.test(text)) return pick("pool", "booth", "sofa", "lounge") ?? zones[0];
+  if (/hennessy|moët|moet|cîroc|ciroc|bottle|sparkler|bucket|bitters/.test(text)) return pick("booth", "tables", "bar") ?? zones[0];
+  if (/sit|rest|chill|shade|chair|sofa|booth|lounge|take it in|table|vip/.test(text) && !/stroll|step outside/.test(text))
+    return pick("booth", "chairs", "tables", "cafe", "sofa", "lounge", "departures") ?? zones[0];
+  if (/food|eat|kelewele|grill|chop|plate|waakye|buy|coconut|drink|sip|bar|order at the bar/.test(text) || verb.tag === "food")
+    return pick("grill", "bar", "counter", "tables", "chairs") ?? zones[0];
+  if (/dance|drum|floor|band|highlife|hit the floor/.test(text)) return pick("floor", "drums", "mats") ?? zones[0];
+  if (verb.tag === "party") return pick("floor", "booth", "bar", "tables") ?? zones[0];
+  if (/pool/.test(text)) return pick("pool", "booth", "sofa", "lounge") ?? zones[0];
   if (/desk|check|lobby|work|office/.test(text)) return pick("desk", "checkin", "lobby", "counter") ?? zones[0];
   if (/walk|stroll|watch|morning|haze/.test(text)) return pick("shade", "mid", "green", "shore", "street") ?? zones[0];
   return pick("mid", "hang") ?? zones[Math.floor(zones.length / 2)] ?? zones[0];
@@ -710,12 +851,13 @@ function zonesFor(spotId: string): { id: string; label: string; emoji: string; l
       { id: "sofa", label: "Lounge sofa", emoji: "🛋️", left: 76, top: 52 },
     ];
   }
-  if (CLUB_IDS.has(spotId) || spotId === "plus233" || spotId === "republic" || spotId === "still" || spotId === "monsoon") {
+  if (isNightlife(spotId, CLUB_IDS)) {
     return [
-      { id: "bar", label: "The bar", emoji: "🍹", left: 24, top: 46 },
-      { id: "floor", label: "Dance floor", emoji: "🪩", left: 52, top: 48 },
-      { id: "booth", label: "VIP booth", emoji: "👑", left: 74, top: 54 },
-      { id: "door", label: "Entrance", emoji: "🚪", left: 40, top: 68 },
+      { id: "door", label: "Door", emoji: "🚪", left: 42, top: 72 },
+      { id: "bar", label: "The bar", emoji: "🍹", left: 24, top: 48 },
+      { id: "floor", label: "Dance floor", emoji: "🪩", left: 50, top: 50 },
+      { id: "booth", label: "VIP / bottles", emoji: "🍾", left: 74, top: 54 },
+      { id: "tables", label: "Tables", emoji: "🪑", left: 36, top: 58 },
     ];
   }
   if (spotId === "beach" || spotId === "bojo" || spotId === "kokrobite") {
@@ -772,7 +914,7 @@ function spotFlavor(spot: Spot) {
 function sceneKind(spot: Spot): Kind {
   if (spot.id === "kotoka") return "airport";
   if (HOTELS.has(spot.id)) return "hotel";
-  if (CLUB_IDS.has(spot.id)) return "club";
+  if (isNightlife(spot.id, CLUB_IDS)) return "club";
   if (BEACHES.has(spot.id)) return "shore";
   if (GARDENS.has(spot.id)) return "garden";
   if (spot.id === "gym" || spot.id === "stadium") return "gym";
@@ -1167,11 +1309,26 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
       { x: -76, y: 19, z: 20, w: 5, h: 12, d: 5, color: "#FCD116" },
       { x: -68, y: 19, z: 18, w: 5, h: 9, d: 5, color: "#ec4899" },
       { x: -90, y: 19, z: 22, w: 4, h: 8, d: 4, color: "#a3e635" },
-      // Speakers / booth
+      // Speakers / VIP booth
       { x: 62, y: 0, z: 0, w: 16, h: 28, d: 14, color: "#0e0c12" },
       { x: 64, y: 20, z: 2, w: 12, h: 4, d: 10, color: "#3b82f6" },
       { x: 70, y: 0, z: 28, w: 28, h: 10, d: 20, color: "#100e14" },
       { x: 74, y: 10, z: 32, w: 20, h: 3, d: 12, color: "#a88420" },
+      // VIP couches
+      { x: 54, y: 0, z: 36, w: 22, h: 8, d: 14, color: "#4a1528" },
+      { x: 54, y: 8, z: 36, w: 22, h: 10, d: 4, color: "#6b1f3a" },
+      { x: 86, y: 0, z: 40, w: 18, h: 8, d: 14, color: "#3b2048" },
+      { x: 86, y: 8, z: 40, w: 18, h: 10, d: 4, color: "#5b2d6e" },
+      // Bottle service table + empties clutter
+      { x: 68, y: 0, z: 48, w: 16, h: 9, d: 12, color: "#2a1810" },
+      { x: 70, y: 9, z: 50, w: 4, h: 8, d: 4, color: "#c9a227" },
+      { x: 76, y: 9, z: 52, w: 3, h: 6, d: 3, color: "#e8e8e8" },
+      { x: 72, y: 9, z: 54, w: 3, h: 5, d: 3, color: "#CE1126" },
+      // Regular floor tables
+      { x: -40, y: 0, z: 28, w: 18, h: 8, d: 12, color: "#1c1410" },
+      { x: -38, y: 8, z: 30, w: 14, h: 2, d: 8, color: "#3a2a20" },
+      { x: 8, y: 0, z: 30, w: 18, h: 8, d: 12, color: "#1c1410" },
+      { x: 10, y: 8, z: 32, w: 14, h: 2, d: 8, color: "#3a2a20" },
       // Worn dance pads
       { x: -90, y: 0, z: 48, w: 22, h: 2, d: 22, color: "#b8326e" },
       { x: -50, y: 0, z: 52, w: 22, h: 2, d: 22, color: "#c9a020" },

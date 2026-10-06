@@ -70,6 +70,11 @@ export const CLUB_IDS = new Set([
   "one-percent",
   "zen-garden",
   "afrikiko",
+  "bloom",
+  "monsoon",
+  "republic",
+  "still",
+  "plus233",
 ]);
 
 export const ACCRA_SPOTS: Spot[] = [

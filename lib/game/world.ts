@@ -45,6 +45,8 @@ export type Life = {
   log: string[];
   inbox: string[];
   relations: { name: string; score: number }[];
+  /** Friends currently at your place (home loop). */
+  guests?: { name: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string }[];
   funded: boolean;
   lastRentAt: number;
   outageCheckedDay: number;
@@ -1113,6 +1115,7 @@ function clone(life: Life): Life {
     log: [...life.log],
     inbox: [...life.inbox],
     relations: life.relations.map((person) => ({ ...person })),
+    guests: (life.guests ?? []).map((guest) => ({ ...guest })),
     furniture: (life.furniture ?? []).map((piece) => ({ ...piece })),
     stored: [...(life.stored ?? [])],
     transfers: (life.transfers ?? []).map((note) => ({ ...note })),
@@ -1833,11 +1836,24 @@ export function treatPerson(life: Life, name: string): StepResult {
 }
 
 export function invitePerson(life: Life, name: string): StepResult {
+  const known = life.relations.find((person) => person.name === name);
+  if (known && known.score < 8) return { life, notes: [], error: "They barely know you yet. Gist more first." };
   const next = clone(life);
   next.needs.social = clampNeed(next.needs.social + 12);
   bumpRelation(next, name, 10);
-  pushLog(next, `${name} is coming over.`);
-  return { life: next, notes: [`${name} is on the way. Clear a chair.`] };
+  const stay = life.where === "home" ? 120 : 200;
+  next.guests = [
+    ...(next.guests ?? []).filter((guest) => guest.name !== name),
+    {
+      name,
+      arrivedAt: next.minutes,
+      until: next.minutes + stay,
+      doing: "arrive",
+      gift: Math.random() > 0.4 ? "Sugar bread" : undefined,
+    },
+  ];
+  pushLog(next, life.where === "home" ? `${name} is at the door.` : `${name} is coming over.`);
+  return { life: next, notes: [life.where === "home" ? `${name} is at the door. Clear a chair.` : `${name} is on the way. Clear a chair.`] };
 }
 
 export function visitPerson(life: Life, name: string): StepResult {

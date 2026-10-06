@@ -203,10 +203,12 @@ export const RING_PRICE = 2500;
 export const WEDDING_PRICE = 6000;
 
 export function friendStage(score: number) {
+  if (score >= 90) return "Family-like";
   if (score >= 75) return "Best friend";
   if (score >= 50) return "Close friend";
   if (score >= 25) return "Friend";
-  return "Met once";
+  if (score >= 10) return "Acquaintance";
+  return "Stranger";
 }
 
 export function groupThread(owner: string, id: string) {

@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { isNightlife } from "@/lib/game/club-night";
 
 export type TuneId = "city" | "club" | "beach" | "radio";
 
 const BEACHES = new Set(["beach", "bojo", "kokrobite"]);
 
 export function tuneFor(where: string, station = false): TuneId {
-  if (station || where === "joy" || where === "republic") return "radio";
-  if (CLUB_IDS.has(where)) return "club";
+  if (station || where === "joy") return "radio";
+  if (isNightlife(where, CLUB_IDS) || where === "republic") return "club";
   if (BEACHES.has(where)) return "beach";
   return "city";
 }
@@ -21,81 +22,109 @@ type Tune = {
   kick: number[];
   snare: number[];
   hat: number[];
+  openHat?: number[];
+  clap?: number[];
+  perc?: number[];
   bass: [number, number][];
+  log?: [number, number][];
   lead: [number, number][];
   chord: [number, number[]][];
+  heat?: boolean;
 };
 
 const TUNES: Record<TuneId, Tune> = {
   city: {
     label: "Highlife",
-    bpm: 98,
-    gain: 0.42,
-    kick: [0, 8],
+    bpm: 102,
+    gain: 0.48,
+    kick: [0, 7, 8, 14],
     snare: [4, 12],
-    hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    hat: [0, 2, 3, 4, 6, 8, 10, 11, 12, 14],
+    openHat: [6, 14],
+    clap: [4, 12],
     bass: [
-      [0, 48],
-      [3, 48],
-      [6, 55],
-      [8, 52],
-      [11, 50],
-      [14, 48],
-    ],
-    lead: [
-      [0, 67],
-      [2, 64],
-      [3, 72],
-      [5, 67],
-      [6, 64],
-      [8, 69],
-      [10, 67],
-      [11, 72],
-      [13, 67],
-      [14, 64],
-    ],
-    chord: [
-      [0, [60, 64, 67]],
-      [8, [57, 62, 66]],
-    ],
-  },
-  club: {
-    label: "The club",
-    bpm: 118,
-    gain: 0.56,
-    kick: [0, 2, 4, 6, 8, 10, 12, 14],
-    snare: [4, 12],
-    hat: [1, 3, 5, 7, 9, 11, 13, 15],
-    bass: [
-      [0, 33],
-      [2, 33],
-      [4, 33],
-      [7, 36],
-      [8, 33],
-      [10, 33],
-      [12, 31],
-      [14, 33],
+      [0, 45],
+      [3, 45],
+      [6, 52],
+      [8, 50],
+      [11, 48],
+      [13, 45],
     ],
     lead: [
       [0, 69],
-      [3, 72],
-      [6, 76],
-      [8, 74],
-      [11, 72],
+      [2, 72],
+      [3, 76],
+      [5, 74],
+      [6, 69],
+      [8, 71],
+      [10, 74],
+      [11, 76],
+      [13, 72],
       [14, 69],
     ],
     chord: [
-      [0, [57, 60, 64]],
-      [8, [53, 57, 60]],
+      [0, [57, 61, 64]],
+      [8, [55, 59, 62]],
+    ],
+  },
+  club: {
+    label: "Amapiano heat",
+    bpm: 114,
+    gain: 0.68,
+    heat: true,
+    // Four-on-floor + Accra bounce
+    kick: [0, 4, 8, 12, 2, 10],
+    snare: [4, 12],
+    clap: [4, 12, 13],
+    hat: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    openHat: [6, 14, 15],
+    perc: [3, 7, 11, 15],
+    // Sub + mid bass groove
+    bass: [
+      [0, 33],
+      [1, 33],
+      [4, 33],
+      [5, 36],
+      [8, 31],
+      [9, 33],
+      [12, 29],
+      [13, 33],
+    ],
+    // Log-drum / piano bounce
+    log: [
+      [0, 57],
+      [2, 60],
+      [3, 64],
+      [6, 60],
+      [8, 55],
+      [10, 57],
+      [11, 62],
+      [14, 60],
+    ],
+    lead: [
+      [0, 72],
+      [4, 76],
+      [7, 79],
+      [8, 76],
+      [12, 74],
+      [15, 72],
+    ],
+    chord: [
+      [0, [45, 52, 57, 60]],
+      [4, [45, 52, 57, 60]],
+      [8, [43, 50, 55, 58]],
+      [12, [41, 48, 53, 57]],
     ],
   },
   beach: {
-    label: "The shore",
-    bpm: 86,
-    gain: 0.4,
+    label: "Shore breeze",
+    bpm: 90,
+    gain: 0.44,
     kick: [0, 6, 8, 14],
     snare: [4, 12],
     hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    openHat: [6, 14],
+    clap: [4, 12],
     bass: [
       [0, 43],
       [6, 43],
@@ -104,9 +133,10 @@ const TUNES: Record<TuneId, Tune> = {
     ],
     lead: [
       [0, 79],
-      [5, 76],
+      [4, 76],
       [8, 74],
-      [13, 79],
+      [12, 79],
+      [14, 81],
     ],
     chord: [
       [0, [55, 59, 62]],
@@ -115,11 +145,13 @@ const TUNES: Record<TuneId, Tune> = {
   },
   radio: {
     label: "Joy FM",
-    bpm: 104,
-    gain: 0.5,
+    bpm: 106,
+    gain: 0.52,
     kick: [0, 6, 8, 14],
     snare: [4, 12],
     hat: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    openHat: [7, 15],
+    clap: [4, 12],
     bass: [
       [0, 43],
       [2, 43],
@@ -152,11 +184,13 @@ const TUNES: Record<TuneId, Tune> = {
 type Engine = {
   ctx: AudioContext;
   master: GainNode;
+  bus: GainNode;
   noise: AudioBuffer;
   next: number;
   step: number;
   timer: number;
   live: boolean;
+  bar: number;
 };
 
 let currentTune: TuneId = "city";
@@ -170,21 +204,34 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
   function ensure() {
     if (engine.current) return engine.current;
     const ctx = new AudioContext();
+    const bus = ctx.createGain();
+    bus.gain.value = 1;
     const master = ctx.createGain();
     master.gain.value = 0.0001;
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -16;
-    comp.knee.value = 8;
-    comp.ratio.value = 3;
-    comp.attack.value = 0.01;
-    comp.release.value = 0.2;
-    master.connect(comp);
-    comp.connect(ctx.destination);
+    comp.threshold.value = -18;
+    comp.knee.value = 12;
+    comp.ratio.value = 4.5;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.18;
+    const shelf = ctx.createBiquadFilter();
+    shelf.type = "lowshelf";
+    shelf.frequency.value = 120;
+    shelf.gain.value = 3.5;
+    const air = ctx.createBiquadFilter();
+    air.type = "highshelf";
+    air.frequency.value = 6000;
+    air.gain.value = 2.2;
+    bus.connect(shelf);
+    shelf.connect(air);
+    air.connect(comp);
+    comp.connect(master);
+    master.connect(ctx.destination);
     const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noise.getChannelData(0);
     for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
-    const made: Engine = { ctx, master, noise, next: ctx.currentTime + 0.08, step: 0, timer: 0, live: true };
-    made.timer = window.setInterval(() => pump(made), 50);
+    const made: Engine = { ctx, master, bus, noise, next: ctx.currentTime + 0.08, step: 0, timer: 0, live: true, bar: 0 };
+    made.timer = window.setInterval(() => pump(made), 40);
     engine.current = made;
     return made;
   }
@@ -240,7 +287,15 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
     };
   }, []);
 
+  // Keep club heat label lively when the tune changes
+  useEffect(() => {
+    const made = engine.current;
+    if (!made || !made.live) return;
+    made.next = Math.max(made.next, made.ctx.currentTime + 0.02);
+  }, [tune]);
+
   const song = TUNES[tune];
+  const hot = playing && tune === "club";
   return (
     <button
       type="button"
@@ -248,9 +303,11 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
       aria-pressed={playing}
       aria-label={playing ? `Pause ${song.label}` : `Play ${song.label}`}
       onClick={() => (playing ? stop() : void start())}
-      className={`absolute right-2 top-[max(7.5rem,calc(env(safe-area-inset-top)+6.6rem))] z-30 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-lg sm:right-3 sm:px-3 sm:py-2 sm:text-sm ${playing ? "bg-[#121212] text-white" : "bg-white text-[#121212]"}`}
+      className={`absolute right-2 top-[max(7.5rem,calc(env(safe-area-inset-top)+6.6rem))] z-30 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-lg sm:right-3 sm:px-3 sm:py-2 sm:text-sm ${
+        hot ? "bg-[#CE1126] text-white shadow-[0_0_18px_rgba(206,17,38,.45)]" : playing ? "bg-[#121212] text-white" : "bg-white text-[#121212]"
+      }`}
     >
-      <span aria-hidden>{playing ? "♫" : "♪"}</span>
+      <span aria-hidden>{playing ? (hot ? "🔥" : "♫") : "♪"}</span>
       <span>{playing ? song.label : "Play music"}</span>
     </button>
   );
@@ -260,18 +317,39 @@ function pump(engine: Engine) {
   if (!engine.live) return;
   if (engine.next < engine.ctx.currentTime) engine.next = engine.ctx.currentTime + 0.05;
   const tune = TUNES[currentTune];
-  const horizon = engine.ctx.currentTime + 0.18;
+  const horizon = engine.ctx.currentTime + 0.22;
   const eighth = 60 / tune.bpm / 2;
-  engine.master.gain.setTargetAtTime(tune.gain, engine.ctx.currentTime, 0.08);
+  const heatBump = tune.heat && engine.bar % 4 === 3 ? 1.12 : 1;
+  engine.master.gain.setTargetAtTime(tune.gain * heatBump, engine.ctx.currentTime, 0.06);
   while (engine.next < horizon) {
     const step = engine.step % 16;
+    if (step === 0) engine.bar += 1;
     const time = engine.next;
-    if (tune.kick.includes(step)) kick(engine, time, currentTune === "beach" ? 0.45 : 0.7);
-    if (tune.snare.includes(step)) snare(engine, time, currentTune === "club" ? 0.28 : 0.16);
-    if (tune.hat.includes(step)) hat(engine, time, currentTune === "club" ? 0.07 : 0.035);
-    for (const [at, note] of tune.bass) if (at === step) blip(engine, time, midi(note), 0.32, currentTune === "club" ? "sawtooth" : "triangle", currentTune === "club" ? 0.1 : 0.08, currentTune === "club" ? 240 : 420);
-    for (const [at, note] of tune.lead) if (at === step) blip(engine, time, midi(note), 0.2, "triangle", 0.07, 2200);
-    for (const [at, notes] of tune.chord) if (at === step) notes.forEach((note) => blip(engine, time, midi(note), 0.7, "triangle", 0.035, 900));
+    const drop = tune.heat && engine.bar % 8 === 0;
+    const kickGain = tune.heat ? (drop ? 0.95 : 0.78) : currentTune === "beach" ? 0.48 : 0.62;
+    if (tune.kick.includes(step)) kick(engine, time, kickGain, tune.heat);
+    if (tune.snare.includes(step)) snare(engine, time, tune.heat ? 0.32 : 0.18);
+    if (tune.clap?.includes(step)) clap(engine, time, tune.heat ? 0.22 : 0.12);
+    if (tune.hat.includes(step)) hat(engine, time, tune.heat ? (step % 2 === 0 ? 0.055 : 0.035) : 0.032);
+    if (tune.openHat?.includes(step)) openHat(engine, time, tune.heat ? 0.1 : 0.06);
+    if (tune.perc?.includes(step)) perc(engine, time, 0.09);
+    for (const [at, note] of tune.bass) {
+      if (at === step) {
+        if (tune.heat) subBass(engine, time, midi(note), 0.28);
+        blip(engine, time, midi(note), tune.heat ? 0.26 : 0.32, tune.heat ? "sawtooth" : "triangle", tune.heat ? 0.12 : 0.08, tune.heat ? 280 : 420);
+      }
+    }
+    for (const [at, note] of tune.log ?? []) {
+      if (at === step) logDrum(engine, time, midi(note), 0.14);
+    }
+    for (const [at, note] of tune.lead) {
+      if (at === step) blip(engine, time, midi(note), tune.heat ? 0.16 : 0.2, tune.heat ? "square" : "triangle", tune.heat ? 0.05 : 0.07, tune.heat ? 3200 : 2200);
+    }
+    for (const [at, notes] of tune.chord) {
+      if (at === step) notes.forEach((note, i) => pad(engine, time, midi(note), 0.85, tune.heat ? 0.028 + i * 0.004 : 0.032));
+    }
+    // Club riser / air every 4 bars
+    if (tune.heat && step === 14 && engine.bar % 4 === 3) riser(engine, time, eighth * 2);
     engine.next += eighth;
     engine.step += 1;
   }
@@ -289,44 +367,147 @@ function blip(engine: Engine, time: number, freq: number, dur: number, type: Osc
   osc.frequency.setValueAtTime(freq, time);
   filter.type = "lowpass";
   filter.frequency.setValueAtTime(cutoff, time);
+  filter.Q.value = 1.2;
   amp.gain.setValueAtTime(0.0001, time);
-  amp.gain.exponentialRampToValueAtTime(gain, time + 0.02);
+  amp.gain.exponentialRampToValueAtTime(gain, time + 0.015);
   amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
   osc.connect(filter);
   filter.connect(amp);
-  amp.connect(engine.master);
+  amp.connect(engine.bus);
   osc.start(time);
   osc.stop(time + dur + 0.05);
 }
 
-function kick(engine: Engine, time: number, gain: number) {
+function subBass(engine: Engine, time: number, freq: number, dur: number) {
   const osc = engine.ctx.createOscillator();
   const amp = engine.ctx.createGain();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(140, time);
-  osc.frequency.exponentialRampToValueAtTime(46, time + 0.12);
-  amp.gain.setValueAtTime(gain, time);
-  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.22);
+  osc.frequency.setValueAtTime(Math.max(38, freq * 0.5), time);
+  amp.gain.setValueAtTime(0.0001, time);
+  amp.gain.exponentialRampToValueAtTime(0.2, time + 0.02);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
   osc.connect(amp);
-  amp.connect(engine.master);
+  amp.connect(engine.bus);
   osc.start(time);
-  osc.stop(time + 0.24);
+  osc.stop(time + dur + 0.04);
+}
+
+function logDrum(engine: Engine, time: number, freq: number, gain: number) {
+  const osc = engine.ctx.createOscillator();
+  const filter = engine.ctx.createBiquadFilter();
+  const amp = engine.ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(freq * 1.02, time);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.92, time + 0.18);
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(freq * 2.2, time);
+  filter.Q.value = 2.4;
+  amp.gain.setValueAtTime(0.0001, time);
+  amp.gain.exponentialRampToValueAtTime(gain, time + 0.01);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.22);
+  osc.connect(filter);
+  filter.connect(amp);
+  amp.connect(engine.bus);
+  osc.start(time);
+  osc.stop(time + 0.26);
+}
+
+function pad(engine: Engine, time: number, freq: number, dur: number, gain: number) {
+  const osc = engine.ctx.createOscillator();
+  const osc2 = engine.ctx.createOscillator();
+  const filter = engine.ctx.createBiquadFilter();
+  const amp = engine.ctx.createGain();
+  osc.type = "sawtooth";
+  osc2.type = "triangle";
+  osc.frequency.setValueAtTime(freq, time);
+  osc2.frequency.setValueAtTime(freq * 1.005, time);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(900, time);
+  filter.frequency.linearRampToValueAtTime(1400, time + dur * 0.4);
+  filter.frequency.linearRampToValueAtTime(700, time + dur);
+  amp.gain.setValueAtTime(0.0001, time);
+  amp.gain.exponentialRampToValueAtTime(gain, time + 0.08);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+  osc.connect(filter);
+  osc2.connect(filter);
+  filter.connect(amp);
+  amp.connect(engine.bus);
+  osc.start(time);
+  osc2.start(time);
+  osc.stop(time + dur + 0.05);
+  osc2.stop(time + dur + 0.05);
+}
+
+function kick(engine: Engine, time: number, gain: number, heat = false) {
+  const osc = engine.ctx.createOscillator();
+  const amp = engine.ctx.createGain();
+  const click = engine.ctx.createOscillator();
+  const clickAmp = engine.ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(heat ? 170 : 140, time);
+  osc.frequency.exponentialRampToValueAtTime(heat ? 42 : 46, time + (heat ? 0.16 : 0.12));
+  amp.gain.setValueAtTime(gain, time);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + (heat ? 0.32 : 0.22));
+  click.type = "square";
+  click.frequency.setValueAtTime(1800, time);
+  clickAmp.gain.setValueAtTime(heat ? 0.08 : 0.04, time);
+  clickAmp.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+  osc.connect(amp);
+  amp.connect(engine.bus);
+  click.connect(clickAmp);
+  clickAmp.connect(engine.bus);
+  osc.start(time);
+  osc.stop(time + 0.36);
+  click.start(time);
+  click.stop(time + 0.04);
 }
 
 function snare(engine: Engine, time: number, gain: number) {
   const src = engine.ctx.createBufferSource();
   const filter = engine.ctx.createBiquadFilter();
   const amp = engine.ctx.createGain();
+  const body = engine.ctx.createOscillator();
+  const bodyAmp = engine.ctx.createGain();
   src.buffer = engine.noise;
-  filter.type = "highpass";
-  filter.frequency.value = 1400;
+  filter.type = "bandpass";
+  filter.frequency.value = 1800;
+  filter.Q.value = 0.8;
   amp.gain.setValueAtTime(gain, time);
-  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.16);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+  body.type = "triangle";
+  body.frequency.setValueAtTime(190, time);
+  body.frequency.exponentialRampToValueAtTime(120, time + 0.08);
+  bodyAmp.gain.setValueAtTime(gain * 0.45, time);
+  bodyAmp.gain.exponentialRampToValueAtTime(0.0001, time + 0.1);
   src.connect(filter);
   filter.connect(amp);
-  amp.connect(engine.master);
+  amp.connect(engine.bus);
+  body.connect(bodyAmp);
+  bodyAmp.connect(engine.bus);
   src.start(time);
-  src.stop(time + 0.18);
+  src.stop(time + 0.2);
+  body.start(time);
+  body.stop(time + 0.12);
+}
+
+function clap(engine: Engine, time: number, gain: number) {
+  for (let i = 0; i < 3; i += 1) {
+    const src = engine.ctx.createBufferSource();
+    const filter = engine.ctx.createBiquadFilter();
+    const amp = engine.ctx.createGain();
+    const t = time + i * 0.012;
+    src.buffer = engine.noise;
+    filter.type = "bandpass";
+    filter.frequency.value = 2200 + i * 400;
+    filter.Q.value = 1.4;
+    amp.gain.setValueAtTime(gain * (1 - i * 0.25), t);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    src.connect(filter);
+    filter.connect(amp);
+    amp.connect(engine.bus);
+    src.start(t);
+    src.stop(t + 0.1);
+  }
 }
 
 function hat(engine: Engine, time: number, gain: number) {
@@ -335,12 +516,61 @@ function hat(engine: Engine, time: number, gain: number) {
   const amp = engine.ctx.createGain();
   src.buffer = engine.noise;
   filter.type = "highpass";
-  filter.frequency.value = 7000;
+  filter.frequency.value = 7800;
   amp.gain.setValueAtTime(gain, time);
-  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
   src.connect(filter);
   filter.connect(amp);
-  amp.connect(engine.master);
+  amp.connect(engine.bus);
   src.start(time);
-  src.stop(time + 0.06);
+  src.stop(time + 0.05);
+}
+
+function openHat(engine: Engine, time: number, gain: number) {
+  const src = engine.ctx.createBufferSource();
+  const filter = engine.ctx.createBiquadFilter();
+  const amp = engine.ctx.createGain();
+  src.buffer = engine.noise;
+  filter.type = "highpass";
+  filter.frequency.value = 6200;
+  amp.gain.setValueAtTime(gain, time);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.22);
+  src.connect(filter);
+  filter.connect(amp);
+  amp.connect(engine.bus);
+  src.start(time);
+  src.stop(time + 0.24);
+}
+
+function perc(engine: Engine, time: number, gain: number) {
+  const osc = engine.ctx.createOscillator();
+  const amp = engine.ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(780, time);
+  osc.frequency.exponentialRampToValueAtTime(220, time + 0.08);
+  amp.gain.setValueAtTime(gain, time);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + 0.1);
+  osc.connect(amp);
+  amp.connect(engine.bus);
+  osc.start(time);
+  osc.stop(time + 0.12);
+}
+
+function riser(engine: Engine, time: number, dur: number) {
+  const src = engine.ctx.createBufferSource();
+  const filter = engine.ctx.createBiquadFilter();
+  const amp = engine.ctx.createGain();
+  src.buffer = engine.noise;
+  filter.type = "bandpass";
+  filter.Q.value = 4;
+  filter.frequency.setValueAtTime(400, time);
+  filter.frequency.exponentialRampToValueAtTime(5000, time + dur);
+  amp.gain.setValueAtTime(0.02, time);
+  amp.gain.linearRampToValueAtTime(0.12, time + dur * 0.85);
+  amp.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+  src.connect(filter);
+  filter.connect(amp);
+  amp.connect(engine.bus);
+  src.start(time);
+  src.stop(time + dur + 0.02);
 }

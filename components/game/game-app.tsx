@@ -30,6 +30,14 @@ import { checkIn } from "@/lib/game/weekly";
 import { CABINS, bookFlight, routeOf } from "@/lib/game/flights";
 import type { Cabin } from "@/lib/game/flights";
 import { TOUR, finishTour, skipTour, type TourId } from "@/lib/game/tour";
+import {
+  cookAtHome,
+  hangWithGuest,
+  maybeKnock,
+  offerSleepover,
+  sendGuestHome,
+  tickGuests,
+} from "@/lib/game/home-life";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -65,6 +73,7 @@ import {
   accraHour,
   realMinutes,
   huntGem,
+  invitePerson,
   moodOf,
   payOffer,
   passTime,
@@ -968,7 +977,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       flash(result.error);
       return;
     }
-    const badged = syncBadges(result.life);
+    let nextLife = tickGuests(result.life);
+    if (nextLife.where === "home" && !(nextLife.guests ?? []).length && Math.random() < 0.18) {
+      const knock = maybeKnock(nextLife);
+      nextLife = knock.life;
+      if (knock.note) result = { ...result, notes: [knock.note, ...result.notes] };
+    }
+    const badged = syncBadges(nextLife);
     commitLife(account.username, badged.life);
     const note = [result.notes.filter(Boolean)[0], badged.notes[0]].filter(Boolean).join(" · ");
     if (note) flash(note);
@@ -1121,6 +1136,15 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             if (verb) apply(runVerb(life, verb, "home"));
           }}
           onRun={(verb) => apply(runVerb(life, verb, "home"))}
+          onCook={(recipeId, shareWith) => apply(cookAtHome(life, recipeId, shareWith))}
+          onHang={(name, kind) => apply(hangWithGuest(life, name, kind))}
+          onSleepover={(name) => apply(offerSleepover(life, name))}
+          onSendHome={(name) => apply(sendGuestHome(life, name))}
+          onInviteKnock={() => {
+            const name = [...life.relations].sort((a, b) => b.score - a.score)[0]?.name ?? "Ama from next door";
+            apply(invitePerson(life, name));
+          }}
+          onUpgrade={() => setTab("buy")}
         />
       ) : tab === "home" ? (
         <VenueFloor
@@ -1300,6 +1324,9 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <LayerChip active={filter === "trip"} onClick={() => setFilter("trip")}>
                 Day trips
               </LayerChip>
+              <span className="rounded-full bg-[#121212]/80 px-3 py-1.5 text-[11px] font-semibold text-white shadow">
+                🚌 Hustle loop live
+              </span>
             </div>
           ) : null}
           <button

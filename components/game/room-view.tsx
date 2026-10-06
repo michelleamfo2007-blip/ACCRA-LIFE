@@ -2,8 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { HomeDesk } from "@/components/game/home-desk";
 import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
+import { activeGuests } from "@/lib/game/home-life";
 import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
@@ -40,6 +42,12 @@ export function RoomView({
   onLay,
   onStore,
   onSell,
+  onCook,
+  onHang,
+  onSleepover,
+  onSendHome,
+  onInviteKnock,
+  onUpgrade,
 }: {
   life: Life;
   onAct: (id: string) => void;
@@ -50,6 +58,12 @@ export function RoomView({
   onLay?: (id: string, x: number, z: number, rot: number) => void;
   onStore?: (id: string) => void;
   onSell?: (id: string) => void;
+  onCook?: (recipeId: string, shareWith?: string) => void;
+  onHang?: (name: string, kind: "chat" | "tv" | "game" | "drink") => void;
+  onSleepover?: (name: string) => void;
+  onSendHome?: (name: string) => void;
+  onInviteKnock?: () => void;
+  onUpgrade?: () => void;
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
   const dark = life.dumsor && !hasCurrent(life.inventory);
@@ -223,6 +237,7 @@ export function RoomView({
   const owns = (id: string) => life.inventory.includes(id);
   const look = homeLook(life.homeId);
   const sofaColor = owns("gold") ? "#8b1e3f" : owns("leather") ? "#1c1c1c" : owns("family") ? "#c4844a" : look.sofa;
+  const guests = activeGuests(life);
 
   return (
     <div className="absolute inset-0 touch-none" style={{ background: dark ? "#10131a" : night ? "#1b2744" : "#c5d7ea" }}>
@@ -234,6 +249,7 @@ export function RoomView({
         dark={dark}
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
+        guests={guests.map((guest) => guest.name)}
         onAsk={onAsk}
         onWalk={(x, z) => {
           if (draft || !canInterrupt()) return;
@@ -272,10 +288,26 @@ export function RoomView({
           🪑 Sitting · tap floor to get up
         </div>
       ) : null}
+      {guests.some((guest) => guest.sleepover) ? (
+        <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-[#121212] px-4 py-2 text-sm font-semibold text-[#FCD116] shadow-lg">
+          😴 Sleepover · breakfast gist in the morning
+        </div>
+      ) : null}
+      {!draft && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInviteKnock ? (
+        <HomeDesk
+          life={life}
+          onCook={onCook}
+          onHang={onHang}
+          onSleepover={onSleepover}
+          onSendHome={onSendHome}
+          onInviteKnock={onInviteKnock}
+          onBuyHint={onUpgrade}
+        />
+      ) : null}
       {!draft && !fixture && !picked ? (
         <>
           <p className="pointer-events-none absolute bottom-[max(5.6rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
-            Tap chair to sit · pinch zoom · Buy to place
+            Cook · friends · pinch zoom · Buy to place
           </p>
           <div className="absolute bottom-[max(7.4rem,calc(env(safe-area-inset-bottom)+6.6rem))] right-2 z-30 flex flex-col gap-1.5">
             <button

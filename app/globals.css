@@ -1123,13 +1123,98 @@ body {
   .venue-dance,
   .venue-beam,
   .venue-neon,
-  .venue-mote {
+  .venue-mote,
+  .club-spark,
+  .club-pop-flash,
+  .club-cheer-burst {
     animation: none;
   }
 }
 
 .city-traffic {
   pointer-events: none;
+}
+.npc-hustle-walk {
+  animation: npc-hustle-bob 0.45s ease-in-out infinite;
+}
+@keyframes npc-hustle-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.club-sparkler {
+  position: relative;
+  width: 4px;
+  height: 28px;
+  background: linear-gradient(#fff7c2, #f5c542 40%, #ce1126);
+  border-radius: 2px;
+  margin: 0 auto;
+}
+.club-spark {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: #fff6c2;
+  box-shadow: 0 0 6px #f5c542;
+  transform: rotate(calc(var(--i) * 36deg)) translateY(-6px);
+  animation: club-spark 0.55s ease-out infinite;
+  animation-delay: calc(var(--i) * 40ms);
+}
+.club-sparkler-pop .club-spark {
+  animation-duration: 0.35s;
+  background: #fff;
+  box-shadow: 0 0 10px #fcd116, 0 0 18px #ff4d9a;
+}
+.club-pop-flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90px;
+  height: 90px;
+  margin: -45px 0 0 -45px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 244, 180, 0.85) 0%, rgba(252, 209, 22, 0.35) 35%, transparent 70%);
+  animation: club-flash 0.55s ease-out forwards;
+}
+.club-cheer-burst {
+  background: radial-gradient(ellipse at 50% 55%, rgba(252, 209, 22, 0.22) 0%, transparent 55%);
+  animation: club-cheer 0.9s ease-out forwards;
+}
+@keyframes club-spark {
+  0% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 36deg)) translateY(-4px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 36deg)) translateY(-22px) scale(0.4);
+  }
+}
+@keyframes club-flash {
+  from {
+    opacity: 1;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+@keyframes club-cheer {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 .city-drive-east,
 .city-drive-west,
@@ -1185,7 +1270,8 @@ body {
   .city-drive-east,
   .city-drive-west,
   .city-drive-south,
-  .city-drive-north {
+  .city-drive-north,
+  .npc-hustle-walk {
     animation: none;
   }
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useSyncExternalStore, memo, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, memo, type PointerEvent as ReactPointerEvent } from "react";
 import { happeningsAt, heatLabel, type Heat } from "@/lib/game/happenings";
+import { npcsAt, phaseEmoji, type NpcLive } from "@/lib/game/npcs";
+import { ROADS_X, ROADS_Y } from "@/lib/game/roads";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -10,8 +12,6 @@ const MAX_Z = 2.4;
 
 type View = { x: number; y: number; z: number };
 
-const ROADS_X = [120, 440, 780, 1120, 1460, 1840];
-const ROADS_Y = [140, 380, 620, 880, 1160];
 const ROAD_NAMES_H = ["RING ROAD NORTH", "LIBERATION ROAD", "OXFORD / OSU", "SPINTEX ROAD", "LABADI BEACH ROAD"];
 const ROAD_NAMES_V = ["N1 LINK", "ACHIMOTA RD", "INDEPENDENCE AVE", "CANTONMENTS", "LABONE LINK", "TEMA MOTORWAY"];
 const TRAFFIC = makeTraffic(false);
@@ -297,6 +297,7 @@ export const CityBoard = memo(function CityBoard({
       >
         <CityArt night={night} boards={boards} ads={ads} onBoard={onBoard} lite={lite} />
         <SpotPins filter={filter} active={active} vibes={vibes} onSelect={onSelect} lite={lite} />
+        <HustleLayer lite={lite} />
       </div>
       <div data-zoom className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
@@ -309,6 +310,48 @@ export const CityBoard = memo(function CityBoard({
           ⤢
         </button>
       </div>
+    </div>
+  );
+});
+
+function HustleLayer({ lite }: { at?: Date; lite: boolean }) {
+  const [live, setLive] = useState<NpcLive[]>(() => npcsAt());
+  useEffect(() => {
+    const pulse = () => setLive(npcsAt());
+    pulse();
+    const id = window.setInterval(pulse, lite ? 2000 : 1000);
+    return () => window.clearInterval(id);
+  }, [lite]);
+  return (
+    <>
+      {live.map((npc) => (
+        <NpcPin key={npc.id} npc={npc} lite={lite} />
+      ))}
+    </>
+  );
+}
+
+const NpcPin = memo(function NpcPin({ npc, lite }: { npc: NpcLive; lite: boolean }) {
+  const sleeping = npc.phase === "sleep";
+  return (
+    <div
+      className={`pointer-events-none absolute z-[12] flex -translate-x-1/2 -translate-y-full flex-col items-center transition-[left,top] duration-1000 ease-linear ${sleeping ? "opacity-55" : ""}`}
+      style={{ left: npc.x, top: npc.y }}
+      title={`${npc.name} · ${npc.label}`}
+    >
+      <span
+        className={`mb-0.5 max-w-[7.5rem] truncate rounded-full px-2 py-0.5 text-[9px] font-bold shadow-sm ${
+          npc.moving ? "bg-[#FCD116] text-[#121212]" : npc.phase === "night_out" ? "bg-[#7c3aed] text-white" : npc.phase === "work" ? "bg-[#006B3F] text-white" : "bg-[#121212]/85 text-white"
+        }`}
+      >
+        {phaseEmoji(npc.phase)} {lite ? npc.name : `${npc.name} · ${npc.label}`}
+      </span>
+      <span
+        className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold text-white shadow ring-2 ring-white/80 ${npc.moving ? "npc-hustle-walk" : ""}`}
+        style={{ background: npc.shirt, boxShadow: `0 0 0 2px ${npc.skin}` }}
+      >
+        {npc.name.slice(0, 1)}
+      </span>
     </div>
   );
 });
