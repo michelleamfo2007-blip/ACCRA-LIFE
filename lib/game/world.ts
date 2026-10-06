@@ -1,4 +1,6 @@
 import { ACCRA_SPOTS } from "@/lib/game/accra-spots";
+import type { Net, SpotPos } from "@/lib/game/net";
+import { bizWages } from "@/lib/game/biz-table";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -53,7 +55,18 @@ export type Life = {
   transfers?: PurseNote[];
   seenTransfers?: string[];
   chats?: unknown;
+  net?: Net;
+  spot?: SpotPos;
+  businesses?: Business[];
+  bag?: Record<string, { qty: number; paid: number }>;
+  soldToday?: { day: number; spots: Record<string, number> };
+  pantry?: number;
+  cool?: Record<string, number>;
 };
+
+export const PANTRY_MAX = 12;
+
+export type Business = { id: string; kind: string; openedAt: number; lastCollect: number; level: number };
 
 export type PurseNote = { id: string; delta: number; note: string };
 
@@ -80,6 +93,13 @@ export type Verb = {
   tag?: "food" | "party" | "gym" | "church";
   job?: boolean;
   emoji?: string;
+  sleep?: boolean;
+  needs?: string[];
+  power?: boolean;
+  pantry?: number;
+  stock?: number;
+  cool?: boolean;
+  perSkill?: number;
 };
 
 export type Spot = {
@@ -936,6 +956,10 @@ function clone(life: Life): Life {
     transfers: (life.transfers ?? []).map((note) => ({ ...note })),
     seenTransfers: [...(life.seenTransfers ?? [])],
     chats: life.chats,
+    businesses: (life.businesses ?? []).map((shop) => ({ ...shop })),
+    bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
+    soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
+    cool: { ...(life.cool ?? {}) },
   };
 }
 
@@ -1052,13 +1076,14 @@ function settleBills(life: Life, from: number, to: number) {
     const rent = homeById(life.homeId).rent;
     const loanPay = Math.min(life.loan, life.weeklyLoan);
     const upkeep = SHOP.reduce((sum, item) => sum + (item.upkeep && life.inventory.includes(item.id) ? item.upkeep : 0), 0);
-    life.cash -= rent + loanPay + upkeep;
+    const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level), 0);
+    life.cash -= rent + loanPay + upkeep + wages;
     life.loan -= loanPay;
     if (life.loan <= 0) {
       life.loan = 0;
       life.weeklyLoan = 0;
     }
-    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}.`);
+    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}.`);
     if (life.cash < 0) notes.push("The wallet is in the red. Rent still left.");
   }
   return notes;
@@ -1081,15 +1106,17 @@ export function careerLevel(life: Life) {
   return Math.min(5, 1 + Math.floor(life.skills.career / 3));
 }
 
-export const RIDES = [
+export type RideId = "trek" | "trotro" | "train" | "okada" | "taxi";
+
+export type Ride = { id: RideId; label: string; cost: number; minutes: number };
+
+export const RIDES: Ride[] = [
   { id: "trek", label: "Trek", cost: 0, minutes: 40 },
   { id: "trotro", label: "Trotro", cost: 5, minutes: 25 },
   { id: "train", label: "Train", cost: 8, minutes: 20 },
   { id: "okada", label: "Okada", cost: 12, minutes: 14 },
   { id: "taxi", label: "Taxi", cost: 28, minutes: 12 },
-] as const;
-
-export type Ride = (typeof RIDES)[number];
+];
 
 export function goTo(life: Life, placeId: string, ride: Ride = RIDES[1]): StepResult {
   if (life.where === placeId) return { life, notes: [] };
@@ -1109,17 +1136,22 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "radio" && next.dumsor && !hasCurrent(next.inventory)) {
     return { life: next, notes, error: "The radio is quiet. Dumsor took the socket." };
   }
+  const locked = lockReason(next, verb);
+  if (locked) return { life: next, notes, error: locked };
   if (verb.special === "gem" && next.gemDay === dayIndex(next.minutes)) {
     return { life: next, notes, error: "You already found today's gem." };
   }
   let cost = verb.cost;
   if (verb.tag === "food" && next.birthId === "market") cost = Math.round(cost * 0.7);
   if (cost > 0 && next.cash < cost) return { life: next, notes, error: "Wallet light. Make some money first." };
-  const timed = passTime(next, verb.minutes, verb.id === "sleep" ? "sleep" : "awake");
+  const timed = passTime(next, verb.minutes, verb.id === "sleep" || verb.sleep ? "sleep" : "awake");
   const after = timed.life;
   notes.push(...timed.notes);
   after.cash -= cost;
-  let earn = verb.earn;
+  let earn = verb.earn + (verb.perSkill && verb.skill ? verb.perSkill * after.skills[verb.skill] : 0);
+  if (verb.pantry) after.pantry = Math.max(0, (after.pantry ?? 0) - verb.pantry);
+  if (verb.stock) after.pantry = Math.min(PANTRY_MAX, (after.pantry ?? 0) + verb.stock);
+  if (verb.cool) after.cool = { ...(after.cool ?? {}), [verb.id]: after.minutes + Math.max(30, verb.minutes) };
   if (verb.job) {
     earn *= careerLevel(after);
     if (after.traits.includes("hustler")) earn = Math.round(earn * 1.15);
@@ -1163,6 +1195,22 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   }
   pushLog(after, verb.detail);
   return { life: after, notes: [verb.label, ...notes.filter(Boolean)] };
+}
+
+export function coolLeft(life: Life, verb: Verb) {
+  if (!verb.cool) return 0;
+  return Math.max(0, Math.ceil((life.cool?.[verb.id] ?? 0) - life.minutes));
+}
+
+export function lockReason(life: Life, verb: Verb): string | null {
+  const missing = (verb.needs ?? []).filter((id) => !life.inventory.includes(id));
+  if (missing.length) return `Need ${missing.map((id) => SHOP.find((item) => item.id === id)?.name ?? id).join(", ")}`;
+  if (verb.power && life.dumsor && !hasCurrent(life.inventory)) return "Dumsor. No current for that.";
+  if (verb.pantry && (life.pantry ?? 0) < verb.pantry) return "Need groceries. Restock at the fridge.";
+  if (verb.stock && (life.pantry ?? 0) >= PANTRY_MAX) return "The fridge is already full.";
+  const wait = coolLeft(life, verb);
+  if (wait > 0) return `Ready again in ${wait >= 60 ? `${Math.floor(wait / 60)}h ${wait % 60}m` : `${wait}m`}`;
+  return null;
 }
 
 export type Offer = {

@@ -2,6 +2,7 @@ import "server-only";
 import { timingSafeEqual } from "crypto";
 import { cedis, mergeMoney, SPOTS, type Life, type Spot } from "@/lib/game/world";
 import { supabase } from "@/lib/server/supabase";
+import type { SpotPos } from "@/lib/game/net";
 
 export type CloudPlayer = {
   username: string;
@@ -37,6 +38,17 @@ type PlayerRow = {
 
 function db() {
   return supabase();
+}
+
+const SHARED_KEYS = ["chats", "net", "spot"] as const;
+
+export function shared(life: Life | null | undefined): Partial<Life> {
+  const out: Partial<Life> = {};
+  if (!life) return out;
+  for (const key of SHARED_KEYS) {
+    if (life[key] !== undefined) Object.assign(out, { [key]: life[key] });
+  }
+  return out;
 }
 
 function same(left: string, right: string) {
@@ -153,7 +165,7 @@ export async function crowdCounts() {
   return { players: players ?? 0, online };
 }
 
-export type FoundPlayer = { username: string; name: string; where: string | null };
+export type FoundPlayer = { username: string; name: string; where: string | null; look?: Life["look"]; spot?: SpotPos | null };
 
 function cleanQuery(query: string) {
   return query.trim().replace(/^@/, "").replace(/[%_,.()"'\\]/g, "").slice(0, 32);
@@ -168,9 +180,17 @@ export async function findPlayers(query: string, where?: string, except?: string
   else if (where) request = request.filter("life->>where", "eq", where);
   else return [];
   const { data } = await request.limit(30);
-  const people = ((data ?? []) as { username: string; name: string; life?: { where?: string } | null }[])
+  const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const people = ((data ?? []) as { username: string; name: string; life?: { where?: string; seen?: string; look?: Life["look"]; spot?: SpotPos } | null }[])
     .filter((row) => row.username !== except)
-    .map((row) => ({ username: row.username, name: row.name, where: row.life?.where ?? null }));
+    .filter((row) => q || (typeof row.life?.seen === "string" && row.life.seen >= since))
+    .map((row) => ({
+      username: row.username,
+      name: row.name,
+      where: row.life?.where ?? null,
+      look: where && !q ? row.life?.look : undefined,
+      spot: where && !q && row.life?.spot?.where === where ? row.life.spot : null,
+    }));
   people.sort((a, b) => Number(b.username === q) - Number(a.username === q));
   return people;
 }
@@ -245,7 +265,7 @@ export async function loginPlayer(username: string, passwordHash: string) {
   if (!player.life) return player;
   const settled = mergeMoney(player.life, player.life);
   if (settled.cash === player.life.cash && (settled.seenTransfers?.length ?? 0) === (player.life.seenTransfers?.length ?? 0)) return player;
-  const life = { ...settled, chats: (player.life as Life & { chats?: unknown }).chats };
+  const life = { ...settled, ...shared(player.life) };
   const saved = await savePlayer({ ...player, life });
   return saved ? { ...player, life } : player;
 }
@@ -262,10 +282,52 @@ export async function saveMergedLife(username: string, incoming: Life) {
   const known = new Set((merged.transfers ?? []).map((note) => note.id));
   const extra = (latest?.life?.transfers ?? []).filter((note) => note.id && !known.has(note.id));
   if (extra.length && latest?.life) merged = mergeMoney({ ...latest.life, transfers: [...(merged.transfers ?? []), ...extra] }, merged);
-  const chats = (latest?.life as (Life & { chats?: unknown }) | undefined)?.chats ?? (player.life as Life & { chats?: unknown }).chats;
-  const life = chats ? { ...merged, chats } : merged;
+  const life = { ...merged, ...shared(player.life), ...shared(latest?.life) };
   const saved = await savePlayer({ ...player, life });
   return saved ? life : null;
+}
+
+function noteId(prefix: string) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function chargePlayer(username: string, amount: number, latest: Life, note: string, prefix = "pay") {
+  const value = Math.round(amount);
+  if (!Number.isFinite(value) || value < 1) return { error: "Enter an amount in cedis." } as const;
+  const player = await readPlayer(username);
+  if (!player?.life) return { error: "Log in again." } as const;
+  const current = mergeMoney(player.life, latest);
+  if (value > current.cash) return { error: `You need ${cedis(value)}. You have ${cedis(current.cash)}.` } as const;
+  const id = noteId(prefix);
+  const life: Life = {
+    ...current,
+    cash: current.cash - value,
+    transfers: [...(current.transfers ?? []), { id, delta: -value, note }].slice(-80),
+    seenTransfers: [...new Set([...(current.seenTransfers ?? []), id])].slice(-80),
+    log: [note, ...(current.log ?? [])].slice(0, 14),
+  };
+  const fresh = await readPlayer(username);
+  const saved = await savePlayer({ ...player, life: { ...life, ...shared(fresh?.life ?? player.life) } });
+  if (!saved) return { error: "The payment did not go through." } as const;
+  return { life, id } as const;
+}
+
+export async function creditPlayer(username: string, amount: number, note: string, prefix = "in") {
+  const value = Math.round(amount);
+  if (!Number.isFinite(value) || value < 1) return false;
+  const player = await readPlayer(username);
+  if (!player?.life) return false;
+  const life: Life = { ...player.life, transfers: [...(player.life.transfers ?? []), { id: noteId(prefix), delta: value, note }].slice(-80) };
+  return savePlayer({ ...player, life });
+}
+
+export async function updateLife(username: string, change: (life: Life) => Life | null) {
+  const player = await readPlayer(username);
+  if (!player?.life) return null;
+  const next = change(player.life);
+  if (!next) return null;
+  const saved = await savePlayer({ ...player, life: next });
+  return saved ? next : null;
 }
 
 export async function sendMoney(from: string, to: string, amount: number, latest: Life) {
@@ -289,12 +351,12 @@ export async function sendMoney(from: string, to: string, amount: number, latest
     seenTransfers: [...new Set([...(current.seenTransfers ?? []), id])].slice(-80),
     log: [noteOut, ...(current.log ?? [])].slice(0, 14),
   };
-  const senderChats = (sender.life as Life & { chats?: unknown }).chats;
-  const senderSaved = await savePlayer({ ...sender, life: senderChats ? { ...sent, chats: senderChats } : sent });
+  const keep = shared(sender.life);
+  const senderSaved = await savePlayer({ ...sender, life: { ...sent, ...keep } });
   if (!senderSaved) return { error: "MoMo did not go through." };
   const fresh = await readPlayer(to);
   if (!fresh?.life) {
-    await savePlayer({ ...sender, life: senderChats ? { ...current, chats: senderChats } : current });
+    await savePlayer({ ...sender, life: { ...current, ...keep } });
     return { error: "That username is not in Accra." };
   }
   const waiting: Life = {
@@ -303,7 +365,7 @@ export async function sendMoney(from: string, to: string, amount: number, latest
   };
   const recipientSaved = await savePlayer({ ...fresh, life: waiting });
   if (!recipientSaved) {
-    await savePlayer({ ...sender, life: senderChats ? { ...current, chats: senderChats } : current });
+    await savePlayer({ ...sender, life: { ...current, ...keep } });
     return { error: "MoMo did not go through." };
   }
   return { life: sent, note: `@${to} has ${cedis(value)} in their wallet.` };

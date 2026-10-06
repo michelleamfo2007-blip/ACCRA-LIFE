@@ -5,6 +5,8 @@ import { cedis, handleOf, type Life } from "@/lib/game/world";
 
 export type ChatMsg = { who: "me" | "them" | "note"; text: string; time: string };
 
+export type GroupRow = { id: string; name: string; last: string; time: string; members: string[] };
+
 const EMOJI = ["😊", "😂", "🙏🏾", "🔥", "❤️", "👀"];
 
 export function MessagesApp({
@@ -33,17 +35,18 @@ export function MessagesApp({
   chats: Record<string, ChatMsg[]>;
   blocked: string[];
   unread: Record<string, number>;
-  groups: string[];
+  groups: GroupRow[];
   onOpen: (id: string) => void;
   onBack: () => void;
-  onCreateGroup: (name: string) => void;
+  onCreateGroup: (name: string, members: string[]) => Promise<string | null>;
   onSend: (text: string) => void;
   onAct: (kind: "invite" | "visit" | "food" | "pay" | "spare", amount?: number) => void;
   onBlock: (id: string) => void;
   onReport: (id: string) => void;
 }) {
   if (thread) {
-    const person = resolvePerson(thread, players);
+    const room = groups.find((group) => group.id === thread);
+    const person = room ? { id: thread, name: room.name, handle: room.name } : resolvePerson(thread, players);
     return (
       <Thread
         person={person}
@@ -91,15 +94,16 @@ function Inbox({
   chats: Record<string, ChatMsg[]>;
   blocked: string[];
   unread: Record<string, number>;
-  groups: string[];
+  groups: GroupRow[];
   onOpen: (id: string) => void;
   onBack: () => void;
-  onCreateGroup: (name: string) => void;
+  onCreateGroup: (name: string, members: string[]) => Promise<string | null>;
 }) {
   const [tab, setTab] = useState<"chats" | "updates">("chats");
   const [query, setQuery] = useState("");
   const [lookup, setLookup] = useState("");
   const [groupName, setGroupName] = useState("");
+  const [groupPeople, setGroupPeople] = useState("");
   const [making, setMaking] = useState(false);
   const [notice, setNotice] = useState("");
   const [found, setFound] = useState<{ username: string; name: string }[]>([]);
@@ -132,7 +136,7 @@ function Inbox({
     };
   }, []);
   const people = peopleBook([...players, ...found]).filter((person) => !blocked.includes(person.id));
-  const unreadTotal = people.reduce((sum, person) => sum + (unread[person.id] ?? 0), 0);
+  const unreadTotal = people.reduce((sum, person) => sum + (unread[person.id] ?? 0), 0) + groups.reduce((sum, group) => sum + (unread[group.id] ?? 0), 0);
   const shown = people.filter((person) => {
     const hay = `${person.name} ${person.handle}`.toLowerCase();
     return hay.includes(query.trim().toLowerCase());
@@ -237,27 +241,46 @@ function Inbox({
                 <span className="block text-xs text-[#5c6b82]">Add them by username and plan an Accra night.</span>
               </span>
             </button>
-            {groups.map((name) => (
-              <button key={name} type="button" onClick={() => onOpen(`group:${name}`)} className="mt-2 flex w-full items-center gap-3 border-b border-black/5 py-2 text-left">
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-[#7a5af5] text-sm text-white">👥</span>
-                <span className="font-semibold">{name}</span>
+            {groups.map((group) => (
+              <button key={group.id} type="button" onClick={() => onOpen(group.id)} className="mt-2 flex w-full items-center gap-3 border-b border-black/5 py-2 text-left">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#7a5af5] text-sm text-white">👥</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-semibold">{group.name}</span>
+                    <span className="shrink-0 text-[11px] text-[#6b7c93]">{group.time}</span>
+                  </span>
+                  <span className={`block truncate text-sm ${(unread[group.id] ?? 0) > 0 ? "font-semibold text-[#121212]" : "text-[#5c6b82]"}`}>{group.last || `${group.members.length} members`}</span>
+                </span>
+                {(unread[group.id] ?? 0) > 0 ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white">{unread[group.id]}</span> : null}
               </button>
             ))}
             {making ? (
               <form
-                className="mt-2 flex gap-2"
+                className="mt-2 space-y-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const name = groupName.trim();
-                  if (!name) return;
-                  setGroupName("");
-                  setMaking(false);
-                  onCreateGroup(name);
+                  const members = groupPeople.split(/[\s,]+/).map((item) => item.replace(/^@/, "").toLowerCase()).filter(Boolean);
+                  if (!name || !members.length) {
+                    setNotice("Name the group and add at least one @username.");
+                    return;
+                  }
+                  void onCreateGroup(name, members).then((error) => {
+                    if (error) {
+                      setNotice(error);
+                      return;
+                    }
+                    setGroupName("");
+                    setGroupPeople("");
+                    setMaking(false);
+                    setNotice("");
+                  });
                 }}
               >
-                <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Group name" className="h-10 flex-1 rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
-                <button type="submit" className="rounded-full bg-[#121212] px-4 text-sm font-semibold text-white">
-                  Create
+                <input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Group name" className="h-10 w-full rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
+                <input value={groupPeople} onChange={(event) => setGroupPeople(event.target.value)} placeholder="@ama @kojo" className="h-10 w-full rounded-full bg-[#f4f7fb] px-4 text-sm outline-none" />
+                <button type="submit" className="w-full rounded-full bg-[#121212] py-2.5 text-sm font-semibold text-white">
+                  Create group
                 </button>
               </form>
             ) : null}

@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
+import { BizApp } from "@/components/game/biz-app";
+import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
+import { parseGroupThread, type SocialView } from "@/lib/game/net";
 import {
   CLOTHES,
   CLOTHS,
@@ -27,7 +30,7 @@ import {
   type StepResult,
 } from "@/lib/game/world";
 
-type AppId = "home" | "messages" | "work" | "goals" | "momo" | "contacts" | "radio" | "news" | "games" | "boutique" | "light" | "settings";
+type AppId = "home" | "messages" | "work" | "goals" | "momo" | "contacts" | "radio" | "news" | "games" | "boutique" | "light" | "settings" | "biz" | "susu" | "people";
 
 export function Handset({
   life,
@@ -50,11 +53,23 @@ export function Handset({
   onAir,
   unread,
   onRead,
+  social,
+  cloud,
+  asks,
+  onNet,
+  onVisit,
+  friends,
 }: {
+  friends: { username: string; name: string }[];
   life: Life;
   username: string;
   unread: Record<string, number>;
   onRead: (id: string) => void;
+  social: SocialView | null;
+  cloud: boolean;
+  asks: number;
+  onNet: NetAction;
+  onVisit: (host: string) => void;
   onClose: () => void;
   onWork: (jobId: string) => void;
   onWear: (look: Look, cost?: number) => void;
@@ -80,7 +95,7 @@ export function Handset({
   useEffect(() => {
     readRef.current = onRead;
   });
-  const [groups, setGroups] = useState<string[]>([]);
+  const groups = (social?.groups ?? []).map((group) => ({ id: `group:${group.owner}:${group.id}`, name: group.name, last: group.last, time: group.time, members: group.members }));
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -102,15 +117,17 @@ export function Handset({
     onAir(app === "radio");
   }, [app, onAir]);
   useEffect(() => {
-    if (!thread?.startsWith("user:")) return;
-    const withUser = thread.slice(5);
+    const room = thread ? parseGroupThread(thread) : null;
+    if (!thread || (!thread.startsWith("user:") && !room)) return;
+    const url = room ? `/api/live/social?group=${encodeURIComponent(`${room.owner}:${room.id}`)}` : `/api/live/chat?with=${encodeURIComponent(thread.slice(5))}`;
     let stop = false;
     const load = () => {
-      fetch(`/api/live/chat?with=${encodeURIComponent(withUser)}`)
+      fetch(url)
         .then((response) => response.json())
-        .then((payload: { messages?: ChatMsg[] }) => {
-          if (stop || !Array.isArray(payload.messages)) return;
-          setChats((current) => ({ ...current, [thread]: payload.messages ?? [] }));
+        .then((payload: { messages?: ChatMsg[]; group?: { messages: { who: "me" | "them"; from: string; text: string; time: string }[] } }) => {
+          const lines = room ? payload.group?.messages.map((mail) => ({ who: mail.who, time: mail.time, text: mail.who === "me" ? mail.text : `@${mail.from}: ${mail.text}` })) : payload.messages;
+          if (stop || !Array.isArray(lines)) return;
+          setChats((current) => ({ ...current, [thread]: lines }));
           readRef.current(thread);
         })
         .catch(() => {});
@@ -143,7 +160,7 @@ export function Handset({
 
   function personName(id: string) {
     if (id.startsWith("user:")) return players.find((player) => player.username === id.slice(5))?.name ?? id.slice(5);
-    if (id.startsWith("group:")) return id.slice(6);
+    if (id.startsWith("group:")) return groups.find((group) => group.id === id)?.name ?? "Group";
     return id;
   }
 
@@ -179,7 +196,7 @@ export function Handset({
             <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
               {app === "home" && !thread ? (
-                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
+                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
               ) : null}
               {app === "messages" ? (
                 <MessagesApp
@@ -193,14 +210,29 @@ export function Handset({
                   unread={unread}
                   groups={groups}
                   onOpen={openThread}
-                  onCreateGroup={(name) => {
-                    setGroups((current) => (current.includes(name) ? current : [...current, name]));
-                    openThread(`group:${name}`);
+                  onCreateGroup={async (name, members) => {
+                    if (!cloud) return "Groups need an online account.";
+                    const response = await fetch("/api/live/social", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "group-create", name, members }) });
+                    const payload = (await response.json().catch(() => null)) as { error?: string; ref?: { owner: string; id: string } } | null;
+                    if (!response.ok || !payload?.ref) return payload?.error ?? "The group did not save.";
+                    void onNet({ action: "refresh" });
+                    openThread(`group:${payload.ref.owner}:${payload.ref.id}`);
+                    return null;
                   }}
                   onBack={() => (thread ? setThread(null) : setApp("home"))}
                   onSend={(text) => {
                     if (!thread) return;
                     pushChat(thread, { who: "me", text, time });
+                    const room = parseGroupThread(thread);
+                    if (room) {
+                      void fetch("/api/live/social", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "group-send", owner: room.owner, id: room.id, text }) })
+                        .then((response) => response.json())
+                        .then((payload: { error?: string }) => {
+                          if (payload.error) pushChat(thread, { who: "note", text: payload.error, time });
+                        })
+                        .catch(() => pushChat(thread, { who: "note", text: "The message did not leave this phone.", time }));
+                      return;
+                    }
                     if (!thread.startsWith("user:")) {
                       pushChat(thread, { who: "note", text: "That chat is not a real account.", time });
                       return;
@@ -242,6 +274,18 @@ export function Handset({
                       });
                       return;
                     }
+                    if (cloud && thread.startsWith("user:") && (kind === "invite" || kind === "visit")) {
+                      const other = thread.slice(5);
+                      if (kind === "visit") {
+                        onVisit(other);
+                        return;
+                      }
+                      void onNet({ action: "invite", to: other }).then((error) => {
+                        pushChat(thread, { who: "note", text: error ?? `You invited @${other} over. They can visit for the next day.`, time });
+                        if (!error) onSocial(invitePerson(life, name));
+                      });
+                      return;
+                    }
                     const result = kind === "invite" ? invitePerson(life, name) : kind === "visit" ? visitPerson(life, name) : treatPerson(life, name);
                     if (result.error) pushChat(thread, { who: "them", text: result.error, time });
                     else {
@@ -267,6 +311,21 @@ export function Handset({
               {app === "games" ? <NoteScreen title="Oware" onBack={() => setApp("home")} lines={["The board is on the stoop.", "A full game lands later. For now, the seeds are just sitting there, waiting on you."]} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
+              {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "susu" ? <SusuApp me={username} life={life} social={social} cloud={cloud} onBack={() => setApp("home")} onAction={onNet} /> : null}
+              {app === "people" ? (
+                <PeopleApp
+                  me={username}
+                  life={life}
+                  social={social}
+                  cloud={cloud}
+                  friends={friends}
+                  onBack={() => setApp("home")}
+                  onAction={onNet}
+                  onVisit={onVisit}
+                  onChat={(other) => openThread(`user:${other}`)}
+                />
+              ) : null}
               {app === "settings" ? (
                 <SettingsApp email={email} onBack={() => setApp("home")} onEmail={onEmail} onLogout={onLogout} onMenu={onClose} onNewLife={onNewLife} />
               ) : null}
@@ -314,6 +373,7 @@ function HomeScreen({
   date,
   time,
   inbox,
+  asks,
   onOpen,
   onRide,
   onMarket,
@@ -321,6 +381,7 @@ function HomeScreen({
   date: string;
   time: string;
   inbox: number;
+  asks: number;
   onOpen: (app: AppId) => void;
   onRide: () => void;
   onMarket: () => void;
@@ -365,6 +426,15 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Light" color="#fff4c2" onClick={() => onOpen("light")}>
           <Bulb />
+        </AppIcon>
+        <AppIcon label="Business" color="#121212" onClick={() => onOpen("biz")}>
+          <span className="text-2xl">🏪</span>
+        </AppIcon>
+        <AppIcon label="Susu" color="#006B3F" onClick={() => onOpen("susu")}>
+          <span className="text-2xl">🤝</span>
+        </AppIcon>
+        <AppIcon label="People" color="#c45c9a" badge={asks} onClick={() => onOpen("people")}>
+          <span className="text-2xl">💞</span>
         </AppIcon>
         <AppIcon label="Settings" color="#e7edf5" onClick={() => onOpen("settings")}>
           <Gear />

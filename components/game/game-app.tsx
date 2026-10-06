@@ -1,17 +1,21 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ActionDeck } from "@/components/game/action-deck";
 import { BOARDS, CityBoard } from "@/components/game/city-board";
 import { IsoHuman } from "@/components/game/iso-human";
-import { VenueFloor } from "@/components/game/venue-floor";
+import { VenueFloor, type Peer } from "@/components/game/venue-floor";
 import { Catalogue } from "@/components/game/catalogue";
 import { Handset } from "@/components/game/handset";
 import { RoomView } from "@/components/game/room-view";
 import { Payday, ShiftFloor, StreetRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
+import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
+import { TradeSheet } from "@/components/game/trade-sheet";
+import { buyGood, sellGood } from "@/lib/game/trade";
+import type { HostHome } from "@/lib/game/net";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -71,6 +75,16 @@ const emptyServer = "";
 function useSave() {
   const raw = useSyncExternalStore(subscribeSave, getRaw, () => emptyServer);
   return useMemo(() => parseRaw(raw), [raw]);
+}
+
+function subscribeMinute(callback: () => void) {
+  const id = window.setInterval(callback, 30000);
+  return () => window.clearInterval(id);
+}
+
+function useCityHeadline() {
+  const minute = useSyncExternalStore(subscribeMinute, () => Math.floor(Date.now() / 60000), () => null);
+  return useMemo(() => (minute == null ? null : cityNow(new Date(minute * 60000)).headline), [minute]);
 }
 
 function useCookie() {
@@ -282,6 +296,7 @@ function Guest({
   const [spotId, setSpotId] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState(false);
   const crowd = useCityCrowd();
+  const headline = useCityHeadline();
   const spot = SPOTS.find((item) => item.id === spotId) ?? null;
 
   return (
@@ -317,7 +332,7 @@ function Guest({
         </LayerChip>
       </div>
       <div className="absolute left-1/2 top-[7.4rem] z-20 -translate-x-1/2">
-        <p className="rounded-full bg-[#006B3F] px-5 py-2 text-sm font-semibold text-white shadow">🎉 All-white season is law this week</p>
+        <p className="max-w-[92vw] truncate rounded-full bg-[#006B3F] px-5 py-2 text-sm font-semibold text-white shadow">{headline ?? "Accra is moving"}</p>
       </div>
       <div className="absolute bottom-4 left-1/2 z-20 w-[min(94vw,560px)] -translate-x-1/2 space-y-3">
         {spot ? (
@@ -746,15 +761,18 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [errand, setErrand] = useState<{ spot: string; n: number } | null>(null);
   const [menuFocus, setMenuFocus] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
-  const herePeople = usePlacePeople(account.life?.where ?? null);
+  const herePeople = usePlacePeople(account.life?.where ?? null, account.cloud ? 3000 : 15000);
   const sheetPeople = usePlacePeople(placeId);
+  const moveGate = useRef<{ at: number; timer: number | null }>({ at: 0, timer: null });
+  const [tradeOpen, setTradeOpen] = useState(false);
+  const [visit, setVisit] = useState<HostHome | null>(null);
   const [ping, setPing] = useState<InboxPing | null>(null);
   const inbox = useInbox(account.username, Boolean(account.cloud), (next) => {
     setPing(next);
     window.setTimeout(() => setPing((current) => (current?.at === next.at ? null : current)), 6000);
     try {
       if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
-        new Notification(`@${next.username}`, { body: next.text, tag: `accralife-${next.username}` });
+        new Notification(next.name, { body: next.text, tag: `accralife-${next.id}` });
       }
     } catch {}
   });
@@ -777,6 +795,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const quest = questFor(life);
   const crowd = useCityCrowd();
   const place = placeId ? spotById(placeId) : null;
+  const city = now == null ? QUIET_CITY : cityNow(new Date(now));
+  const homeRide = rideIn(RIDES[1], city.weather);
 
   function apply(result: StepResult) {
     if (result.error) {
@@ -786,6 +806,47 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     commitLife(account.username, result.life);
     const note = result.notes.filter(Boolean)[0];
     if (note) flash(note);
+  }
+
+  async function netAction(body: Record<string, unknown>) {
+    if (body.action === "refresh") {
+      inbox.refresh();
+      return null;
+    }
+    if (!account.cloud) return "This needs an online account.";
+    const response = await fetch("/api/live/social", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, life: account.life }) });
+    const data = (await response.json().catch(() => null)) as { error?: string; life?: Life; note?: string } | null;
+    if (!response.ok || data?.error) return data?.error ?? "That did not go through.";
+    if (data?.life) commitLife(account.username, data.life);
+    if (data?.note) flash(data.note);
+    inbox.refresh();
+    return null;
+  }
+
+  async function visitHost(host: string) {
+    const response = await fetch(`/api/live/social?home=${encodeURIComponent(host)}`);
+    const data = (await response.json().catch(() => null)) as { home?: HostHome; error?: string } | null;
+    if (!response.ok || !data?.home) {
+      flash(data?.error ?? "You need an invite to visit.");
+      return;
+    }
+    setVisit(data.home);
+    setTab("home");
+    void fetch("/api/live/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: host, text: "🚪 I'm at your place!" }) }).catch(() => undefined);
+  }
+
+  function shareSpot(x: number, y: number) {
+    if (!account.cloud || !life || life.where === "home") return;
+    const where = life.where;
+    const send = () => {
+      moveGate.current.at = Date.now();
+      moveGate.current.timer = null;
+      void fetch("/api/live/move", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ where, x, y }) }).catch(() => undefined);
+    };
+    if (moveGate.current.timer) window.clearTimeout(moveGate.current.timer);
+    const wait = 1200 - (Date.now() - moveGate.current.at);
+    if (wait <= 0) send();
+    else moveGate.current.timer = window.setTimeout(send, wait);
   }
 
   async function paySomeone(name: string, amount: number, username?: string) {
@@ -857,7 +918,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               return;
             }
             if (id === "home") {
-              setTrip({ name: "Home", placeId: "home", ride: RIDES[1] });
+              setTrip({ name: "Home", placeId: "home", ride: homeRide });
               setPlaceId(null);
               return;
             }
@@ -877,13 +938,20 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             const verb = HOME_VERBS.find((item) => item.id === id);
             if (verb) apply(runVerb(life, verb, "home"));
           }}
+          onRun={(verb) => apply(runVerb(life, verb, "home"))}
         />
       ) : tab === "home" ? (
         <VenueFloor
+          key={life.where}
           life={life}
           people={herePeople}
+          me={account.username}
+          onMove={shareSpot}
+          onTrade={() => setTradeOpen(true)}
           focus={menuFocus}
-          onHome={() => setTrip({ name: "Home", placeId: "home", ride: RIDES[1] })}
+          extra={eventVerbs(life.where, city)}
+          homeFare={homeRide.cost}
+          onHome={() => setTrip({ name: "Home", placeId: "home", ride: homeRide })}
           onAct={(verb, person) => apply(person ? runVerb(life, verb, life.where, person) : payOffer(life, verb, offerFrom(verb), life.where))}
           onPay={(person, amount, username) => paySomeone(person, amount, username)}
           onOpenChat={(username) => {
@@ -894,6 +962,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       ) : (
         <div className="h-full bg-[#fff6df]" />
       )}
+      {city.weather.rain && !(tab === "home" && life.where === "home") ? <div className={`rain-layer pointer-events-none absolute inset-0 z-10 ${city.weather.flood ? "rain-heavy" : ""}`} aria-hidden /> : null}
       {clean ? (
         <button type="button" className="absolute bottom-4 left-4 z-30 rounded-full bg-white px-4 py-2 text-sm font-semibold shadow" onClick={() => setClean(false)}>
           Show screen
@@ -962,6 +1031,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 <p className="text-xs text-[#5c6b82]">Look around {spotById(gemSpotId(life.minutes)).name}. Next find is {cedis(40)}.</p>
               </button>
             ) : null}
+            {city.events.length || city.match || city.weather.rain ? (
+              <button
+                type="button"
+                className={`w-full rounded-2xl px-3 py-2 text-left text-white shadow ${city.weather.flood ? "bg-[#1f4e79]" : city.match?.live ? "bg-[#CE1126]" : "bg-[#006B3F]"}`}
+                onClick={() => {
+                  const target = eventSpot(city);
+                  if (!target) return;
+                  setTab("map");
+                  setPlaceId(target);
+                }}
+              >
+                <p className="line-clamp-2 text-xs font-bold">{city.headline}</p>
+                {city.weather.rain && !city.weather.flood ? <p className="text-[11px] opacity-90">🌧️ {city.weather.label} Rides are slower and cost a bit more.</p> : null}
+              </button>
+            ) : null}
             {life.dumsor ? <p className="w-full rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
             <button type="button" className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow" onClick={() => setClean(true)}>
               ⌃ Clean screen
@@ -1010,9 +1094,9 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             ).map(([id, label]) => (
               <button key={id} type="button" onClick={() => setTab(id)} className={`relative rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""}`}>
                 {label}
-                {id === "phone" && inbox.total > 0 ? (
-                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white" aria-label={`${inbox.total} unread`}>
-                    {inbox.total > 9 ? "9+" : inbox.total}
+                {id === "phone" && inbox.total + inbox.asks > 0 ? (
+                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#ff3b30] px-1 text-[11px] font-bold text-white" aria-label={`${inbox.total + inbox.asks} new`}>
+                    {inbox.total + inbox.asks > 9 ? "9+" : inbox.total + inbox.asks}
                   </span>
                 ) : null}
               </button>
@@ -1074,10 +1158,16 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           here={life.where === place.id}
           people={sheetPeople.map((person) => person.name)}
           rideId={rideId}
+          sky={city.weather}
+          extra={eventVerbs(place.id, city)}
           onRide={setRideId}
           onClose={() => setPlaceId(null)}
           onGo={() => {
-            const ride = RIDES.find((item) => item.id === rideId) ?? RIDES[1];
+            const ride = rideIn(RIDES.find((item) => item.id === rideId) ?? RIDES[1], city.weather);
+            if (ride.blocked) {
+              flash(ride.blocked);
+              return;
+            }
             setTrip({ name: place.name, placeId: place.id, ride });
             setPlaceId(null);
           }}
@@ -1144,6 +1234,61 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
         />
       ) : null}
+      {visit ? (
+        <div className="absolute inset-0 z-[45] bg-[#d7ecf8]">
+          <div className="pointer-events-none absolute inset-0">
+            <RoomView life={{ ...life, homeId: visit.homeId, look: visit.look, inventory: visit.inventory, furniture: visit.furniture, floor: visit.floor, stored: [], dumsor: false }} onAct={() => {}} onMap={() => {}} onAsk={() => {}} />
+          </div>
+          <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-bold shadow-lg">
+            🏠 At @{visit.username}&apos;s place · {homeById(visit.homeId).area}
+          </div>
+          <div className="absolute inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 mx-auto max-w-md space-y-2 rounded-3xl bg-white p-3 shadow-2xl">
+            <p className="text-sm text-[#5c6b82]">{homeLook(visit.homeId).label}. {visit.furniture.length ? `${visit.furniture.length} pieces laid out.` : "Still bare walls."}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: "visit-gist", label: "Gist on the sofa", detail: "Old stories, new stories, louder each time.", minutes: 60, effects: { social: 26, fun: 14 } },
+                  { id: "visit-cook", label: "Cook together", detail: "Jollof in their pot. Somebody argues about pepper.", minutes: 70, effects: { hunger: 34, social: 20, fun: 10 } },
+                  { id: "visit-movie", label: "Watch a movie", detail: "A Ghallywood classic. You both pretend not to cry.", minutes: 110, effects: { fun: 30, social: 18, energy: -6 } },
+                  { id: "visit-games", label: "Play ludo", detail: "Six, six, six. They swear the dice is cursed.", minutes: 50, effects: { fun: 26, social: 16 } },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => apply(runVerb(life, { ...item, cost: 0, earn: 0, effects: { ...item.effects }, social: true }, life.where, visit.name))}
+                  className="rounded-2xl bg-[#f4f7fb] px-3 py-2.5 text-left text-sm font-semibold"
+                >
+                  {item.label}
+                  <span className="block text-[11px] font-normal text-[#5c6b82]">⏱ {item.minutes}m</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => setVisit(null)} className="w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
+              Say bye and leave
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {tradeOpen && tab === "home" && life.where !== "home" ? (
+        <TradeSheet
+          life={life}
+          onClose={() => setTradeOpen(false)}
+          onBuy={(id) => {
+            const result = buyGood(life, id);
+            if (result.error) flash(result.error);
+            else commitLife(account.username, result.life);
+          }}
+          onSell={(id) => {
+            const result = sellGood(life, id);
+            if (result.error) flash(result.error);
+            else {
+              commitLife(account.username, result.life);
+              flash(result.notes[0] ?? "Sold.");
+            }
+          }}
+        />
+      ) : null}
       {payday ? <Payday earned={payday.earned} performance={payday.performance} onClose={() => setPayday(null)} /> : null}
       {tab === "buy" ? (
         <Catalogue cash={life.cash} owned={life.inventory} stored={life.stored ?? []} floor={life.floor} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
@@ -1204,16 +1349,16 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <button
           type="button"
           onClick={() => {
-            setChatLaunch({ id: `user:${ping.username}` });
+            setChatLaunch({ id: ping.id });
             setTab("phone");
             setPing(null);
           }}
           className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-[60] flex w-[min(360px,calc(100%-1.5rem))] -translate-x-1/2 items-center gap-3 rounded-3xl bg-white/95 px-4 py-3 text-left shadow-[0_16px_40px_rgba(22,32,60,.25)] backdrop-blur"
         >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#006B3F] text-sm font-bold text-white">{ping.username.slice(0, 1).toUpperCase()}</span>
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#006B3F] text-sm font-bold text-white">{ping.id.startsWith("group:") ? "👥" : ping.username.slice(0, 1).toUpperCase()}</span>
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-sm font-bold text-[#121212]">@{ping.username}</span>
+              <span className="truncate text-sm font-bold text-[#121212]">{ping.name}</span>
               <span className="shrink-0 text-[11px] text-[#8b97ab]">now</span>
             </span>
             <span className="block truncate text-sm text-[#5c6b82]">{ping.text}</span>
@@ -1226,8 +1371,14 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           username={account.username}
           unread={inbox.unread}
           onRead={(id) => {
-            if (id.startsWith("user:")) inbox.markRead(id.slice(5));
+            inbox.markRead(id);
           }}
+          social={inbox.social}
+          cloud={Boolean(account.cloud)}
+          asks={inbox.asks}
+          onNet={netAction}
+          onVisit={(host) => void visitHost(host)}
+          friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
           launch={chatLaunch}
           onLaunchConsumed={() => setChatLaunch(null)}
           onAir={setOnAir}
@@ -1286,29 +1437,27 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   );
 }
 
-function usePlacePeople(where: string | null) {
-  const [people, setPeople] = useState<{ username: string; name: string }[]>([]);
+function usePlacePeople(where: string | null, every = 15000) {
+  const [found, setPeople] = useState<{ where: string; people: Peer[] }>({ where: "", people: [] });
+  const people = where && found.where === where ? found.people : [];
   useEffect(() => {
-    if (!where || where === "home") {
-      setPeople([]);
-      return;
-    }
+    if (!where || where === "home") return;
     let stop = false;
     const load = () => {
       fetch(`/api/live/people?where=${encodeURIComponent(where)}`)
         .then((response) => response.json())
-        .then((payload: { people?: { username: string; name: string }[] }) => {
-          if (!stop && Array.isArray(payload.people)) setPeople(payload.people);
+        .then((payload: { people?: Peer[] }) => {
+          if (!stop && Array.isArray(payload.people)) setPeople({ where, people: payload.people });
         })
         .catch(() => {});
     };
     load();
-    const id = window.setInterval(load, 15000);
+    const id = window.setInterval(load, every);
     return () => {
       stop = true;
       window.clearInterval(id);
     };
-  }, [where]);
+  }, [where, every]);
   return people;
 }
 
@@ -1414,6 +1563,8 @@ function PlaceSheet({
   here,
   people,
   rideId,
+  sky,
+  extra,
   onRide,
   onClose,
   onGo,
@@ -1424,13 +1575,15 @@ function PlaceSheet({
   here: boolean;
   people: string[];
   rideId: (typeof RIDES)[number]["id"];
+  sky: Weather;
+  extra: Verb[];
   onRide: (id: (typeof RIDES)[number]["id"]) => void;
   onClose: () => void;
   onGo: () => void;
   onAct: (verb: Verb) => void;
   onGem: (() => void) | null;
 }) {
-  const ride = RIDES.find((item) => item.id === rideId) ?? RIDES[1];
+  const ride = rideIn(RIDES.find((item) => item.id === rideId) ?? RIDES[1], sky);
   const area = areaOf(place);
   const blurb = place.blurb.startsWith(`${area}.`) ? place.blurb.slice(area.length + 1).trim() : place.blurb;
   const [copied, setCopied] = useState(false);
@@ -1465,7 +1618,7 @@ function PlaceSheet({
         </svg>
         {copied ? "Link copied" : `Share a link to ${place.name}`}
       </button>
-      <ActionDeck verbs={place.actions} here={here} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
+      <ActionDeck verbs={[...extra, ...place.actions]} here={here} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
       {onGem ? (
         <button type="button" onClick={onGem} className="mt-2 rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
           Search for the gem
@@ -1486,21 +1639,26 @@ function PlaceSheet({
       ) : (
         <>
           <div className="mt-4 grid grid-cols-5 gap-1.5">
-            {RIDES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onRide(item.id)}
-                className={`rounded-2xl px-1 py-2.5 text-center ${rideId === item.id ? "bg-[#fff4c2] ring-2 ring-[#CE1126]" : "bg-[#f4f7fb]"}`}
-              >
-                <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "train" ? "🚆" : item.id === "okada" ? "🏍️" : "🚕"}</span>
-                <span className="mt-1 block text-sm font-semibold">{item.label}</span>
-                <span className="block text-xs text-[#5c6b82]">{item.cost ? cedis(item.cost) : "Free"}</span>
-              </button>
-            ))}
+            {RIDES.map((base) => {
+              const item = rideIn(base, sky);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={Boolean(item.blocked)}
+                  onClick={() => onRide(item.id)}
+                  className={`rounded-2xl px-1 py-2.5 text-center disabled:opacity-40 ${rideId === item.id ? "bg-[#fff4c2] ring-2 ring-[#CE1126]" : "bg-[#f4f7fb]"}`}
+                >
+                  <span className="block text-lg">{item.id === "trek" ? "🚶" : item.id === "trotro" ? "🚐" : item.id === "train" ? "🚆" : item.id === "okada" ? "🏍️" : "🚕"}</span>
+                  <span className="mt-1 block text-sm font-semibold">{item.label}</span>
+                  <span className={`block text-xs ${item.note ? "font-semibold text-[#1f4e79]" : "text-[#5c6b82]"}`}>{item.blocked ? "Parked" : item.cost ? cedis(item.cost) : "Free"}</span>
+                </button>
+              );
+            })}
           </div>
-          <button type="button" onClick={onGo} className="mt-3 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white">
-            Go · {ride.cost ? cedis(ride.cost) : "Free"}
+          {sky.rain ? <p className="mt-2 text-xs font-semibold text-[#1f4e79]">🌧️ {sky.label} Roads are slow. The train runs on time.</p> : null}
+          <button type="button" onClick={onGo} disabled={Boolean(ride.blocked)} className="mt-3 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white disabled:opacity-40">
+            {ride.blocked ? ride.blocked : `Go · ${ride.cost ? cedis(ride.cost) : "Free"} · ${ride.minutes}m`}
           </button>
         </>
       )}

@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { groupThread, type SocialView } from "@/lib/game/net";
 
 export type InboxThread = {
+  id: string;
   username: string;
   name: string;
   last: string;
@@ -11,7 +13,9 @@ export type InboxThread = {
   incoming: { at: string; text: string }[];
 };
 
-export type InboxPing = { username: string; name: string; text: string; at: string };
+export type InboxPing = { id: string; username: string; name: string; text: string; at: string };
+
+type ChatThread = Omit<InboxThread, "id">;
 
 function readKey(username: string) {
   return `accralife-read:${username}`;
@@ -26,14 +30,20 @@ function loadSeen(username: string): Record<string, string> {
   }
 }
 
+function seenFor(seen: Record<string, string>, id: string) {
+  return seen[id] ?? (id.startsWith("user:") ? seen[id.slice(5)] : undefined) ?? "";
+}
+
 export function useInbox(username: string, enabled: boolean, onPing: (ping: InboxPing) => void) {
   const [loaded, setThreads] = useState<InboxThread[]>([]);
+  const [social, setSocial] = useState<SocialView | null>(null);
   const [seenBook, setSeenBook] = useState(() => ({ username, map: loadSeen(username) }));
   const seen = seenBook.username === username ? seenBook.map : loadSeen(username);
   const threads = enabled ? loaded : [];
   const announced = useRef<Set<string> | null>(null);
   const pingRef = useRef(onPing);
   const seenRef = useRef(seen);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     pingRef.current = onPing;
     seenRef.current = seen;
@@ -43,46 +53,53 @@ export function useInbox(username: string, enabled: boolean, onPing: (ping: Inbo
     announced.current = null;
     if (!enabled) return;
     let stop = false;
-    const load = () => {
-      fetch("/api/live/chat")
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { threads?: InboxThread[] } | null) => {
-          if (stop || !Array.isArray(payload?.threads)) return;
-          const list = payload.threads.map((thread) => ({ ...thread, incoming: Array.isArray(thread.incoming) ? thread.incoming : [] }));
-          setThreads(list);
-          const keys = list.flatMap((thread) => thread.incoming.map((mail) => `${thread.username}|${mail.at}`));
-          if (!announced.current) {
-            announced.current = new Set(keys);
-            return;
-          }
-          for (const thread of list) {
-            const since = seenRef.current[thread.username] ?? "";
-            for (const mail of thread.incoming) {
-              const key = `${thread.username}|${mail.at}`;
-              if (announced.current.has(key)) continue;
-              announced.current.add(key);
-              if (mail.at > since) pingRef.current({ username: thread.username, name: thread.name, text: mail.text, at: mail.at });
-            }
-          }
-        })
-        .catch(() => {});
+    const load = async () => {
+      const [chat, net] = await Promise.all([
+        fetch("/api/live/chat")
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null) as Promise<{ threads?: ChatThread[] } | null>,
+        fetch("/api/live/social")
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null) as Promise<SocialView | null>,
+      ]);
+      if (stop) return;
+      const direct: InboxThread[] = Array.isArray(chat?.threads) ? chat.threads.map((thread) => ({ ...thread, id: `user:${thread.username}`, incoming: Array.isArray(thread.incoming) ? thread.incoming : [] })) : [];
+      const groups: InboxThread[] =
+        net && Array.isArray(net.groups) ? net.groups.map((group) => ({ id: groupThread(group.owner, group.id), username: group.owner, name: group.name, last: group.last, time: group.time, incoming: group.incoming ?? [] })) : [];
+      if (net && Array.isArray(net.susu)) setSocial(net);
+      const list = [...direct, ...groups];
+      setThreads(list);
+      const keys = list.flatMap((thread) => thread.incoming.map((mail) => `${thread.id}|${mail.at}`));
+      if (!announced.current) {
+        announced.current = new Set(keys);
+        return;
+      }
+      for (const thread of list) {
+        const since = seenFor(seenRef.current, thread.id);
+        for (const mail of thread.incoming) {
+          const key = `${thread.id}|${mail.at}`;
+          if (announced.current.has(key)) continue;
+          announced.current.add(key);
+          if (mail.at > since) pingRef.current({ id: thread.id, username: thread.username, name: thread.id.startsWith("group:") ? thread.name : `@${thread.username}`, text: mail.text, at: mail.at });
+        }
+      }
     };
-    load();
-    const id = window.setInterval(load, 5000);
+    void load();
+    const id = window.setInterval(() => void load(), 5000);
     return () => {
       stop = true;
       window.clearInterval(id);
     };
-  }, [enabled, username]);
+  }, [enabled, username, tick]);
 
   const markRead = useCallback(
-    (other: string) => {
-      const thread = loaded.find((item) => item.username === other);
+    (id: string) => {
+      const thread = loaded.find((item) => item.id === id);
       const latest = thread?.incoming[thread.incoming.length - 1]?.at ?? new Date().toISOString();
       setSeenBook((book) => {
         const current = book.username === username ? book.map : loadSeen(username);
-        if (current[other] && current[other] >= latest) return book;
-        const next = { ...current, [other]: latest };
+        if (seenFor(current, id) >= latest) return book;
+        const next = { ...current, [id]: latest };
         try {
           localStorage.setItem(readKey(username), JSON.stringify(next));
         } catch {}
@@ -92,13 +109,16 @@ export function useInbox(username: string, enabled: boolean, onPing: (ping: Inbo
     [loaded, username],
   );
 
+  const refresh = useCallback(() => setTick((value) => value + 1), []);
+
   const unread: Record<string, number> = {};
   for (const thread of threads) {
-    const since = seen[thread.username] ?? "";
+    const since = seenFor(seen, thread.id);
     const count = thread.incoming.filter((mail) => mail.at > since).length;
-    if (count) unread[`user:${thread.username}`] = count;
+    if (count) unread[thread.id] = count;
   }
+  const asks = enabled ? (social?.asks.length ?? 0) + (social?.invites.length ?? 0) : 0;
   const total = Object.values(unread).reduce((sum, count) => sum + count, 0);
 
-  return { threads, unread, total, markRead };
+  return { threads, unread, total, asks, markRead, social: enabled ? social : null, refresh };
 }

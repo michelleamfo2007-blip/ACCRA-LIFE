@@ -2,7 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed } from "@/lib/game/world";
+import { ItemSheet } from "@/components/game/item-sheet";
+import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
+import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
 
@@ -20,9 +22,12 @@ const SPOTS = {
   roamC: { x: -1.1, z: 1.6, action: null },
 };
 
+type Pose = "idle" | "walk" | "act" | "sleep";
+
 export function RoomView({
   life,
   onAct,
+  onRun,
   onMap,
   onAsk,
   errand = null,
@@ -32,6 +37,7 @@ export function RoomView({
 }: {
   life: Life;
   onAct: (id: string) => void;
+  onRun?: (verb: Verb) => void;
   onMap: () => void;
   onAsk: () => void;
   errand?: { spot: string; n: number } | null;
@@ -43,22 +49,52 @@ export function RoomView({
   const dark = life.dumsor && !hasCurrent(life.inventory);
   const bedItem = SHOP.filter((item) => item.kind === "bed" && life.inventory.includes(item.id)).sort((a, b) => b.price - a.price)[0];
   const [pos, setPos] = useState({ x: 0.2, z: 1.1 });
-  const [pose, setPose] = useState<"idle" | "walk" | "act">("idle");
+  const [pose, setPose] = useState<Pose>("idle");
   const [heading, setHeading] = useState(0);
   const posRef = useRef(pos);
   const busy = useRef(false);
   const frame = useRef(0);
   const onActRef = useRef(onAct);
+  const onRunRef = useRef(onRun);
   const onMapRef = useRef(onMap);
   const [picked, setPicked] = useState<string | null>(null);
+  const [fixture, setFixture] = useState<FixtureId | null>(null);
   const [draft, setDraft] = useState<Placed | null>(null);
 
   useEffect(() => {
     onActRef.current = onAct;
+    onRunRef.current = onRun;
     onMapRef.current = onMap;
-  }, [onAct, onMap]);
+  }, [onAct, onRun, onMap]);
 
-  function walkTo(target: { x: number; z: number }, action: string | null) {
+  function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean) {
+    walkTo(target, null, () => {
+      setPose(inBed && (verb.sleep || verb.id === "sleep") ? "sleep" : "act");
+      onRunRef.current?.(verb);
+      window.setTimeout(
+        () => {
+          setPose("idle");
+          busy.current = false;
+        },
+        inBed && (verb.sleep || verb.id === "sleep") ? 2800 : 1500,
+      );
+    });
+  }
+
+  function pickVerb(verb: Verb) {
+    if (fixture) {
+      const spot = SPOTS[fixture];
+      setFixture(null);
+      runAt(spot, verb, fixture === "bed");
+      return;
+    }
+    const piece = (life.furniture ?? []).find((item) => item.id === picked);
+    setPicked(null);
+    if (!piece) return;
+    runAt({ x: clampRoom(piece.x + (piece.x > 0 ? -0.7 : 0.7), -4.6, 4.6), z: clampRoom(piece.z + 0.55, -3.4, 3.6) }, verb, false);
+  }
+
+  function walkTo(target: { x: number; z: number }, action: string | null, arrive?: () => void) {
     cancelAnimationFrame(frame.current);
     busy.current = true;
     const start = { ...posRef.current };
@@ -77,6 +113,10 @@ export function RoomView({
       setPos(point);
       if (t < 1) {
         frame.current = requestAnimationFrame(step);
+        return;
+      }
+      if (arrive) {
+        arrive();
         return;
       }
       if (action === "map") {
@@ -144,6 +184,7 @@ export function RoomView({
     if (!draft) return;
     onLay?.(draft.id, draft.x, draft.z, draft.rot);
     setDraft(null);
+    setPicked(null);
   }
 
   const owns = (id: string) => life.inventory.includes(id);
@@ -161,44 +202,63 @@ export function RoomView({
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
         onAsk={onAsk}
-        onGo={(id) => walkTo(SPOTS[id as keyof typeof SPOTS], SPOTS[id as keyof typeof SPOTS].action)}
+        onGo={(id) => {
+          if (id === "door") {
+            walkTo(SPOTS.door, "map");
+            return;
+          }
+          if (draft) return;
+          setPicked(null);
+          setFixture(id as FixtureId);
+        }}
         pieces={shownPieces(life, draft)}
         picked={draft?.id ?? picked}
         placing={Boolean(draft)}
         onPick={(id) => {
           setDraft(null);
+          setFixture(null);
           setPicked(id);
         }}
         onDrag={(x, z) => setDraft((current) => (current ? { ...current, x: clampRoom(x, -4.2, 4.2), z: clampRoom(z, -3.2, 3.4) } : current))}
       />
-      <PieceCard
-        id={draft?.id ?? picked}
-        placing={Boolean(draft)}
-        onMove={() => {
-          const piece = (life.furniture ?? []).find((item) => item.id === picked);
-          if (piece) setDraft({ ...piece });
-        }}
-        onTurn={() => {
-          const piece = (life.furniture ?? []).find((item) => item.id === picked);
-          if (!piece) return;
-          onLay?.(piece.id, piece.x, piece.z, (piece.rot + 1) % 4);
-        }}
-        onStore={() => {
-          if (!picked) return;
-          onStore?.(picked);
-          setPicked(null);
-          setDraft(null);
-        }}
-        onSell={() => {
-          if (!picked) return;
-          onSell?.(picked);
-          setPicked(null);
-          setDraft(null);
-        }}
-        onClose={() => {
-          setPicked(null);
-          setDraft(null);
-        }}
+      {pose === "sleep" ? (
+        <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#3b6cff] shadow-lg">
+          💤 Sleeping…
+        </div>
+      ) : null}
+      {fixture && !draft ? <ItemSheet card={fixtureCard(fixture, life)} life={life} onPick={pickVerb} onClose={() => setFixture(null)} /> : null}
+      {picked && !draft && pieceCard(picked) ? (
+        <ItemSheet
+          card={pieceCard(picked)!}
+          life={life}
+          onPick={pickVerb}
+          onClose={() => setPicked(null)}
+          footer={
+            <PieceTools
+              id={picked}
+              onMove={() => {
+                const piece = (life.furniture ?? []).find((item) => item.id === picked);
+                if (piece) setDraft({ ...piece });
+              }}
+              onTurn={() => {
+                const piece = (life.furniture ?? []).find((item) => item.id === picked);
+                if (!piece) return;
+                onLay?.(piece.id, piece.x, piece.z, (piece.rot + 1) % 4);
+              }}
+              onStore={() => {
+                onStore?.(picked);
+                setPicked(null);
+              }}
+              onSell={() => {
+                onSell?.(picked);
+                setPicked(null);
+              }}
+            />
+          }
+        />
+      ) : null}
+      <PlaceCard
+        id={draft?.id ?? null}
         onNudge={nudge}
         onRotate={() => setDraft((current) => (current ? { ...current, rot: (current.rot + 1) % 4 } : current))}
         onPlace={commitDraft}
@@ -217,26 +277,34 @@ function clampRoom(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function PieceCard({
+function PieceTools({ id, onMove, onTurn, onStore, onSell }: { id: string; onMove: () => void; onTurn: () => void; onStore: () => void; onSell: () => void }) {
+  const item = SHOP.find((entry) => entry.id === id);
+  if (!item) return null;
+  return (
+    <div className="rounded-2xl bg-[#f7f8fb] p-3">
+      <p className="text-xs text-[#5c6b82]">
+        Bought for {cedis(item.price)} · sells for {cedis(sellValue(item.price))}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Choice onClick={onMove}>Move</Choice>
+        <Choice onClick={onTurn}>Turn</Choice>
+        <Choice onClick={onStore}>Store</Choice>
+        <button type="button" onClick={onSell} className="min-w-[4.5rem] flex-1 rounded-full bg-[#fde8ea] px-3 py-2.5 text-sm font-semibold text-[#CE1126]">
+          Sell
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlaceCard({
   id,
-  placing,
-  onMove,
-  onTurn,
-  onStore,
-  onClose,
-  onSell,
   onNudge,
   onRotate,
   onPlace,
   onCancel,
 }: {
   id: string | null;
-  placing: boolean;
-  onMove: () => void;
-  onTurn: () => void;
-  onStore: () => void;
-  onClose: () => void;
-  onSell: () => void;
   onNudge: (x: number, z: number) => void;
   onRotate: () => void;
   onPlace: () => void;
@@ -249,12 +317,11 @@ function PieceCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold">{item.name}</p>
-          <p className="text-xs text-[#5c6b82]">{placing ? "Drag or arrow keys move · R rotates · Enter places · Esc cancels" : `Sells for ${cedis(sellValue(item.price))}`}</p>
+          <p className="text-xs text-[#5c6b82]">Drag or arrow keys move · R rotates · Enter places · Esc cancels</p>
         </div>
         <p className="shrink-0 font-bold">{cedis(item.price)}</p>
       </div>
-      {placing ? (
-        <div className="mt-3 flex items-center gap-3">
+      <div className="mt-3 flex items-center gap-3">
           <div className="grid grid-cols-3 gap-1">
             <span />
             <Pad onClick={() => onNudge(0, -0.35)}>↑</Pad>
@@ -277,17 +344,6 @@ function PieceCard({
             </button>
           </div>
         </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Choice onClick={onMove}>Move</Choice>
-          <Choice onClick={onTurn}>Turn</Choice>
-          <Choice onClick={onStore}>Store</Choice>
-          <Choice onClick={onClose}>Close</Choice>
-          <button type="button" onClick={onSell} className="min-w-[4.5rem] flex-1 rounded-full bg-[#fde8ea] px-3 py-2.5 text-sm font-semibold text-[#CE1126]">
-            Sell
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function Apartment({
 }: {
   life: Life;
   pos: { x: number; z: number };
-  pose: "idle" | "walk" | "act";
+  pose: "idle" | "walk" | "act" | "sleep";
   heading: number;
   dark: boolean;
   bedColor: string;
@@ -94,25 +94,45 @@ export function Apartment({
           </group>
         );
       })}
-      <group position={[pos.x, 0, pos.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-          <circleGeometry args={[0.32, 16]} />
-          <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />
-        </mesh>
-        <Figure
-          skin={life.look.skin}
-          shirt={life.look.cloth}
-          pants={life.look.body === "woman" ? "#1c2744" : life.look.accent}
-          hair={life.look.hair}
-          cloth={life.look.cloth}
-          pattern={life.look.pattern}
-          outfit={life.look.outfit}
-          body={life.look.body}
-          crown={moodOf(life.needs).label === "Happy"}
-          pose={pose}
-          turn={(heading * 180) / Math.PI}
-        />
-      </group>
+      {pose === "sleep" ? (
+        <group position={[2.15, 0, -2.35]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+          <group position={[0, 0.47, 0.74]} rotation={[-Math.PI / 2, 0, 0]} scale={0.9}>
+            <Figure
+              skin={life.look.skin}
+              shirt={life.look.cloth}
+              pants={life.look.body === "woman" ? "#1c2744" : life.look.accent}
+              hair={life.look.hair}
+              cloth={life.look.cloth}
+              pattern={life.look.pattern}
+              outfit={life.look.outfit}
+              body={life.look.body}
+              pose="idle"
+              turn={0}
+            />
+          </group>
+          <Box color={bedColor} position={[0, 0.6, 0.34]} size={[life.inventory.includes("king") ? 2.05 : 1.52, 0.1, 1.3]} />
+        </group>
+      ) : (
+        <group position={[pos.x, 0, pos.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+            <circleGeometry args={[0.32, 16]} />
+            <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />
+          </mesh>
+          <Figure
+            skin={life.look.skin}
+            shirt={life.look.cloth}
+            pants={life.look.body === "woman" ? "#1c2744" : life.look.accent}
+            hair={life.look.hair}
+            cloth={life.look.cloth}
+            pattern={life.look.pattern}
+            outfit={life.look.outfit}
+            body={life.look.body}
+            crown={moodOf(life.needs).label === "Happy"}
+            pose={pose}
+            turn={(heading * 180) / Math.PI}
+          />
+        </group>
+      )}
     </Canvas>
   );
 }

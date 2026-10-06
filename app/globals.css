@@ -576,6 +576,27 @@ body {
     transform: rotate(360deg);
   }
 }
+.rain-layer {
+  background-image: repeating-linear-gradient(105deg, rgba(210, 228, 255, 0) 0 14px, rgba(210, 228, 255, 0.55) 14px 15px, rgba(210, 228, 255, 0) 15px 34px),
+    linear-gradient(rgba(40, 60, 90, 0.18), rgba(40, 60, 90, 0.18));
+  background-size: 120px 160px, 100% 100%;
+  animation: rain-fall 0.45s linear infinite;
+}
+.rain-heavy {
+  background-image: repeating-linear-gradient(100deg, rgba(210, 228, 255, 0) 0 8px, rgba(210, 228, 255, 0.7) 8px 9px, rgba(210, 228, 255, 0) 9px 20px),
+    linear-gradient(rgba(25, 45, 80, 0.32), rgba(25, 45, 80, 0.32));
+  animation-duration: 0.3s;
+}
+@keyframes rain-fall {
+  to {
+    background-position: -30px 160px, 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rain-layer {
+    animation: none;
+  }
+}
 .venue-scroll {
   scrollbar-width: none;
   touch-action: pan-x;

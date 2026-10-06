@@ -4,7 +4,9 @@ import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
-import { accraHour, cedis, spotById, type Life, type Offer, type Spot, type Verb } from "@/lib/game/world";
+import { accraHour, cedis, spotById, type Life, type Look, type Offer, type Spot, type Verb } from "@/lib/game/world";
+import type { SpotPos } from "@/lib/game/net";
+import { bagCount, isSupply } from "@/lib/game/trade";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
 const SHIRTS = ["#CE1126", "#f5c542", "#ec4899", "#006B3F", "#f4efe6", "#e5484d"];
@@ -13,6 +15,14 @@ const HAIR = ["Afro", "Bob", "Bun", "Cut"];
 const HOTELS = new Set(["hotel", "kempinski", "movenpick"]);
 const BEACHES = new Set(["beach", "bojo", "kokrobite"]);
 const GARDENS = new Set(["aburi", "botanical", "golf", "sakumono"]);
+
+export type Peer = { username: string; name: string; look?: Look; spot?: SpotPos | null };
+
+function startSpot(seed: string) {
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) % 9973;
+  return { left: 24 + (hash % 40), top: 56 + (Math.floor(hash / 40) % 20) };
+}
 
 type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables";
 type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
@@ -25,21 +35,35 @@ export function VenueFloor({
   onOpenChat,
   onPay,
   focus = null,
+  extra = [],
+  homeFare = 5,
+  me = "",
+  onMove,
+  onTrade,
 }: {
   life: Life;
-  people: { username: string; name: string }[];
+  people: Peer[];
+  me?: string;
+  onMove?: (x: number, y: number) => void;
+  onTrade?: () => void;
   onHome: () => void;
   onAct: (verb: Verb, person?: string) => void;
   onOpenChat: (person: string) => void;
   onPay: (person: string, amount: number, username?: string) => string | null | Promise<string | null>;
   focus?: string | null;
+  extra?: Verb[];
+  homeFare?: number;
 }) {
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);
-  const [youAt, setYouAt] = useState({ left: "34%", top: "62%" });
+  const [youAt, setYouAt] = useState(() => {
+    const first = startSpot(`${me}:${life.where}`);
+    return { left: `${first.left}%`, top: `${first.top}%` };
+  });
+  const moveRef = useRef(onMove);
   const [stride, setStride] = useState<{ ms: number; face: 1 | -1; moving: boolean }>({ ms: 700, face: 1, moving: false });
   const [panel, setPanel] = useState(true);
   const [drift, setDrift] = useState<[number, number][]>([
@@ -72,11 +96,17 @@ export function VenueFloor({
   }, []);
 
   useEffect(() => {
-    follow(34, "auto");
+    moveRef.current = onMove;
+  });
+
+  useEffect(() => {
+    const first = startSpot(`${me}:${life.where}`);
+    follow(first.left, "auto");
+    moveRef.current?.(first.left, first.top);
     return () => {
       if (stopTimer.current) window.clearTimeout(stopTimer.current);
     };
-  }, []);
+  }, [me, life.where]);
 
   function follow(left: number, behavior: ScrollBehavior = "smooth") {
     const box = scroller.current;
@@ -94,6 +124,7 @@ export function VenueFloor({
     setStride({ ms, face: nextLeft < fromLeft ? -1 : 1, moving: true });
     setYouAt({ left: `${nextLeft}%`, top: `${nextTop}%` });
     follow(nextLeft);
+    onMove?.(nextLeft, nextTop);
     if (stopTimer.current) window.clearTimeout(stopTimer.current);
     stopTimer.current = window.setTimeout(() => setStride((current) => ({ ...current, moving: false })), ms);
     return ms;
@@ -166,25 +197,27 @@ export function VenueFloor({
                 />
               ))
             : null}
-          {people.slice(0, stands.length).map((person, index) => (
-            <PersonTag
-              key={person.username}
-              name={person.name}
-              tone="blue"
-              style={stands[index]}
-              skin={SKINS[index % SKINS.length]}
-              shirt={SHIRTS[(index + 1) % SHIRTS.length]}
-              hair={HAIR[index % HAIR.length]}
-              pants={PANTS[index % PANTS.length]}
-              glide
-              onClick={() =>
-                approach(stands[index], () => {
-                  setWho(person.username);
-                  setLines([]);
-                })
-              }
-            />
-          ))}
+          {people.slice(0, 10).map((person, index) => {
+            const style = person.spot ? { left: `${person.spot.x}%`, top: `${person.spot.y}%` } : stands[index % stands.length];
+            return (
+              <LivePeer
+                key={person.username}
+                name={`@${person.username}`}
+                style={style}
+                live={Boolean(person.spot)}
+                skin={person.look?.skin ?? SKINS[index % SKINS.length]}
+                shirt={person.look?.cloth ?? SHIRTS[(index + 1) % SHIRTS.length]}
+                hair={person.look?.hair ?? HAIR[index % HAIR.length]}
+                pants={person.look ? (person.look.body === "woman" ? "#1c1917" : person.look.accent) : PANTS[index % PANTS.length]}
+                onClick={() =>
+                  approach(style, () => {
+                    setWho(person.username);
+                    setLines([]);
+                  })
+                }
+              />
+            );
+          })}
           <PersonTag
             name="You"
             tone="pink"
@@ -243,14 +276,43 @@ export function VenueFloor({
           </div>
           <p className="text-sm text-[#5c6b82]">{spot.blurb}</p>
           {party ? <p className="mt-2 rounded-full bg-[#121212] px-3 py-1 text-xs font-semibold text-[#FCD116]">Party on. Highlife, and the floor is already full.</p> : null}
-          <ActionDeck verbs={spot.actions} here focus={focus} onPay={(verb, offer) => onAct(payVerb(verb, offer))} />
+          {onTrade && (isSupply(spot.id) || bagCount(life) > 0) ? (
+            <button type="button" onClick={onTrade} className="mt-2 flex w-full items-center justify-between rounded-2xl bg-[#fff4c2] px-3 py-2.5 text-left text-sm font-semibold">
+              <span>🧺 {isSupply(spot.id) ? "Buy goods to trade" : `Sell from your bag (${bagCount(life)})`}</span>
+              <span className="text-[#006B3F]">Open</span>
+            </button>
+          ) : null}
+          <ActionDeck verbs={[...extra, ...spot.actions]} here focus={focus} onPay={(verb, offer) => onAct(payVerb(verb, offer))} />
           <button type="button" onClick={onHome} className="mt-2 w-full rounded-full bg-[#121212] px-3 py-2.5 text-sm font-semibold text-white">
-            Head home · ₵5
+            Head home · {cedis(homeFare)}
           </button>
         </div>
       )}
     </div>
   );
+}
+
+function LivePeer({ style, live, onClick, ...look }: { name: string; style: { left: string; top: string }; live: boolean; skin: string; shirt: string; hair: string; pants: string; onClick: () => void }) {
+  const [walking, setWalking] = useState(false);
+  const [face, setFace] = useState<1 | -1>(1);
+  const { left, top } = style;
+  const last = useRef({ left, top });
+  useEffect(() => {
+    const before = last.current;
+    last.current = { left, top };
+    if (before.left === left && before.top === top) return;
+    const dx = Number.parseFloat(left) - Number.parseFloat(before.left);
+    const start = window.setTimeout(() => {
+      setFace(dx < 0 ? -1 : 1);
+      setWalking(true);
+    }, 0);
+    const stop = window.setTimeout(() => setWalking(false), live ? 1500 : 3000);
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(stop);
+    };
+  }, [left, top, live]);
+  return <PersonTag {...look} tone="blue" style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
 }
 
 function PersonTag({
@@ -279,7 +341,7 @@ function PersonTag({
   pose?: "idle" | "walk" | "act";
   face?: 1 | -1;
   dance?: boolean;
-  glide?: boolean;
+  glide?: boolean | "live";
   onClick?: () => void;
 }) {
   const body = (
@@ -304,7 +366,7 @@ function PersonTag({
       type="button"
       aria-label={`Talk to ${name}`}
       onClick={onClick}
-      className={`absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ${glide ? "transition-[left,top] duration-[3000ms] ease-in-out" : ""}`}
+      className={`absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ${glide === "live" ? "transition-[left,top] duration-[1500ms] ease-linear" : glide ? "transition-[left,top] duration-[3000ms] ease-in-out" : ""}`}
       style={layer}
     >
       {body}
