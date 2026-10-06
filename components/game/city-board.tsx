@@ -12,6 +12,10 @@ type View = { x: number; y: number; z: number };
 
 const ROADS_X = [120, 440, 780, 1120, 1460, 1840];
 const ROADS_Y = [140, 380, 620, 880, 1160];
+const ROAD_NAMES_H = ["RING ROAD NORTH", "LIBERATION ROAD", "OXFORD / OSU", "SPINTEX ROAD", "LABADI BEACH ROAD"];
+const ROAD_NAMES_V = ["N1 LINK", "ACHIMOTA RD", "INDEPENDENCE AVE", "CANTONMENTS", "LABONE LINK", "TEMA MOTORWAY"];
+const TRAFFIC = makeTraffic(false);
+const TRAFFIC_LITE = makeTraffic(true);
 
 type Kind = "house" | "shop" | "block" | "tower";
 type Bld = { x: number; y: number; kind: Kind; hue: number; w: number };
@@ -431,30 +435,48 @@ const CityArt = memo(function CityArt({
       <ellipse cx="500" cy="1048" rx="168" ry="70" fill="#7ec4e4" />
       <ellipse cx="500" cy="1048" rx="118" ry="44" fill="#c5e9f6" />
       <ellipse cx="960" cy="760" rx="130" ry="78" fill="#c5e2a4" />
-      {ROADS_Y.map((y) => (
+      {ROADS_Y.map((y, index) => (
         <g key={`hy-${y}`}>
-          <rect x="36" y={y - 13} width="1928" height="26" rx="8" fill="#e7ebf2" />
-          <line x1="52" y1={y} x2="1948" y2={y} stroke="white" strokeWidth="2" strokeDasharray="16 14" />
+          <rect x="28" y={y - 22} width="1944" height="44" rx="4" fill="#9aa3ad" />
+          <rect x="36" y={y - 16} width="1928" height="32" rx="3" fill="#3a414c" />
+          <line x1="52" y1={y} x2="1948" y2={y} stroke="#FCD116" strokeWidth="2.2" strokeDasharray="18 16" strokeOpacity="0.85" />
+          <line x1="52" y1={y - 14} x2="1948" y2={y - 14} stroke="white" strokeWidth="1.2" strokeOpacity="0.35" />
+          <line x1="52" y1={y + 14} x2="1948" y2={y + 14} stroke="white" strokeWidth="1.2" strokeOpacity="0.35" />
+          {ROAD_NAMES_H[index] ? (
+            <text x="120" y={y - 20} fill="white" fillOpacity="0.55" fontSize="11" fontWeight="700" letterSpacing="1.5" fontFamily="ui-sans-serif">
+              {ROAD_NAMES_H[index]}
+            </text>
+          ) : null}
         </g>
       ))}
-      {ROADS_X.map((x) => (
+      {ROADS_X.map((x, index) => (
         <g key={`vx-${x}`}>
-          <rect x={x - 13} y="28" width="26" height="1145" rx="8" fill="#e7ebf2" />
-          <line x1={x} y1="44" x2={x} y2="1168" stroke="white" strokeWidth="2" strokeDasharray="16 14" />
+          <rect x={x - 22} y="20" width="44" height="1160" rx="4" fill="#9aa3ad" />
+          <rect x={x - 16} y="28" width="32" height="1145" rx="3" fill="#3a414c" />
+          <line x1={x} y1="44" x2={x} y2="1168" stroke="#FCD116" strokeWidth="2.2" strokeDasharray="18 16" strokeOpacity="0.85" />
+          <line x1={x - 12} y1="44" x2={x - 12} y2="1168" stroke="white" strokeWidth="1.2" strokeOpacity="0.3" />
+          <line x1={x + 12} y1="44" x2={x + 12} y2="1168" stroke="white" strokeWidth="1.2" strokeOpacity="0.3" />
+          {ROAD_NAMES_V[index] ? (
+            <text x={x + 24} y="80" transform={`rotate(90 ${x + 24} 80)`} fill="white" fillOpacity="0.5" fontSize="11" fontWeight="700" letterSpacing="1.5" fontFamily="ui-sans-serif">
+              {ROAD_NAMES_V[index]}
+            </text>
+          ) : null}
         </g>
       ))}
       <Highway x={0} label="N1 WEST · CAPE COAST · ELMINA · KAKUM" />
       <Highway x={1904} label="MOTORWAY EAST · SHAI HILLS · AKOSOMBO · ADA" />
-      <circle cx="780" cy="620" r="36" fill="#e7ebf2" />
-      <circle cx="780" cy="620" r="16" fill="#b7d48c" />
-      <rect x="40" y="458" width="230" height="14" rx="2" fill="#d5dae3" />
-      <line x1="52" y1="465" x2="258" y2="465" stroke="white" strokeDasharray="12 8" />
+      <circle cx="780" cy="620" r="42" fill="#9aa3ad" />
+      <circle cx="780" cy="620" r="34" fill="#3a414c" />
+      <circle cx="780" cy="620" r="14" fill="#b7d48c" />
+      <rect x="40" y="458" width="230" height="14" rx="2" fill="#3a414c" />
+      <line x1="52" y1="465" x2="258" y2="465" stroke="#FCD116" strokeDasharray="12 8" />
       {buildings.map((building) => (
         <Building key={`${building.x}-${building.y}`} building={building} night={night} />
       ))}
       {trees.map((tree) => (
         <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} lite={lite} />
       ))}
+      <Traffic lite={lite} />
       {boards
         ? BOARDS.map((board) => (
             <Board
@@ -583,11 +605,160 @@ function Highway({ x, label }: { x: number; label: string }) {
   return (
     <g>
       <rect x={x} y="0" width="96" height="1190" fill="#c9d9a6" />
-      <rect x={mid - 15} y="0" width="30" height="1190" fill="#9aa3ad" />
-      <line x1={mid} y1="0" x2={mid} y2="1190" stroke="#FCD116" strokeWidth="2" strokeDasharray="22 16" />
+      <rect x={mid - 18} y="0" width="36" height="1190" fill="#3a414c" />
+      <line x1={mid} y1="0" x2={mid} y2="1190" stroke="#FCD116" strokeWidth="2.4" strokeDasharray="22 16" />
+      <line x1={mid - 12} y1="0" x2={mid - 12} y2="1190" stroke="white" strokeWidth="1" strokeOpacity="0.35" />
+      <line x1={mid + 12} y1="0" x2={mid + 12} y2="1190" stroke="white" strokeWidth="1" strokeOpacity="0.35" />
       <text x={mid} y="595" transform={`rotate(-90 ${mid} 595)`} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="13" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
         {label}
       </text>
+    </g>
+  );
+}
+
+type TrafficCar = {
+  id: string;
+  axis: "h" | "v";
+  road: number;
+  lane: number;
+  dir: 1 | -1;
+  kind: "taxi" | "trotro" | "private" | "okada";
+  color: string;
+  dur: number;
+  delay: number;
+};
+
+function makeTraffic(lite: boolean): TrafficCar[] {
+  const cars: TrafficCar[] = [];
+  const kinds: TrafficCar["kind"][] = ["taxi", "trotro", "private", "okada", "private", "taxi"];
+  const colors = ["#FCD116", "#f7f4ef", "#CE1126", "#1c1917", "#006B3F", "#3b82f6", "#e5484d", "#f5c542"];
+  let n = 1;
+  for (let i = 0; i < ROADS_Y.length; i += 1) {
+    const count = lite ? 2 : 4;
+    for (let c = 0; c < count; c += 1) {
+      n += 1;
+      cars.push({
+        id: `h-${i}-${c}`,
+        axis: "h",
+        road: i,
+        lane: c % 2 === 0 ? -1 : 1,
+        dir: c % 2 === 0 ? 1 : -1,
+        kind: kinds[n % kinds.length],
+        color: colors[n % colors.length],
+        dur: 11 + (n % 7) * 1.4,
+        delay: -((n * 2.3) % 12),
+      });
+    }
+  }
+  for (let i = 0; i < ROADS_X.length; i += 1) {
+    const count = lite ? 2 : 3;
+    for (let c = 0; c < count; c += 1) {
+      n += 1;
+      cars.push({
+        id: `v-${i}-${c}`,
+        axis: "v",
+        road: i,
+        lane: c % 2 === 0 ? -1 : 1,
+        dir: c % 2 === 0 ? 1 : -1,
+        kind: kinds[(n + 2) % kinds.length],
+        color: colors[(n + 3) % colors.length],
+        dur: 13 + (n % 6) * 1.6,
+        delay: -((n * 1.7) % 14),
+      });
+    }
+  }
+  // N1 motorways
+  for (let c = 0; c < (lite ? 2 : 4); c += 1) {
+    n += 1;
+    cars.push({
+      id: `n1w-${c}`,
+      axis: "v",
+      road: -1,
+      lane: c % 2 === 0 ? -1 : 1,
+      dir: c % 2 === 0 ? 1 : -1,
+      kind: kinds[n % kinds.length],
+      color: colors[n % colors.length],
+      dur: 16 + c * 2,
+      delay: -(c * 3.5),
+    });
+    cars.push({
+      id: `n1e-${c}`,
+      axis: "v",
+      road: -2,
+      lane: c % 2 === 0 ? -1 : 1,
+      dir: c % 2 === 0 ? -1 : 1,
+      kind: kinds[(n + 1) % kinds.length],
+      color: colors[(n + 2) % colors.length],
+      dur: 15 + c * 2.2,
+      delay: -(c * 2.8 + 1),
+    });
+  }
+  return cars;
+}
+
+function Traffic({ lite }: { lite: boolean }) {
+  const cars = lite ? TRAFFIC_LITE : TRAFFIC;
+  return (
+    <g className="city-traffic" pointerEvents="none">
+      {cars.map((car) => {
+        const roadY = car.axis === "h" ? ROADS_Y[car.road] + car.lane * 7 : 0;
+        const roadX =
+          car.road === -1 ? 48 + car.lane * 8 : car.road === -2 ? 1952 + car.lane * 8 : car.axis === "v" ? ROADS_X[car.road] + car.lane * 7 : 0;
+        const cls =
+          car.axis === "h" ? (car.dir > 0 ? "city-drive-east" : "city-drive-west") : car.dir > 0 ? "city-drive-south" : "city-drive-north";
+        return (
+          <g
+            key={car.id}
+            className={cls}
+            style={{
+              animationDuration: `${car.dur}s`,
+              animationDelay: `${car.delay}s`,
+            }}
+          >
+            <MapCar x={car.axis === "h" ? 0 : roadX} y={car.axis === "h" ? roadY : 0} axis={car.axis} dir={car.dir} kind={car.kind} color={car.color} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function MapCar({
+  x,
+  y,
+  axis,
+  dir,
+  kind,
+  color,
+}: {
+  x: number;
+  y: number;
+  axis: "h" | "v";
+  dir: 1 | -1;
+  kind: TrafficCar["kind"];
+  color: string;
+}) {
+  const long = kind === "trotro" ? 28 : kind === "okada" ? 14 : 20;
+  const wide = kind === "trotro" ? 11 : kind === "okada" ? 7 : 9;
+  const w = axis === "h" ? long : wide;
+  const h = axis === "h" ? wide : long;
+  const cx = x - w / 2;
+  const cy = y - h / 2;
+  const glass = axis === "h" ? (dir > 0 ? cx + w * 0.55 : cx + 2) : dir > 0 ? cy + h * 0.55 : cy + 2;
+  return (
+    <g>
+      <rect x={cx} y={cy} width={w} height={h} rx="2.5" fill={color} stroke="#121212" strokeOpacity="0.25" strokeWidth="0.8" />
+      {axis === "h" ? (
+        <rect x={glass} y={cy + 1.5} width={w * 0.28} height={h - 3} rx="1" fill="#9fd4f2" fillOpacity="0.85" />
+      ) : (
+        <rect x={cx + 1.5} y={glass} width={w - 3} height={h * 0.28} rx="1" fill="#9fd4f2" fillOpacity="0.85" />
+      )}
+      {kind === "taxi" ? <rect x={cx + w * 0.35} y={cy - 2} width={w * 0.3} height="2.5" rx="0.5" fill="#121212" /> : null}
+      {kind === "trotro" ? (
+        <text x={x} y={y + 1.5} textAnchor="middle" fill="#121212" fontSize="5" fontWeight="800" fontFamily="ui-sans-serif">
+          TRO
+        </text>
+      ) : null}
     </g>
   );
 }

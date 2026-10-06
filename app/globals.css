@@ -353,24 +353,56 @@ body {
 .street-car {
   position: absolute;
   top: 18%;
-  height: 28px;
-  width: 64px;
-  border-radius: 6px 10px 6px 6px;
-  background: #f0b429;
+  height: 30px;
+  width: 68px;
+  border-radius: 7px 12px 7px 7px;
+  background: linear-gradient(180deg, #ffe08a 0%, #fcd116 55%, #d4a010 100%);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15);
   animation: street-traffic 3.4s linear infinite;
+}
+.street-car::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  width: 18px;
+  height: 16px;
+  border-radius: 3px;
+  background: rgba(159, 212, 242, 0.9);
+}
+.street-car::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -3px;
+  height: 5px;
+  border-radius: 2px;
+  background: #121212;
+  opacity: 0.35;
 }
 .street-car-b {
   top: 58%;
-  background: #f7f4ef;
+  width: 82px;
+  background: linear-gradient(180deg, #fff 0%, #e8eef5 55%, #c5ceda 100%);
   animation-duration: 4.6s;
   animation-delay: -1.4s;
 }
+.street-car-b::before {
+  left: 12px;
+  right: auto;
+}
 .street-car-c {
   top: 36%;
-  width: 78px;
-  background: #006b3f;
+  width: 92px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #1a8f55 0%, #006b3f 60%, #004e2c 100%);
   animation-duration: 5.2s;
   animation-delay: -2s;
+}
+.street-car-c::before {
+  width: 28px;
+  right: 14px;
 }
 .street-sim {
   position: absolute;
@@ -709,6 +741,68 @@ body {
   }
   to {
     left: -30%;
+  }
+}
+
+.city-traffic {
+  pointer-events: none;
+}
+.city-drive-east,
+.city-drive-west,
+.city-drive-south,
+.city-drive-north {
+  will-change: transform;
+}
+.city-drive-east {
+  animation: city-drive-east linear infinite;
+}
+.city-drive-west {
+  animation: city-drive-west linear infinite;
+}
+.city-drive-south {
+  animation: city-drive-south linear infinite;
+}
+.city-drive-north {
+  animation: city-drive-north linear infinite;
+}
+@keyframes city-drive-east {
+  from {
+    transform: translate(40px, 0);
+  }
+  to {
+    transform: translate(1920px, 0);
+  }
+}
+@keyframes city-drive-west {
+  from {
+    transform: translate(1920px, 0);
+  }
+  to {
+    transform: translate(40px, 0);
+  }
+}
+@keyframes city-drive-south {
+  from {
+    transform: translate(0, 36px);
+  }
+  to {
+    transform: translate(0, 1160px);
+  }
+}
+@keyframes city-drive-north {
+  from {
+    transform: translate(0, 1160px);
+  }
+  to {
+    transform: translate(0, 36px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .city-drive-east,
+  .city-drive-west,
+  .city-drive-south,
+  .city-drive-north {
+    animation: none;
   }
 }
 
