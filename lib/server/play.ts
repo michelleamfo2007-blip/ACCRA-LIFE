@@ -2,6 +2,7 @@ import "server-only";
 import { earnedBadges } from "@/lib/game/badges";
 import { bizKind } from "@/lib/game/biz-table";
 import { applyMove, rollDie, startBoard, type GameKind, type Move } from "@/lib/game/boards";
+import { vehicleOf } from "@/lib/game/fleet";
 import { carOf } from "@/lib/game/garage";
 import { CODE_LABEL, EVENT_INFO, crewGoal, crewWeek, type Crew, type EventKind, type LifeEvent, type Match, type NetRef } from "@/lib/game/net";
 import { SPOTS, cedis, type Life } from "@/lib/game/world";
@@ -17,7 +18,7 @@ type Row = { username: string; name: string; life: Life | null };
 
 let crowd: { at: number; rows: Row[] } | null = null;
 
-async function everyone(fresh = false): Promise<Row[]> {
+export async function everyone(fresh = false): Promise<Row[]> {
   if (!fresh && crowd && Date.now() - crowd.at < 30000) return crowd.rows;
   const client = supabase();
   if (!client) return [];
@@ -27,7 +28,7 @@ async function everyone(fresh = false): Promise<Row[]> {
   return rows;
 }
 
-function forget() {
+export function forget() {
   crowd = null;
 }
 
@@ -396,7 +397,9 @@ function worthOf(life: Life) {
   const plots = (life.plots ?? []).reduce((sum, plot) => sum + plot.spent * 0.7, 0);
   const shops = (life.businesses ?? []).reduce((sum, shop) => sum + bizKind(shop.kind).price * 0.6 * shop.level, 0);
   const car = (carOf(life.car?.id)?.price ?? 0) * 0.6;
-  return Math.round(life.cash + plots + shops + car);
+  const fleet = (life.fleet ?? []).reduce((sum, item) => sum + vehicleOf(item.kind).price * 0.5, 0);
+  const bank = (life.bank?.savings ?? 0) - (life.bank?.loan ?? 0);
+  return Math.round(life.cash + plots + shops + car + fleet + bank);
 }
 
 export type BoardRow = { username: string; name: string; value: number };
@@ -415,5 +418,7 @@ export async function leaderboard() {
     chef: top((life) => life.skills?.cooking ?? 0),
     fans: top((life) => life.music?.fans ?? 0),
     badges: top((life) => earnedBadges(life).length),
+    football: top((life) => life.team?.trophies ?? 0),
+    elders: top((life) => life.community?.standing ?? 0),
   };
 }

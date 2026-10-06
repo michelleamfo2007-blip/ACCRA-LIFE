@@ -81,7 +81,27 @@ export type Match = {
   moved: string;
 };
 
+export type PostKind = "status" | "house" | "outfit" | "car" | "team" | "harvest";
+
+export type Post = { id: string; kind: PostKind; text: string; snap: string; likes: string[]; at: string };
+
+export type ListingKind = "item" | "good" | "fit";
+
+export type Listing = { id: string; kind: ListingKind; ref: string; label: string; emoji: string; qty: number; price: number; at: string };
+
+export type FcStatus = "waiting" | "done" | "declined";
+
+export type FcMatch = { id: string; a: string; b: string; aTeam: string; bTeam: string; stake: number; status: FcStatus; score?: [number, number]; at: string };
+
 export type Net = {
+  posts?: Post[];
+  following?: string[];
+  listings?: Listing[];
+  fc?: FcMatch[];
+  fcIn?: NetRef[];
+  runs?: { week: number; pitch: string }[];
+  votes?: { week: number; for: string }[];
+  stipend?: number;
   susu?: SusuGroup[];
   susuIn?: NetRef[];
   groups?: ChatGroup[];
@@ -113,6 +133,22 @@ export function crewWeek(at = Date.now()) {
 export function crewGoal(crew: Crew) {
   return 1000 * crew.members.length;
 }
+
+export const POST_GAP_MS = 20 * 60000;
+export const MARKET_FEE = 0.05;
+export const MAX_LISTINGS = 8;
+export const RUN_FEE = 300;
+export const RUN_STANDING = 60;
+export const STIPEND = 400;
+
+export const POST_LABEL: Record<PostKind, { label: string; emoji: string }> = {
+  status: { label: "Status", emoji: "💬" },
+  house: { label: "My room", emoji: "🏠" },
+  outfit: { label: "Fit check", emoji: "👗" },
+  car: { label: "My ride", emoji: "🚗" },
+  team: { label: "My team", emoji: "⚽" },
+  harvest: { label: "Harvest", emoji: "🧺" },
+};
 
 export type SpotPos = { where: string; x: number; y: number; at: string };
 

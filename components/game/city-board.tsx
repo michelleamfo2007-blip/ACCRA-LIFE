@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -58,28 +58,44 @@ export function CityBoard({
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const floorZ = useRef(MIN_Z);
+  const size = useRef({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ x: -160, y: -40, z: 0.72 });
   const viewRef = useRef(view);
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const pinch = useRef<{ dist: number; z: number; view: View } | null>(null);
   const points = useRef(new Map<number, { x: number; y: number }>());
+  const moved = useRef(false);
+
+  function show(next: View) {
+    const clamped = clampView(next, size.current.w, size.current.h);
+    viewRef.current = clamped;
+    setView(clamped);
+  }
 
   useEffect(() => {
     const node = boardRef.current;
     if (!node) return;
-    const rect = node.getBoundingClientRect();
-    const close = rect.width < 760;
-    floorZ.current = close ? 1 : MIN_Z;
-    const z = close ? 1.2 : 0.72;
-    const focusX = close ? 860 : 1000;
-    const focusY = close ? 560 : 680;
-    const next = {
-      z,
-      x: rect.width / 2 - focusX * z,
-      y: rect.height / 2 - focusY * z,
+    let first = true;
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      size.current = { w: rect.width, h: rect.height };
+      floorZ.current = fitZoom(rect.width, rect.height);
+      if (first) {
+        first = false;
+        const close = rect.width < 760;
+        const z = close ? 0.95 : 0.72;
+        const focusX = close ? 860 : 1000;
+        const focusY = close ? 560 : 680;
+        show({ z, x: rect.width / 2 - focusX * z, y: rect.height / 2 - focusY * z });
+        return;
+      }
+      show({ ...viewRef.current, z: Math.max(floorZ.current, viewRef.current.z) });
     };
-    viewRef.current = next;
-    setView(next);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -88,38 +104,62 @@ export function CityBoard({
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const rect = node.getBoundingClientRect();
-      const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current);
-      viewRef.current = next;
-      setView(next);
+      show(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current));
     };
+    const stopGesture = (event: Event) => event.preventDefault();
     node.addEventListener("wheel", onWheel, { passive: false });
-    return () => node.removeEventListener("wheel", onWheel);
+    node.addEventListener("gesturestart", stopGesture);
+    node.addEventListener("gesturechange", stopGesture);
+    return () => {
+      node.removeEventListener("wheel", onWheel);
+      node.removeEventListener("gesturestart", stopGesture);
+      node.removeEventListener("gesturechange", stopGesture);
+    };
   }, []);
 
   function zoomBy(factor: number) {
-    const node = boardRef.current;
-    if (!node) return;
-    const rect = node.getBoundingClientRect();
-    const next = zoomToward(viewRef.current, rect.width / 2, rect.height / 2, viewRef.current.z * factor, floorZ.current);
-    viewRef.current = next;
-    setView(next);
+    const { w, h } = size.current;
+    show(zoomToward(viewRef.current, w / 2, h / 2, viewRef.current.z * factor, floorZ.current));
+  }
+
+  function zoomOutAll() {
+    const { w, h } = size.current;
+    const z = floorZ.current;
+    show({ z, x: (w - WORLD.w * z) / 2, y: (h - WORLD.h * z) / 2 });
+  }
+
+  function release(event: ReactPointerEvent<HTMLDivElement>) {
+    points.current.delete(event.pointerId);
+    if (points.current.size < 2) pinch.current = null;
+    if (points.current.size === 0) drag.current = null;
+    else if (points.current.size === 1) {
+      const left = [...points.current.values()][0];
+      drag.current = { x: left.x, y: left.y, px: viewRef.current.x, py: viewRef.current.y };
+    }
   }
 
   return (
     <div
       ref={boardRef}
-      className="absolute inset-0 cursor-grab touch-none overflow-clip bg-[#b7d48c] active:cursor-grabbing"
+      className="absolute inset-0 cursor-grab touch-none select-none overflow-clip bg-[#b7d48c] active:cursor-grabbing"
+      style={{ WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
       onPointerDown={(event) => {
-        if ((event.target as Element).closest("button, [data-board]")) return;
-        event.currentTarget.setPointerCapture(event.pointerId);
+        if ((event.target as Element).closest("[data-zoom]")) return;
         points.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (points.current.size === 1) {
+          moved.current = false;
           drag.current = { x: event.clientX, y: event.clientY, px: viewRef.current.x, py: viewRef.current.y };
           pinch.current = null;
         } else {
+          moved.current = true;
           drag.current = null;
           const pair = [...points.current.values()];
           pinch.current = { dist: Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1, z: viewRef.current.z, view: viewRef.current };
+          for (const id of points.current.keys()) {
+            try {
+              event.currentTarget.setPointerCapture(id);
+            } catch {}
+          }
         }
       }}
       onPointerMove={(event) => {
@@ -131,35 +171,36 @@ export function CityBoard({
           const dist = Math.hypot(pair[0].x - pair[1].x, pair[0].y - pair[1].y) || 1;
           const midX = (pair[0].x + pair[1].x) / 2 - rect.left;
           const midY = (pair[0].y + pair[1].y) / 2 - rect.top;
-          const next = zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current);
-          viewRef.current = next;
-          setView(next);
+          show(zoomToward(pinch.current.view, midX, midY, pinch.current.z * (dist / pinch.current.dist), floorZ.current));
           return;
         }
         if (!drag.current) return;
-        const next = {
-          z: viewRef.current.z,
-          x: drag.current.px + event.clientX - drag.current.x,
-          y: drag.current.py + event.clientY - drag.current.y,
-        };
-        viewRef.current = next;
-        setView(next);
-      }}
-      onPointerUp={(event) => {
-        points.current.delete(event.pointerId);
-        if (points.current.size < 2) pinch.current = null;
-        if (points.current.size === 0) drag.current = null;
-        else if (points.current.size === 1) {
-          const left = [...points.current.values()][0];
-          drag.current = { x: left.x, y: left.y, px: viewRef.current.x, py: viewRef.current.y };
+        const dx = event.clientX - drag.current.x;
+        const dy = event.clientY - drag.current.y;
+        if (!moved.current && Math.hypot(dx, dy) < 6) return;
+        if (!moved.current) {
+          moved.current = true;
+          try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          } catch {}
         }
+        show({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onLostPointerCapture={(event) => {
+        if (points.current.has(event.pointerId) && event.buttons === 0) release(event);
+      }}
+      onClickCapture={(event) => {
+        if (!moved.current) return;
+        moved.current = false;
+        event.stopPropagation();
+        event.preventDefault();
       }}
       onDoubleClick={(event) => {
         if ((event.target as Element).closest("button, [data-board]")) return;
         const rect = event.currentTarget.getBoundingClientRect();
-        const next = zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current);
-        viewRef.current = next;
-        setView(next);
+        show(zoomToward(viewRef.current, event.clientX - rect.left, event.clientY - rect.top, viewRef.current.z * 1.35, floorZ.current));
       }}
     >
       <div className="absolute left-0 top-0 origin-top-left" style={{ width: WORLD.w, height: WORLD.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
@@ -238,16 +279,33 @@ export function CityBoard({
           );
         })}
       </div>
-      <div className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
-        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
+      <div data-zoom className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
+        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
           +
         </button>
-        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.84)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
+        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
           −
+        </button>
+        <button type="button" aria-label="Show all of Accra" onClick={zoomOutAll} className="grid h-11 w-11 place-items-center rounded-full bg-white text-base font-bold shadow-lg">
+          ⤢
         </button>
       </div>
     </div>
   );
+}
+
+function fitZoom(width: number, height: number) {
+  return Math.min(MIN_Z, Math.max(0.18, Math.min(width / WORLD.w, height / WORLD.h)));
+}
+
+function clampView(view: View, width: number, height: number): View {
+  if (!width || !height) return view;
+  const w = WORLD.w * view.z;
+  const h = WORLD.h * view.z;
+  const pad = 80;
+  const x = w + pad * 2 <= width ? (width - w) / 2 : Math.min(pad, Math.max(width - w - pad, view.x));
+  const y = h + pad * 2 <= height ? (height - h) / 2 : Math.min(pad, Math.max(height - h - pad, view.y));
+  return { z: view.z, x, y };
 }
 
 function zoomToward(view: View, originX: number, originY: number, nextZ: number, floor = MIN_Z): View {

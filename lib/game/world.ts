@@ -76,7 +76,22 @@ export type Life = {
   stats?: Record<string, number>;
   generation?: number;
   playDay?: { day: number; bets: number };
+  story?: Record<string, number>;
+  bank?: Bank;
+  fleet?: Vehicle[];
+  team?: Team | null;
+  pets?: Pet[];
+  community?: Community;
+  guide?: string[];
+  seenParcels?: string[];
 };
+
+export type Bank = { savings: number; lastInterest: number; loan: number; loanDue: number; score: number };
+export type Vehicle = { id: string; kind: string; route: string; driver: string | null; condition: number; lastCollect: number; broken: boolean; papersUntil: number };
+export type Footballer = { id: string; name: string; pos: "GK" | "DEF" | "MID" | "FWD"; skill: number };
+export type Team = { name: string; color: string; players: Footballer[]; morale: number; wins: number; draws: number; losses: number; lastTrain?: number; lastGala?: number; trophies: number };
+export type Pet = { id: string; kind: string; name: string; fedAt: number; boughtAt: number; lastYield: number; lastPlay?: number };
+export type Community = { faith?: "church" | "mosque" | null; standing: number; lastService?: number; givenDay?: { day: number; amount: number }; projects: string[]; chief?: { stool: string; since: number } | null; lastCourt?: number };
 
 export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
@@ -1007,7 +1022,32 @@ function clone(life: Life): Life {
     streak: life.streak ? { ...life.streak } : undefined,
     stats: { ...(life.stats ?? {}) },
     playDay: life.playDay ? { ...life.playDay } : undefined,
+    story: { ...(life.story ?? {}) },
+    bank: life.bank ? { ...life.bank } : undefined,
+    fleet: (life.fleet ?? []).map((car) => ({ ...car })),
+    team: life.team ? { ...life.team, players: life.team.players.map((player) => ({ ...player })) } : life.team,
+    pets: (life.pets ?? []).map((pet) => ({ ...pet })),
+    community: life.community ? { ...life.community, projects: [...life.community.projects], givenDay: life.community.givenDay ? { ...life.community.givenDay } : undefined, chief: life.community.chief ? { ...life.community.chief } : life.community.chief } : undefined,
+    guide: [...(life.guide ?? [])],
+    seenParcels: [...(life.seenParcels ?? [])],
   };
+}
+
+export function seasonFlags(minutes: number) {
+  const at = new Date(minutes * 60000);
+  const month = at.getUTCMonth();
+  const day = at.getUTCDate();
+  return {
+    harmattan: month === 11 || month === 0 || month === 1,
+    detty: (month === 11 && day >= 15) || (month === 0 && day <= 2),
+    rainy: (month >= 3 && month <= 6) || month === 8 || month === 9,
+  };
+}
+
+export const FLEET_WAGES: Record<string, number> = { okada: 70, taxi: 200, trotro: 320 };
+
+export function bump(life: Life, stat: string, by = 1) {
+  life.stats = { ...life.stats, [stat]: (life.stats?.[stat] ?? 0) + by };
 }
 
 export function cloneLife(life: Life) {
@@ -1099,7 +1139,8 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     const bored = next.traits.includes("outout") || next.traits.includes("night") ? 4.6 : 2.6;
     next.needs.fun = clampNeed(next.needs.fun - bored * hours);
     next.needs.social = clampNeed(next.needs.social - 2 * hours);
-    next.needs.hygiene = clampNeed(next.needs.hygiene - (next.traits.includes("fresh") ? 1.4 : 3) * hours);
+    const dusty = seasonFlags(next.minutes).harmattan ? 1 : 0;
+    next.needs.hygiene = clampNeed(next.needs.hygiene - ((next.traits.includes("fresh") ? 1.4 : 3) + dusty) * hours);
     next.needs.bladder = clampNeed(next.needs.bladder - 6.5 * hours);
     if (next.health?.sick) {
       next.needs.energy = clampNeed(next.needs.energy - 2 * hours);
@@ -1123,7 +1164,16 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     if (next.dumsor) notes.push("Dumsor. The meter just sighed.");
   }
   checkHealth(next, clockTo, notes);
+  checkPets(next, clockTo, notes);
   return { life: next, notes };
+}
+
+function checkPets(life: Life, now: number, notes: string[]) {
+  if (!life.pets?.length) return;
+  const gone = life.pets.filter((pet) => now - pet.fedAt > 2880);
+  if (!gone.length) return;
+  life.pets = life.pets.filter((pet) => now - pet.fedAt <= 2880);
+  notes.push(`${gone.map((pet) => pet.name).join(", ")} went two days without food and wandered off.`);
 }
 
 function checkHealth(life: Life, now: number, notes: string[]) {
@@ -1137,10 +1187,9 @@ function checkHealth(life: Life, now: number, notes: string[]) {
   else if (health.day !== day) {
     health.day = day;
     if (!health.sick) {
-      const month = new Date(now * 60000).getUTCMonth();
-      const rainy = (month >= 3 && month <= 6) || month === 8 || month === 9;
+      const { rainy, harmattan } = seasonFlags(now);
       const netted = life.inventory.includes("net");
-      const chance = 0.03 + (life.needs.hygiene < 25 ? 0.1 : 0) + (life.needs.energy < 15 ? 0.08 : 0) + (life.needs.hunger < 20 ? 0.06 : 0) + (rainy && !netted ? 0.12 : 0) - life.skills.fitness * 0.006;
+      const chance = 0.03 + (life.needs.hygiene < 25 ? 0.1 : 0) + (life.needs.energy < 15 ? 0.08 : 0) + (life.needs.hunger < 20 ? 0.06 : 0) + (rainy && !netted ? 0.12 : 0) + (harmattan ? 0.04 : 0) - life.skills.fitness * 0.006;
       if (Math.random() < chance) {
         const kind: SickKind = rainy && !netted && Math.random() < 0.6 ? "malaria" : life.needs.hunger < 20 ? "tummy" : life.needs.energy < 15 ? "burnout" : "flu";
         health.sick = { kind, since: now };
@@ -1163,13 +1212,20 @@ function settleBills(life: Life, from: number, to: number) {
     const upkeep = SHOP.reduce((sum, item) => sum + (item.upkeep && life.inventory.includes(item.id) ? item.upkeep : 0), 0);
     const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level), 0);
     const fees = (life.kids ?? []).filter((kid) => kid.school).length * 40;
-    life.cash -= rent + loanPay + upkeep + wages + fees;
+    const drivers = (life.fleet ?? []).reduce((sum, car) => sum + (car.driver ? (FLEET_WAGES[car.kind] ?? 0) : 0), 0);
+    life.cash -= rent + loanPay + upkeep + wages + fees + drivers;
     life.loan -= loanPay;
     if (life.loan <= 0) {
       life.loan = 0;
       life.weeklyLoan = 0;
     }
-    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
+    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${drivers ? ` and drivers ${cedis(drivers)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
+    const bank = life.bank;
+    if (bank && bank.loan > 0 && day * 1440 > bank.loanDue) {
+      const fine = Math.round(bank.loan * 0.05);
+      life.bank = { ...bank, loan: bank.loan + fine, score: Math.max(300, bank.score - 35) };
+      notes.push(`Bank loan overdue. ${cedis(fine)} late fee and your credit score dropped.`);
+    }
     if (life.cash < 0) notes.push("The wallet is in the red. Rent still left.");
   }
   return notes;
@@ -1215,6 +1271,7 @@ export function goTo(life: Life, placeId: string, ride: Ride = RIDES[1]): StepRe
   }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
   timed.life.where = placeId;
+  bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}`);
   if (ride.id === "car" && timed.life.car) {
@@ -1245,6 +1302,7 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   }
   let cost = verb.cost;
   if (verb.tag === "food" && next.birthId === "market") cost = Math.round(cost * 0.7);
+  if (verb.tag === "party" && seasonFlags(next.minutes).detty) cost = Math.round(cost * 1.3);
   if (cost > 0 && next.cash < cost) return { life: next, notes, error: "Wallet light. Make some money first." };
   const timed = passTime(next, verb.minutes, verb.id === "sleep" || verb.sleep ? "sleep" : "awake");
   const after = timed.life;
@@ -1279,6 +1337,12 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "radio" && after.inventory.includes("speaker")) after.needs.fun = clampNeed(after.needs.fun + 12);
   if (verb.id === "kenkey") after.needs.hunger = clampNeed(after.needs.hunger + 34);
   if (verb.skill) gainSkill(after, verb.skill, verb);
+  if (verb.job) bump(after, "shifts");
+  if (verb.tag === "food") bump(after, "meals");
+  if (verb.tag === "food" && placeId === "home" && verb.skill === "cooking") bump(after, "cooked");
+  if (verb.tag === "party") bump(after, "parties");
+  if (verb.tag === "church") bump(after, "church");
+  if (verb.tag === "gym" || verb.skill === "fitness") bump(after, "workouts");
   if (verb.social) {
     const name = withName || (placeId === "home" ? homeById(after.homeId).neighbor : peopleAt(placeId)[0]);
     const bump = after.traits.includes("smooth") ? 16 : 12;

@@ -19,7 +19,9 @@ import { syncBadges } from "@/lib/game/badges";
 import { carRide } from "@/lib/game/garage";
 import { sickness } from "@/lib/game/health";
 import { dressedFor } from "@/lib/game/tailor";
-import { CODE_LABEL, EVENT_INFO, type HostHome, type LifeEvent } from "@/lib/game/net";
+import { CODE_LABEL, EVENT_INFO, type HostHome, type LifeEvent, type Match } from "@/lib/game/net";
+import { alertsFor } from "@/lib/game/alerts";
+import { claimGuide, guideNext } from "@/lib/game/guide";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -111,6 +113,67 @@ function usePlayerEvents(on: boolean) {
     };
   }, [on]);
   return events;
+}
+
+function notify(title: string, body: string, tag: string) {
+  try {
+    if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) new Notification(title, { body, tag: `accralife-${tag}` });
+  } catch {}
+}
+
+function useAlertPings(life: Life | null, onPing: (text: string) => void) {
+  const seen = useRef<Set<string> | null>(null);
+  const ping = useRef(onPing);
+  useEffect(() => {
+    ping.current = onPing;
+  });
+  useEffect(() => {
+    if (!life) return;
+    const list = alertsFor(life);
+    const before = seen.current;
+    seen.current = new Set(list.map((alert) => alert.id));
+    if (!before) return;
+    const fresh = list.find((alert) => !before.has(alert.id));
+    if (!fresh) return;
+    ping.current(`${fresh.emoji} ${fresh.text}`);
+    notify("Accra Life", fresh.text, fresh.id);
+  }, [life]);
+}
+
+function useTurnPings(username: string, on: boolean, onPing: (text: string) => void) {
+  const ping = useRef(onPing);
+  useEffect(() => {
+    ping.current = onPing;
+  });
+  useEffect(() => {
+    if (!on) return;
+    let stop = false;
+    let known: Set<string> | null = null;
+    const load = () =>
+      fetch("/api/live/play?view=games")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { games?: Match[] } | null) => {
+          if (stop || !data?.games) return;
+          const mine = data.games.filter((match) => (match.status === "playing" && match.board.turn === (match.a === username ? 0 : 1)) || (match.status === "waiting" && match.b === username));
+          const keys = new Set(mine.map((match) => `${match.id}:${match.moved}`));
+          const before = known;
+          known = keys;
+          if (!before) return;
+          const fresh = mine.find((match) => !before.has(`${match.id}:${match.moved}`));
+          if (!fresh) return;
+          const other = fresh.a === username ? fresh.b : fresh.a;
+          const text = fresh.status === "waiting" ? `🎲 @${other} challenged you to ${fresh.game}.` : `🎲 Your move against @${other} in ${fresh.game}.`;
+          ping.current(text);
+          notify("Accra Life", text, `turn-${fresh.id}`);
+        })
+        .catch(() => undefined);
+    void load();
+    const id = window.setInterval(load, 30000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [username, on]);
 }
 
 function eventVerbId(event: LifeEvent) {
@@ -821,6 +884,9 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [visit, setVisit] = useState<HostHome | null>(null);
   const [ping, setPing] = useState<InboxPing | null>(null);
   const playerEvents = usePlayerEvents(Boolean(account.cloud));
+  const [phoneApp, setPhoneApp] = useState<string | null>(null);
+  useAlertPings(life, flash);
+  useTurnPings(account.username, Boolean(account.cloud), flash);
   const inbox = useInbox(account.username, Boolean(account.cloud), (next) => {
     setPing(next);
     window.setTimeout(() => setPing((current) => (current?.at === next.at ? null : current)), 6000);
@@ -852,6 +918,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const city = now == null ? QUIET_CITY : cityNow(new Date(now));
   const car = carRide(life);
   const sick = sickness(life);
+  const guide = guideNext(life);
   const homeRide = car && (life.car?.fuel ?? 0) >= 6 ? car : rideIn(RIDES[1], city.weather);
 
   function apply(result: StepResult) {
@@ -1090,12 +1157,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               }}
             >
               <p className="text-sm font-bold">{quest.title}</p>
-              <p className="text-xs text-[#5c6b82]">{quest.detail}</p>
+              <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : ""}`}>{quest.detail}</p>
             </button>
             {life.gemDay !== Math.floor(life.minutes / 1440) && quest.title !== "Daily gem hunt" ? (
               <button type="button" className="w-full rounded-full bg-white px-3 py-2 text-left shadow" onClick={() => setTab("map")}>
-                <p className="text-sm font-bold">Daily gem hunt</p>
-                <p className="text-xs text-[#5c6b82]">Look around {spotById(gemSpotId(life.minutes)).name}. Next find is {cedis(40)}.</p>
+                <p className="text-sm font-bold">{tab === "map" ? <span className="sm:hidden">💎 Gem at {spotById(gemSpotId(life.minutes)).name}</span> : null}<span className={tab === "map" ? "hidden sm:inline" : ""}>Daily gem hunt</span></p>
+                <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : ""}`}>Look around {spotById(gemSpotId(life.minutes)).name}. Next find is {cedis(40)}.</p>
               </button>
             ) : null}
             {city.events.length || city.match || city.weather.rain ? (
@@ -1114,8 +1181,30 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               </button>
             ) : null}
             {life.dumsor ? <p className="w-full rounded-full bg-[#121212] px-3 py-2 text-xs font-semibold text-white">Dumsor. The lights are out.</p> : null}
+            {guide && (guide.done(life) || guide.title !== quest.title) ? (
+              <button
+                type="button"
+                className={`w-full rounded-2xl px-3 py-2 text-left shadow ${guide.done(life) ? "bg-[#FCD116]" : "bg-white"}`}
+                onClick={() => {
+                  if (guide.done(life)) {
+                    apply(claimGuide(life, guide.id));
+                    return;
+                  }
+                  if (guide.app) {
+                    setPhoneApp(guide.app);
+                    setTab("phone");
+                    return;
+                  }
+                  setTab(guide.id === "eat" ? "home" : "map");
+                }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[#006B3F]">🧭 Getting started</p>
+                <p className="text-sm font-bold">{guide.done(life) ? `${guide.title} ✓ Tap for ₵25` : guide.title}</p>
+                {guide.done(life) ? null : <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : ""}`}>{guide.hint}</p>}
+              </button>
+            ) : null}
             {sick ? (
-              <button type="button" className="w-full rounded-2xl bg-[#0e7c6b] px-3 py-2 text-left text-xs font-semibold text-white shadow" onClick={() => setTab("phone")}>
+              <button type="button" className="w-full rounded-2xl bg-[#0e7c6b] px-3 py-2 text-left text-xs font-semibold text-white shadow" onClick={() => (setPhoneApp("health"), setTab("phone"))}>
                 🤒 {sick.label}. Work pays half. Open Health on your phone.
               </button>
             ) : null}
@@ -1455,13 +1544,15 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onGo={(spot) => {
             setTab("map");
             setPlaceId(spot);
+            setPhoneApp(null);
           }}
           onVisit={(host) => void visitHost(host)}
           friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
           launch={chatLaunch}
           onLaunchConsumed={() => setChatLaunch(null)}
+          openTo={phoneApp}
           onAir={setOnAir}
-          onClose={() => setTab("home")}
+          onClose={() => (setTab("home"), setPhoneApp(null))}
           onWear={(look, cost) => {
             if (!cost) {
               commitLife(account.username, { ...life, look });

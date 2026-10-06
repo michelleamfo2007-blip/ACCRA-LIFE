@@ -25,6 +25,24 @@ import {
   shareCrewBank,
 } from "@/lib/server/play";
 import { CLOUD_COOKIE, readSessionToken } from "@/lib/server/session";
+import {
+  buyListing,
+  cancelListing,
+  castVote,
+  claimStipend,
+  deletePost,
+  electionView,
+  fcAnswer,
+  fcChallenge,
+  fcView,
+  feedView,
+  followPlayer,
+  likePost,
+  listItem,
+  makePost,
+  marketView,
+  runForOffice,
+} from "@/lib/server/town";
 
 const HANDLE = /^[a-z0-9_]{3,16}$/;
 
@@ -41,6 +59,11 @@ function refOf(body: Record<string, unknown> | null): NetRef | null {
   const id = String(body?.id ?? "").trim();
   if (!HANDLE.test(owner) || !/^[a-z0-9]{4,20}$/.test(id)) return null;
   return { owner, id };
+}
+
+function idOf(body: Record<string, unknown> | null) {
+  const id = String(body?.id ?? "").trim();
+  return /^[a-z0-9]{4,20}$/.test(id) ? id : "";
 }
 
 function lifeOf(body: Record<string, unknown> | null) {
@@ -78,6 +101,10 @@ export async function GET(request: Request) {
   if (view === "events") return NextResponse.json({ events: await listEvents() });
   if (view === "games") return NextResponse.json({ games: (await gamesView(username)) ?? [] });
   if (view === "board") return NextResponse.json(await leaderboard());
+  if (view === "feed") return NextResponse.json(await feedView(username, new URL(request.url).searchParams.get("tab") ?? "all"));
+  if (view === "market") return NextResponse.json(await marketView(username));
+  if (view === "fc") return NextResponse.json({ matches: await fcView(username) });
+  if (view === "election") return NextResponse.json(await electionView(username));
   return reply("Unknown view.");
 }
 
@@ -125,6 +152,30 @@ export async function POST(request: Request) {
     }
     case "game-claim":
       return reply(ref ? await claimIdle(username, ref) : "That game is not running.");
+    case "feed-post":
+      return life ? done(await makePost(username, String(body?.kind ?? ""), String(body?.text ?? ""), life)) : reply("Log in again.");
+    case "feed-like":
+      return reply(ref ? await likePost(username, ref.owner, ref.id) : "That post is gone.");
+    case "feed-delete":
+      return reply(idOf(body) ? await deletePost(username, idOf(body)) : "That post is gone.");
+    case "feed-follow":
+      return reply(await followPlayer(username, handle(body?.to)));
+    case "market-list":
+      return life ? done(await listItem(username, String(body?.kind ?? ""), String(body?.ref ?? ""), Number(body?.qty ?? 1), Number(body?.price), life)) : reply("Log in again.");
+    case "market-cancel":
+      return life && idOf(body) ? done(await cancelListing(username, idOf(body), life)) : reply("That listing is gone.");
+    case "market-buy":
+      return ref && life ? done(await buyListing(username, ref.owner, ref.id, life)) : reply("That listing is gone.");
+    case "fc-challenge":
+      return life ? done(await fcChallenge(username, handle(body?.to), Number(body?.stake), life)) : reply("Log in again.");
+    case "fc-answer":
+      return ref && life ? done(await fcAnswer(username, ref, Boolean(body?.yes), life)) : reply("That challenge is gone.");
+    case "vote-run":
+      return life ? done(await runForOffice(username, String(body?.pitch ?? ""), life)) : reply("Log in again.");
+    case "vote-cast":
+      return reply(await castVote(username, handle(body?.to)));
+    case "vote-stipend":
+      return reply(await claimStipend(username));
     default:
       return reply("Unknown action.");
   }

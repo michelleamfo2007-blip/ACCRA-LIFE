@@ -7,7 +7,38 @@ export type CityEvent = {
   detail: string;
   spots: string[];
   verb: Verb;
+  more?: Verb[];
 };
+
+export type Season = { id: "harmattan" | "detty" | "major-rains" | "minor-rains" | "dry"; label: string; emoji: string; detail: string };
+
+export function seasonOf(at = new Date()): Season {
+  const month = at.getUTCMonth();
+  const day = at.getUTCDate();
+  if ((month === 11 && day >= 15) || (month === 0 && day <= 2)) return { id: "detty", label: "Detty December", emoji: "🎆", detail: "Returnees are home. Parties cost 30% more, rooms let for more, and the beaches never close." };
+  if (month === 11 || month === 0 || month === 1) return { id: "harmattan", label: "Harmattan", emoji: "🌫️", detail: "Dusty haze from the Sahara. You get dirty faster, colds go round, and the mornings are cool." };
+  if (month >= 3 && month <= 6) return { id: "major-rains", label: "Major rains", emoji: "🌧️", detail: "Afternoon storms and flooded roads around Circle. Malaria season, so sleep under a net." };
+  if (month === 8 || month === 9) return { id: "minor-rains", label: "Minor rains", emoji: "🌦️", detail: "Shorter showers, still enough for the farm and the mosquitoes." };
+  return { id: "dry", label: "Dry season", emoji: "☀️", detail: "Hot, bright and busy. Good days for the beach and the farm needs watering." };
+}
+
+export type Upcoming = { id: string; title: string; emoji: string; detail: string; date: Date; spots: string[] };
+
+export function upcomingEvents(at = new Date(), days = 150): Upcoming[] {
+  const seen = new Set<string>();
+  const out: Upcoming[] = [];
+  const start = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate(), 12);
+  for (let offset = 0; offset <= days; offset += 1) {
+    const date = new Date(start + offset * 86400000);
+    for (const event of calendar(date)) {
+      const key = event.id === "ghana-month" && date.getUTCDate() === 6 ? "independence-day" : event.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: key, title: event.title, emoji: event.emoji, detail: event.detail, date, spots: event.spots });
+    }
+  }
+  return out;
+}
 
 export type Weather = {
   rain: boolean;
@@ -78,6 +109,7 @@ function calendar(at: Date): CityEvent[] {
       detail: "The whole diaspora is home. Every club and beach is packed till sunrise.",
       spots: PARTY_SPOTS,
       verb: verb({ id: "ev-detty", label: "Detty December night", detail: "Afrobeats, fireworks and everybody you know from abroad.", minutes: 150, cost: 70, effects: { fun: 42, social: 28, energy: -18, hygiene: -10 }, tag: "party", skill: "music", emoji: "🎆" }),
+      more: [verb({ id: "ev-detty-day", label: "Day party with the returnees", detail: "Jollof, a DJ under a tent, and cousins with new accents.", minutes: 120, cost: 50, effects: { fun: 30, social: 30, hunger: 16, energy: -10 }, tag: "party", emoji: "🌴" })],
     });
   }
   if (month === 0 && day === 1) {
@@ -101,6 +133,10 @@ function calendar(at: Date): CityEvent[] {
         day === 6
           ? verb({ id: "ev-parade", label: "Watch the 6 March parade", detail: "Schools march past. The crowd sings the anthem with them.", minutes: 90, effects: { fun: 26, social: 22 }, emoji: "🇬🇭" })
           : verb({ id: "ev-ghana-month", label: "Eat local for Ghana Month", detail: "Waakye, kelewele and a sobolo, all from the same corner.", minutes: 45, cost: 18, effects: { hunger: 34, fun: 12, social: 10 }, tag: "food", emoji: "🇬🇭" }),
+      more:
+        day === 6
+          ? [verb({ id: "ev-flag", label: "Wave red, gold and green", detail: "A flag on a stick, a whistle, and the anthem twice.", minutes: 30, cost: 5, effects: { fun: 14, social: 14 }, emoji: "🎌" })]
+          : [verb({ id: "ev-made-in-ghana", label: "Shop made-in-Ghana", detail: "Batik, shea butter and a smock from a Bolga weaver.", minutes: 40, cost: 30, effects: { fun: 16, social: 8 }, emoji: "🧺" })],
     });
   }
   if (month === 6 && day === 1) {
@@ -131,6 +167,10 @@ function calendar(at: Date): CityEvent[] {
       detail: "The Ga harvest festival. Kpokpoi and palm-nut soup in Jamestown.",
       spots: ["jamestown", "chale-wote"],
       verb: verb({ id: "ev-homowo", label: "Eat kpokpoi with the Ga crowd", detail: "Somebody's auntie hands you a bowl before you ask.", minutes: 60, cost: 10, effects: { hunger: 36, social: 24, fun: 14 }, tag: "food", emoji: "🥣" }),
+      more: [
+        verb({ id: "ev-homowo-sprinkle", label: "Sprinkle kpokpoi with the chief", detail: "The procession moves through the lanes. You throw a pinch for the ancestors.", minutes: 45, effects: { social: 22, fun: 16 }, skill: "charm", emoji: "👑" }),
+        verb({ id: "ev-homowo-drums", label: "Dance to the kpanlogo drums", detail: "The circle opens and somebody pulls you in.", minutes: 40, effects: { fun: 26, social: 14, energy: -10 }, tag: "party", emoji: "🥁" }),
+      ],
     });
   }
   if (month === 7 && day >= 18 && day <= 24) {
@@ -141,6 +181,10 @@ function calendar(at: Date): CityEvent[] {
       detail: "Street art festival. Jamestown's walls are covered in fresh paint.",
       spots: ["chale-wote", "jamestown", "gallery-1957", "artists-alliance"],
       verb: verb({ id: "ev-chale-wote", label: "Walk the Chale Wote street", detail: "Murals, stilt walkers and a sound system every ten metres.", minutes: 90, effects: { fun: 34, social: 20, energy: -8 }, emoji: "🎨" }),
+      more: [
+        verb({ id: "ev-chale-portrait", label: "Sit for a street portrait", detail: "Twenty minutes, charcoal on brown paper. It looks like you on a good day.", minutes: 30, cost: 40, effects: { fun: 20, social: 8 }, emoji: "🖼️" }),
+        verb({ id: "ev-chale-paint", label: "Help paint a mural", detail: "A painter hands you a brush and points at a corner of the wall.", minutes: 60, effects: { fun: 24, social: 16, hygiene: -12 }, skill: "charm", emoji: "🖌️" }),
+      ],
     });
   }
   if (month === 11 && weekday === 5 && day === firstWeekday(year, 11, 5)) {
@@ -163,6 +207,16 @@ function calendar(at: Date): CityEvent[] {
       verb: verb({ id: "ev-christmas", label: "Christmas service and jollof", detail: "The choir goes long. Nobody minds.", minutes: 120, cost: 12, effects: { fun: 24, social: 26, hunger: 30 }, tag: "church", emoji: "🎄" }),
     });
   }
+  if ((month === 11 || month === 0 || month === 1) && !list.some((event) => event.id === "detty")) {
+    list.push({
+      id: "harmattan",
+      title: "Harmattan",
+      emoji: "🌫️",
+      detail: "Dusty haze over the city. Cool mornings, dry lips and a quiet beach.",
+      spots: ["beach", "aburi"],
+      verb: verb({ id: "ev-harmattan", label: "Watch the haze over the sea", detail: "The sun is a pale coin. The beach is nearly empty and cool.", minutes: 45, effects: { fun: 16, energy: 6 }, emoji: "🌫️" }),
+    });
+  }
   return list;
 }
 
@@ -172,8 +226,9 @@ function weather(at: Date): Weather {
   const key = `${at.getUTCFullYear()}-${month}-${at.getUTCDate()}`;
   const major = month >= 3 && month <= 6;
   const minor = month === 8 || month === 9;
-  const chance = major ? 0.45 : minor ? 0.3 : 0.06;
-  if (seed(`rain-${key}`) >= chance) return { rain: false, flood: false, label: "Dry and bright" };
+  const harmattan = month === 11 || month === 0 || month === 1;
+  const chance = major ? 0.45 : minor ? 0.3 : harmattan ? 0.02 : 0.06;
+  if (seed(`rain-${key}`) >= chance) return { rain: false, flood: false, label: harmattan ? "Harmattan haze. Dusty and cool." : "Dry and bright" };
   const start = 12 + Math.floor(seed(`start-${key}`) * 7);
   const length = 2 + Math.floor(seed(`length-${key}`) * 4);
   if (hour < start || hour >= start + length) return { rain: false, flood: false, label: `Rain due around ${start > 12 ? start - 12 : start}${start >= 12 ? "pm" : "am"}` };
@@ -225,7 +280,7 @@ export function cityNow(at = new Date()): City {
 }
 
 export function eventVerbs(spotId: string, city: City): Verb[] {
-  const verbs = city.events.filter((event) => event.spots.includes(spotId)).map((event) => event.verb);
+  const verbs = city.events.filter((event) => event.spots.includes(spotId)).flatMap((event) => [event.verb, ...(event.more ?? [])]);
   if (city.match && !city.match.over && city.match.spots.includes(spotId)) verbs.unshift(matchVerb(city.match));
   return verbs;
 }

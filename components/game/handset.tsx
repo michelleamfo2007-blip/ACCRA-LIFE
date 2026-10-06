@@ -7,7 +7,11 @@ import { BizApp } from "@/components/game/biz-app";
 import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
 import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
+import { AlertsApp, BankApp, CalendarApp, CommunityApp, FeedApp, FleetApp, FootballApp, GuideApp, MarketApp, PetsApp, StoriesApp } from "@/components/game/town-apps";
+import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
+import { guideLeft } from "@/lib/game/guide";
+import { storyReady } from "@/lib/game/story";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
 import {
   CLOTHES,
@@ -60,7 +64,20 @@ type AppId =
   | "badges"
   | "crew"
   | "events"
-  | "leader";
+  | "leader"
+  | "calendar"
+  | "stories"
+  | "bank"
+  | "fleet"
+  | "football"
+  | "pets"
+  | "community"
+  | "guide"
+  | "alerts"
+  | "feed"
+  | "trade";
+
+const APP_IDS: AppId[] = ["messages", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade"];
 
 export function Handset({
   life,
@@ -92,7 +109,9 @@ export function Handset({
   married,
   raining,
   onGo,
+  openTo,
 }: {
+  openTo?: string | null;
   married: boolean;
   raining: boolean;
   onGo: (spot: string) => void;
@@ -123,7 +142,7 @@ export function Handset({
   onLaunchConsumed: () => void;
   onAir: (playing: boolean) => void;
 }) {
-  const [app, setApp] = useState<AppId>(launch ? "messages" : "home");
+  const [app, setApp] = useState<AppId>(launch ? "messages" : openTo && APP_IDS.includes(openTo as AppId) ? (openTo as AppId) : "home");
   const [thread, setThread] = useState<string | null>(launch?.id ?? null);
   const [chats, setChats] = useState<Record<string, ChatMsg[]>>({});
   const [blocked, setBlocked] = useState<string[]>([]);
@@ -181,6 +200,10 @@ export function Handset({
   const inApp = app !== "home" || Boolean(thread);
   const unreadTotal = Object.values(unread).reduce((sum, count) => sum + count, 0);
 
+  function openApp(id: string) {
+    setApp(APP_IDS.includes(id as AppId) ? (id as AppId) : "home");
+  }
+
   function openThread(id: string) {
     setThread(id);
     setApp("messages");
@@ -232,7 +255,7 @@ export function Handset({
             <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
               {app === "home" && !thread ? (
-                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} daily={now != null && !streakState(life, now).claimed} sick={Boolean(life.health?.sick)} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
+                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} asks={asks} daily={now != null && !streakState(life, now).claimed} sick={Boolean(life.health?.sick)} alerts={alertsFor(life).length} stories={storyReady(life)} guide={guideLeft(life).filter((step) => step.done(life)).length} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
               ) : null}
               {app === "messages" ? (
                 <MessagesApp
@@ -357,6 +380,17 @@ export function Handset({
               {app === "crew" ? <CrewApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} onVisit={onVisit} /> : null}
               {app === "events" ? <EventsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} onGo={onGo} /> : null}
               {app === "leader" ? <LeaderApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
+              {app === "calendar" ? <CalendarApp life={life} onBack={() => setApp("home")} onGo={onGo} /> : null}
+              {app === "stories" ? <StoriesApp life={life} onBack={() => setApp("home")} onApply={onSocial} onGo={onGo} /> : null}
+              {app === "bank" ? <BankApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "fleet" ? <FleetApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "football" ? <FootballApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
+              {app === "pets" ? <PetsApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "community" ? <CommunityApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} onGo={onGo} /> : null}
+              {app === "guide" ? <GuideApp life={life} onBack={() => setApp("home")} onApply={onSocial} onOpen={openApp} /> : null}
+              {app === "alerts" ? <AlertsApp life={life} onBack={() => setApp("home")} onOpen={openApp} /> : null}
+              {app === "feed" ? <FeedApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
+              {app === "trade" ? <MarketApp life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -424,6 +458,9 @@ function HomeScreen({
   asks,
   daily,
   sick,
+  alerts,
+  stories,
+  guide,
   onOpen,
   onRide,
   onMarket,
@@ -434,6 +471,9 @@ function HomeScreen({
   asks: number;
   daily: boolean;
   sick: boolean;
+  alerts: number;
+  stories: number;
+  guide: number;
   onOpen: (app: AppId) => void;
   onRide: () => void;
   onMarket: () => void;
@@ -442,54 +482,76 @@ function HomeScreen({
     <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-8 pt-3 text-white">
       <p className="text-center text-[52px] font-semibold leading-none tracking-tight">{time}</p>
       <p className="mt-1 text-center text-[13px] text-white/85">{date}</p>
-      <div className="mt-5 grid grid-cols-4 gap-x-1 gap-y-4">
-        <AppIcon label="Jobs" color="#006B3F" onClick={() => onOpen("work")}>
-          <Briefcase />
+      <div className="mt-4 grid grid-cols-4 gap-x-1 gap-y-4">
+        <AppIcon label="Alerts" color="#243044" badge={alerts} onClick={() => onOpen("alerts")}>
+          <span className="text-2xl">🔔</span>
         </AppIcon>
         <AppIcon label="Messages" color="#5b8def" badge={inbox} onClick={() => onOpen("messages")}>
           <Bubble />
         </AppIcon>
-        <AppIcon label="Radio" color="#1c1c1c" onClick={() => onOpen("radio")}>
-          <Disc />
+        <AppIcon label="Guide" color="#006B3F" badge={guide} onClick={() => onOpen("guide")}>
+          <span className="text-2xl">🧭</span>
         </AppIcon>
-        <AppIcon label="Market" color="#006B3F" onClick={onMarket}>
-          <Basket />
+        <AppIcon label="Calendar" color="#7a3b0c" onClick={() => onOpen("calendar")}>
+          <span className="text-2xl">📅</span>
         </AppIcon>
-        <AppIcon label="Ride" color="#f0b429" onClick={onRide}>
-          <Van />
+      </div>
+      <Section title="Life">
+        <AppIcon label="Jobs" color="#006B3F" onClick={() => onOpen("work")}>
+          <Briefcase />
         </AppIcon>
-        <AppIcon label="Contacts" color="#7a5af5" onClick={() => onOpen("contacts")}>
-          <PhoneMark />
+        <AppIcon label="Stories" color="#5c2a86" badge={stories} onClick={() => onOpen("stories")}>
+          <span className="text-2xl">📖</span>
         </AppIcon>
         <AppIcon label="Dream" color="#f08a3c" onClick={() => onOpen("goals")}>
           <Star />
         </AppIcon>
-        <AppIcon label="MoMo" color="#f5c542" onClick={() => onOpen("momo")}>
-          <WalletMark />
+        <AppIcon label="Family" color="#e88bbf" onClick={() => onOpen("family")}>
+          <span className="text-2xl">👨🏾‍👩🏾‍👧🏾</span>
         </AppIcon>
-        <AppIcon label="City desk" color="#243044" onClick={() => onOpen("news")}>
-          <Paper />
+        <AppIcon label="Pets" color="#8a5a2b" onClick={() => onOpen("pets")}>
+          <span className="text-2xl">🐕</span>
         </AppIcon>
-        <AppIcon label="Games" color="#f4efe6" onClick={() => onOpen("games")}>
-          <Seeds />
+        <AppIcon label="Health" color="#0e7c6b" badge={sick ? 1 : 0} onClick={() => onOpen("health")}>
+          <span className="text-2xl">🩺</span>
+        </AppIcon>
+        <AppIcon label="School" color="#1f4e8c" onClick={() => onOpen("school")}>
+          <span className="text-2xl">🎓</span>
+        </AppIcon>
+        <AppIcon label="Garage" color="#243044" onClick={() => onOpen("garage")}>
+          <span className="text-2xl">🚗</span>
+        </AppIcon>
+        <AppIcon label="Ride" color="#f0b429" onClick={onRide}>
+          <Van />
         </AppIcon>
         <AppIcon label="Boutique" color="#c45c9a" onClick={() => onOpen("boutique")}>
           <Hanger />
         </AppIcon>
+        <AppIcon label="Seamstress" color="#8a2f6a" onClick={() => onOpen("tailor")}>
+          <span className="text-2xl">🧵</span>
+        </AppIcon>
         <AppIcon label="Light" color="#fff4c2" onClick={() => onOpen("light")}>
           <Bulb />
+        </AppIcon>
+      </Section>
+      <Section title="Money">
+        <AppIcon label="MoMo" color="#f5c542" onClick={() => onOpen("momo")}>
+          <WalletMark />
+        </AppIcon>
+        <AppIcon label="Bank" color="#0b3d6b" onClick={() => onOpen("bank")}>
+          <span className="text-2xl">🏦</span>
         </AppIcon>
         <AppIcon label="Business" color="#121212" onClick={() => onOpen("biz")}>
           <span className="text-2xl">🏪</span>
         </AppIcon>
-        <AppIcon label="Susu" color="#006B3F" onClick={() => onOpen("susu")}>
-          <span className="text-2xl">🤝</span>
+        <AppIcon label="Market" color="#006B3F" onClick={onMarket}>
+          <Basket />
         </AppIcon>
-        <AppIcon label="People" color="#c45c9a" badge={asks} onClick={() => onOpen("people")}>
-          <span className="text-2xl">💞</span>
+        <AppIcon label="Buy & Sell" color="#0f766e" onClick={() => onOpen("trade")}>
+          <span className="text-2xl">🏷️</span>
         </AppIcon>
-        <AppIcon label="Family" color="#e88bbf" onClick={() => onOpen("family")}>
-          <span className="text-2xl">👨🏾‍👩🏾‍👧🏾</span>
+        <AppIcon label="Fleet" color="#b45309" onClick={() => onOpen("fleet")}>
+          <span className="text-2xl">🚐</span>
         </AppIcon>
         <AppIcon label="Land" color="#6b4423" onClick={() => onOpen("land")}>
           <span className="text-2xl">🏗️</span>
@@ -497,26 +559,45 @@ function HomeScreen({
         <AppIcon label="Farm" color="#3f7d20" onClick={() => onOpen("farm")}>
           <span className="text-2xl">🌶️</span>
         </AppIcon>
-        <AppIcon label="Garage" color="#243044" onClick={() => onOpen("garage")}>
-          <span className="text-2xl">🚗</span>
+        <AppIcon label="Susu" color="#006B3F" onClick={() => onOpen("susu")}>
+          <span className="text-2xl">🤝</span>
         </AppIcon>
-        <AppIcon label="Studio" color="#3b1f5c" onClick={() => onOpen("studio")}>
-          <span className="text-2xl">🎙️</span>
+      </Section>
+      <Section title="Social">
+        <AppIcon label="Feed" color="#c2185b" onClick={() => onOpen("feed")}>
+          <span className="text-2xl">📸</span>
         </AppIcon>
-        <AppIcon label="School" color="#1f4e8c" onClick={() => onOpen("school")}>
-          <span className="text-2xl">🎓</span>
+        <AppIcon label="People" color="#c45c9a" badge={asks} onClick={() => onOpen("people")}>
+          <span className="text-2xl">💞</span>
         </AppIcon>
-        <AppIcon label="Health" color="#0e7c6b" badge={sick ? 1 : 0} onClick={() => onOpen("health")}>
-          <span className="text-2xl">🩺</span>
-        </AppIcon>
-        <AppIcon label="Seamstress" color="#8a2f6a" onClick={() => onOpen("tailor")}>
-          <span className="text-2xl">🧵</span>
+        <AppIcon label="Contacts" color="#7a5af5" onClick={() => onOpen("contacts")}>
+          <PhoneMark />
         </AppIcon>
         <AppIcon label="Crew" color="#121212" onClick={() => onOpen("crew")}>
           <span className="text-2xl">🛡️</span>
         </AppIcon>
         <AppIcon label="Events" color="#4a1d1d" onClick={() => onOpen("events")}>
           <span className="text-2xl">🎉</span>
+        </AppIcon>
+        <AppIcon label="Community" color="#1e3a5f" onClick={() => onOpen("community")}>
+          <span className="text-2xl">⛪</span>
+        </AppIcon>
+        <AppIcon label="City desk" color="#243044" onClick={() => onOpen("news")}>
+          <Paper />
+        </AppIcon>
+      </Section>
+      <Section title="Play">
+        <AppIcon label="Games" color="#f4efe6" onClick={() => onOpen("games")}>
+          <Seeds />
+        </AppIcon>
+        <AppIcon label="Football" color="#14532d" onClick={() => onOpen("football")}>
+          <span className="text-2xl">⚽</span>
+        </AppIcon>
+        <AppIcon label="Studio" color="#3b1f5c" onClick={() => onOpen("studio")}>
+          <span className="text-2xl">🎙️</span>
+        </AppIcon>
+        <AppIcon label="Radio" color="#1c1c1c" onClick={() => onOpen("radio")}>
+          <Disc />
         </AppIcon>
         <AppIcon label="Badges" color="#b8860b" badge={daily ? 1 : 0} onClick={() => onOpen("badges")}>
           <span className="text-2xl">🏅</span>
@@ -527,7 +608,7 @@ function HomeScreen({
         <AppIcon label="Settings" color="#e7edf5" onClick={() => onOpen("settings")}>
           <Gear />
         </AppIcon>
-      </div>
+      </Section>
       <div className="mt-auto grid grid-cols-4 gap-2 rounded-[28px] bg-white/25 p-3 backdrop-blur">
         <AppIcon label="Messages" color="#25d366" onClick={() => onOpen("messages")}>
           <Bubble />
@@ -598,6 +679,15 @@ function NoteScreen({ title, lines, onBack }: { title: string; lines: string[]; 
           </p>
         ))}
       </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mt-5">
+      <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">{title}</p>
+      <div className="grid grid-cols-4 gap-x-1 gap-y-4 rounded-[24px] bg-white/10 p-2 backdrop-blur-[2px]">{children}</div>
     </div>
   );
 }

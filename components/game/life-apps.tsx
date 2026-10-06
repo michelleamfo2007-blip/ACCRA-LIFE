@@ -12,13 +12,13 @@ import { cedis, type Life, type StepResult } from "@/lib/game/world";
 
 type Apply = (result: StepResult) => void;
 
-function wait(minutes: number) {
+export function wait(minutes: number) {
   if (minutes >= 1440) return `${Math.ceil(minutes / 1440)}d`;
   if (minutes >= 60) return `${Math.ceil(minutes / 60)}h`;
   return `${Math.max(1, Math.ceil(minutes))}m`;
 }
 
-function Screen({ title, life, color = "#121212", onBack, children }: { title: string; life: Life; color?: string; onBack: () => void; children: ReactNode }) {
+export function Screen({ title, life, color = "#121212", onBack, children }: { title: string; life: Life; color?: string; onBack: () => void; children: ReactNode }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <div className="flex items-center gap-2 px-2 py-2 text-white" style={{ background: color }}>
@@ -33,16 +33,16 @@ function Screen({ title, life, color = "#121212", onBack, children }: { title: s
   );
 }
 
-function Label({ children }: { children: ReactNode }) {
+export function Label({ children }: { children: ReactNode }) {
   return <p className="text-[11px] font-bold tracking-wide text-[#8b97ab]">{children}</p>;
 }
 
-function Card({ children, tone }: { children: ReactNode; tone?: "warn" | "good" }) {
+export function Card({ children, tone }: { children: ReactNode; tone?: "warn" | "good" }) {
   const ring = tone === "warn" ? "ring-2 ring-[#CE1126]/40" : tone === "good" ? "ring-2 ring-[#006B3F]/40" : "";
   return <div className={`rounded-2xl bg-white p-3 shadow-sm ${ring}`}>{children}</div>;
 }
 
-function Btn({ children, onClick, disabled, kind = "dark" }: { children: ReactNode; onClick: () => void; disabled?: boolean; kind?: "dark" | "green" | "light" | "red" | "gold" }) {
+export function Btn({ children, onClick, disabled, kind = "dark" }: { children: ReactNode; onClick: () => void; disabled?: boolean; kind?: "dark" | "green" | "light" | "red" | "gold" }) {
   const look = {
     dark: "bg-[#121212] text-white",
     green: "bg-[#006B3F] text-white",
@@ -57,7 +57,7 @@ function Btn({ children, onClick, disabled, kind = "dark" }: { children: ReactNo
   );
 }
 
-function Bar({ value, color = "#006B3F" }: { value: number; color?: string }) {
+export function Bar({ value, color = "#006B3F" }: { value: number; color?: string }) {
   return (
     <div className="mt-2 h-2 rounded-full bg-[#e7edf5]">
       <div className="h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(100, value * 100))}%`, background: color }} />

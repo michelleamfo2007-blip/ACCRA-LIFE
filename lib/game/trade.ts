@@ -94,6 +94,7 @@ export const GOODS: Good[] = [
   { id: "okro", label: "Bag of okro", emoji: "🌿", base: 22, food: true, farm: true },
   { id: "garden-eggs", label: "Garden eggs", emoji: "🍆", base: 26, food: true, farm: true },
   { id: "plantain", label: "Bunch of plantain", emoji: "🍌", base: 45, food: true, farm: true },
+  { id: "eggs", label: "Tray of eggs", emoji: "🥚", base: 38, food: true, farm: true },
 ];
 
 export const BAG_LIMIT = 10;

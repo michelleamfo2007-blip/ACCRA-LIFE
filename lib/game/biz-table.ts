@@ -10,6 +10,7 @@ export type BizKind = {
 };
 
 export const BUSINESSES: BizKind[] = [
+  { id: "momo", label: "MoMo agent stand", emoji: "📱", area: "Circle", price: 2500, perHour: 6, wages: 180, detail: "An umbrella, a float and a queue sending money home. Commission on every cash-out." },
   { id: "kiosk", label: "Provisions kiosk", emoji: "🏪", area: "Madina", price: 1500, perHour: 4, wages: 120, detail: "Sachet water, Milo, airtime. Small and steady." },
   { id: "barber", label: "Barbering shop", emoji: "💈", area: "Kaneshie", price: 3000, perHour: 8, wages: 300, detail: "Two chairs, a generator and a queue on Saturdays." },
   { id: "salon", label: "Salon", emoji: "💇🏾‍♀️", area: "Adabraka", price: 4000, perHour: 10, wages: 380, detail: "Braids, wigs and the best gist on the street." },

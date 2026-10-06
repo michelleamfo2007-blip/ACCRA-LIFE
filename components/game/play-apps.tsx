@@ -39,7 +39,7 @@ function Btn({ children, onClick, disabled, kind = "dark" }: { children: ReactNo
   );
 }
 
-function Offline({ title, color, life, onBack }: { title: string; color: string; life: Life; onBack: () => void }) {
+export function Offline({ title, color, life, onBack }: { title: string; color: string; life: Life; onBack: () => void }) {
   return (
     <Screen title={title} color={color} life={life} onBack={onBack}>
       <p className="rounded-2xl bg-white px-4 py-3 text-sm shadow-sm">This needs an online account. Sign up from the menu to play with people across Accra.</p>
@@ -47,7 +47,7 @@ function Offline({ title, color, life, onBack }: { title: string; color: string;
   );
 }
 
-function usePoll<T>(url: string | null, every: number) {
+export function usePoll<T>(url: string | null, every: number) {
   const [data, setData] = useState<T | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -76,11 +76,11 @@ function subscribeTick(callback: () => void) {
   return () => window.clearInterval(id);
 }
 
-function useClock() {
+export function useClock() {
   return useSyncExternalStore(subscribeTick, () => Math.floor(Date.now() / 20000) * 20000, () => 0);
 }
 
-function when(iso: string, now: number) {
+export function when(iso: string, now: number) {
   const minutes = Math.round((Date.parse(iso) - now) / 60000);
   const abs = Math.abs(minutes);
   const span = abs >= 60 ? `${Math.round(abs / 60)}h` : `${Math.max(1, abs)}m`;
@@ -105,7 +105,7 @@ type CrewView = {
   asks: { owner: string; id: string; name: string }[];
 };
 
-async function post(body: Record<string, unknown>) {
+export async function post(body: Record<string, unknown>) {
   const response = await fetch("/api/live/play", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = (await response.json().catch(() => null)) as ({ error?: string } & Record<string, unknown>) | null;
   if (!response.ok || data?.error) return { error: data?.error ?? "That did not go through.", data };
@@ -739,7 +739,7 @@ function LudoView({ board, me, live, onMove }: { board: Extract<Board, { kind: "
 }
 
 type BoardRow = { username: string; name: string; value: number };
-type Boards = Record<"worth" | "social" | "chef" | "fans" | "badges", BoardRow[]>;
+type Boards = Record<"worth" | "social" | "chef" | "fans" | "badges" | "football" | "elders", BoardRow[]>;
 
 const TABS: { id: keyof Boards; label: string; unit: (value: number) => string }[] = [
   { id: "worth", label: "Net worth", unit: (value) => cedis(value) },
@@ -747,6 +747,8 @@ const TABS: { id: keyof Boards; label: string; unit: (value: number) => string }
   { id: "chef", label: "Chef", unit: (value) => `Cooking ${value}` },
   { id: "fans", label: "Music", unit: (value) => `${value.toLocaleString("en-GH")} fans` },
   { id: "badges", label: "Badges", unit: (value) => `${value} badges` },
+  { id: "football", label: "Football", unit: (value) => `${value} 🏆` },
+  { id: "elders", label: "Community", unit: (value) => `${value} standing` },
 ];
 
 export function LeaderApp({ me, life, cloud, onBack }: { me: string; life: Life; cloud: boolean; onBack: () => void }) {

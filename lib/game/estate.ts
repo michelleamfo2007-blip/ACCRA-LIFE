@@ -1,5 +1,5 @@
 import { BAG_LIMIT, GOODS, bagCount } from "@/lib/game/trade";
-import { cedis, cloneLife, logLine, passTime, type FarmBed, type Life, type Plot, type StepResult } from "@/lib/game/world";
+import { cedis, cloneLife, logLine, passTime, seasonFlags, type FarmBed, type Life, type Plot, type StepResult } from "@/lib/game/world";
 
 export const LAND = [
   { id: "kasoa", label: "Kasoa", price: 8000, rooms: 4, rent: 40, blurb: "Far, dusty, and growing fast." },
@@ -43,7 +43,8 @@ export function plotsOf(life: Life) {
 export function rentDue(life: Life, plot: Plot) {
   if (plot.stage < STAGES.length - 1 || plot.tenants < 1) return 0;
   const days = Math.min(RENT_DAYS_CAP, (life.minutes - plot.lastRent) / 1440);
-  return Math.max(0, Math.floor(days * plot.tenants * landOf(plot.area).rent));
+  const returnees = seasonFlags(life.minutes).detty ? 1.5 : 1;
+  return Math.max(0, Math.floor(days * plot.tenants * landOf(plot.area).rent * returnees));
 }
 
 function withPlot(life: Life, plotId: string, change: (plot: Plot) => Plot) {
