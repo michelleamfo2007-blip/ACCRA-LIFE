@@ -1,0 +1,19 @@
+---
+description: AccraLife visual rule — real Accra photography, editorial and candid
+alwaysApply: true
+---
+
+# Real Accra photography
+
+REAL ACCRA. REAL PEOPLE. REAL PLACES. REAL EXPERIENCES.
+
+AccraLife should feel like a curated magazine about what is happening in Accra: searchable, interactive, and social. Use real photographic imagery wherever a place, event, area, category, or collection is shown.
+
+- Prefer authentic Accra and Ghana lifestyle photography: real locations, Ghanaian people, restaurants, cafés, nightlife, events, beaches, fashion, shopping, art, culture, city life, weekend plans.
+- Shoot the feeling candid and editorial. Skip staged corporate stock, illustrations, cartoon graphics, generic 3D characters, and anything that looks generated.
+- Give every place, event, collection, and category its own cover and gallery. Do not reuse one photo across listings.
+- Development may use distinct high-quality placeholders. Production images are uploaded from the admin desk: cover, gallery, replace, delete, and featured.
+- Serve them fast on a phone: responsive `sizes`, lazy loading except the hero, and compressed output (`next/image`, quality around 75–80).
+- Never let a screen look like an AI-generated template.
+
+The life-sim on `/` is a play surface. It does not supply photography for places, events, or the magazine.

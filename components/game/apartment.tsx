@@ -1,0 +1,296 @@
+"use client";
+
+import { useMemo } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type PerspectiveCamera } from "three";
+import { Figure } from "@/components/game/low-poly-human";
+import { moodOf, type Life } from "@/lib/game/world";
+
+const WALL = "#3e8f84";
+const WALL_DARK = "#357a70";
+
+export function Apartment({
+  life,
+  pos,
+  pose,
+  heading,
+  dark,
+  bedColor,
+  sofaColor,
+  onAsk,
+  onGo,
+}: {
+  life: Life;
+  pos: { x: number; z: number };
+  pose: "idle" | "walk" | "act";
+  heading: number;
+  dark: boolean;
+  bedColor: string;
+  sofaColor: string | null;
+  onAsk: () => void;
+  onGo: (id: string) => void;
+}) {
+  return (
+    <Canvas
+      camera={{ position: [18, 24, 20], fov: 38 }}
+      dpr={[1, 1.5]}
+      gl={{ antialias: true }}
+      resize={{ scroll: false }}
+      style={{ width: "100%", height: "100%", touchAction: "none" }}
+    >
+      <Aim />
+      <color attach="background" args={[dark ? "#10131a" : "#d7e7f2"]} />
+      <ambientLight intensity={dark ? 0.22 : 0.82} />
+      <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : 0.95} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
+        <circleGeometry args={[22, 64]} />
+        <meshLambertMaterial color={dark ? "#3d4a32" : "#8ea35a"} />
+      </mesh>
+      <Floor />
+      <Walls />
+      {!dark ? <Sconces /> : null}
+      <Door onGo={onGo} />
+      <Bed color={bedColor} onGo={onGo} />
+      <Sofa color={sofaColor ?? "#2f8f6b"} onGo={onGo} />
+      <Fridge onGo={onGo} />
+      <Stove onGo={onGo} />
+      <Toilet onGo={onGo} />
+      <Shower onGo={onGo} />
+      <Radio onGo={onGo} />
+      <WindowBars />
+      <group position={[pos.x, 0, pos.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+          <circleGeometry args={[0.32, 16]} />
+          <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />
+        </mesh>
+        <Figure
+          skin={life.look.skin}
+          shirt={life.look.cloth}
+          pants={life.look.body === "woman" ? "#1c2744" : life.look.accent}
+          hair={life.look.hair}
+          cloth={life.look.cloth}
+          pattern={life.look.pattern}
+          outfit={life.look.outfit}
+          body={life.look.body}
+          crown={moodOf(life.needs).label === "Happy"}
+          pose={pose}
+          turn={(heading * 180) / Math.PI}
+        />
+      </group>
+    </Canvas>
+  );
+}
+
+function Aim() {
+  const { camera, size } = useThree();
+  useFrame(() => {
+    const aspect = size.width / Math.max(1, size.height);
+    const phone = aspect < 0.8;
+    const distance = phone ? 36 : aspect < 1.15 ? 26 : 22;
+    const lens = camera as PerspectiveCamera;
+    lens.position.set(distance * 0.42, distance * 0.72, distance * 0.5);
+    lens.fov = phone ? 42 : 32;
+    lens.lookAt(0, phone ? -1.8 : 0, 0);
+    lens.updateProjectionMatrix();
+  });
+  return null;
+}
+
+function Floor() {
+  const map = useMemo(() => tiles(), []);
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <planeGeometry args={[12, 9]} />
+      <meshLambertMaterial map={map} />
+    </mesh>
+  );
+}
+
+function Walls() {
+  const h = 1.7;
+  const y = h / 2;
+  return (
+    <group>
+      <Box color={WALL} position={[0, y, -4.5]} size={[12.2, h, 0.18]} />
+      <Box color={WALL} position={[0, y, 4.5]} size={[12.2, h, 0.18]} />
+      <Box color={WALL_DARK} position={[6, y, 0]} size={[0.18, h, 9.16]} />
+      <Box color={WALL_DARK} position={[-6, y, -2.35]} size={[0.18, h, 4.1]} />
+      <Box color={WALL_DARK} position={[-6, y, 2.7]} size={[0.18, h, 3.4]} />
+      <Box color={WALL} position={[3.4, y, -1.35]} size={[3.2, h, 0.16]} />
+      <Box color={WALL_DARK} position={[-3.15, y, 2.85]} size={[0.16, h, 3.1]} />
+      <Box color={WALL} position={[-4.6, y, 1.25]} size={[2.6, h, 0.16]} />
+      <WoodFloor />
+    </group>
+  );
+}
+
+function WoodFloor() {
+  const map = useMemo(() => wood(), []);
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[3.2, 0.012, -2.9]}>
+      <planeGeometry args={[3.6, 3]} />
+      <meshLambertMaterial map={map} />
+    </mesh>
+  );
+}
+
+function Sconces() {
+  return (
+    <group>
+      <Light at={[-2.2, 1.7, -4.35]} />
+      <Light at={[2.4, 1.7, -4.35]} />
+      <Light at={[5.85, 1.7, 1.2]} />
+    </group>
+  );
+}
+
+function Light({ at }: { at: [number, number, number] }) {
+  return (
+    <mesh position={at}>
+      <sphereGeometry args={[0.08, 8, 6]} />
+      <meshBasicMaterial color="#fff4c4" />
+    </mesh>
+  );
+}
+
+function Door({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <mesh position={[-5.9, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
+      <boxGeometry args={[0.08, 1.7, 0.8]} />
+      <meshLambertMaterial color="#7a4a2c" flatShading />
+    </mesh>
+  );
+}
+
+function Bed({ color, onGo }: { color: string; onGo: (id: string) => void }) {
+  return (
+    <group position={[2.15, 0, -2.35]} onClick={(event) => { event.stopPropagation(); onGo("bed"); }}>
+      <Box color="#6b4428" position={[0, 0.16, 0]} size={[1.85, 0.22, 2.15]} />
+      <Box color="#5a3822" position={[0, 0.42, -0.95]} size={[1.85, 0.55, 0.1]} />
+      <Box color="#f7f4ef" position={[0, 0.32, 0.06]} size={[1.62, 0.12, 1.8]} />
+      <Box color={color} position={[0, 0.38, 0.28]} size={[1.62, 0.08, 1.25]} />
+      <Box color="#f4efe6" position={[-0.38, 0.46, -0.62]} size={[0.52, 0.12, 0.34]} />
+      <Box color="#fff" position={[0.38, 0.46, -0.62]} size={[0.52, 0.12, 0.34]} />
+    </group>
+  );
+}
+
+function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
+  return (
+    <group position={[-1.55, 0, -0.15]} onClick={(event) => { event.stopPropagation(); onGo("chair"); }}>
+      <Box color={color} position={[0, 0.26, 0.06]} size={[1.7, 0.28, 0.62]} />
+      <Box color={color} position={[0, 0.5, -0.22]} size={[1.7, 0.42, 0.16]} />
+      <Box color={color} position={[-0.78, 0.4, 0.06]} size={[0.14, 0.36, 0.62]} />
+      <Box color={color} position={[0.78, 0.4, 0.06]} size={[0.14, 0.36, 0.62]} />
+    </group>
+  );
+}
+
+function Fridge({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <group position={[4.55, 0, 1.7]} onClick={(event) => { event.stopPropagation(); onGo("cooler"); }}>
+      <Box color="#f4f7fa" position={[0, 0.78, 0]} size={[0.72, 1.55, 0.64]} />
+      <Box color="#c5d0da" position={[0, 1.05, 0.33]} size={[0.64, 0.03, 0.02]} />
+      <Box color="#9aa7b2" position={[0.28, 0.85, 0.33]} size={[0.04, 0.28, 0.04]} />
+    </group>
+  );
+}
+
+function Stove({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <group position={[4.4, 0, 3.05]} onClick={(event) => { event.stopPropagation(); onGo("stove"); }}>
+      <Box color="#f3f3f3" position={[0, 0.4, 0]} size={[0.78, 0.8, 0.6]} />
+      <Box color="#1c1c1c" position={[0, 0.82, 0]} size={[0.7, 0.04, 0.52]} />
+      <mesh position={[0.05, 0.96, 0]}>
+        <cylinderGeometry args={[0.12, 0.14, 0.16, 8]} />
+        <meshLambertMaterial color="#c4552a" />
+      </mesh>
+    </group>
+  );
+}
+
+function Toilet({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <group position={[-4.7, 0, 3.3]} onClick={(event) => { event.stopPropagation(); onGo("toilet"); }}>
+      <Box color="#f7f7f7" position={[0, 0.38, -0.12]} size={[0.36, 0.7, 0.18]} />
+      <Box color="#f4f7f8" position={[0, 0.28, 0.12]} size={[0.4, 0.28, 0.32]} />
+    </group>
+  );
+}
+
+function Shower({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <group position={[-5.15, 0, 1.9]} onClick={(event) => { event.stopPropagation(); onGo("shower"); }}>
+      <Box color="#e7eef3" position={[0, 0.06, 0]} size={[0.7, 0.08, 0.7]} />
+      <Box color="#d5e4f2" position={[0, 0.55, -0.28]} size={[0.7, 0.9, 0.06]} />
+    </group>
+  );
+}
+
+function Radio({ onGo }: { onGo: (id: string) => void }) {
+  return (
+    <group position={[0.35, 0, 1.35]} onClick={(event) => { event.stopPropagation(); onGo("radio"); }}>
+      <Box color="#c4894f" position={[0, 0.22, 0]} size={[0.42, 0.44, 0.32]} />
+      <Box color="#2c3338" position={[0, 0.5, 0]} size={[0.3, 0.16, 0.18]} />
+    </group>
+  );
+}
+
+function WindowBars() {
+  return (
+    <group position={[5.9, 1.15, 2.2]}>
+      {[-0.22, -0.07, 0.08, 0.23].map((z) => (
+        <Box key={z} color="#dfe6ee" position={[0, 0, z]} size={[0.04, 0.7, 0.03]} />
+      ))}
+    </group>
+  );
+}
+
+function Box({ color, position, size }: { color: string; position: [number, number, number]; size: [number, number, number] }) {
+  return (
+    <mesh position={position}>
+      <boxGeometry args={size} />
+      <meshLambertMaterial color={color} flatShading />
+    </mesh>
+  );
+}
+
+function wood() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const pen = canvas.getContext("2d");
+  if (!pen) return null;
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      pen.fillStyle = (col + row) % 2 === 0 ? "#e7d2a4" : "#dcc497";
+      pen.fillRect(col * 16, row * 16, 16, 16);
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.repeat.set(3, 2);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+function tiles() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const pen = canvas.getContext("2d");
+  if (!pen) return null;
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      pen.fillStyle = (col + row) % 2 === 0 ? "#ead7b6" : "#dcc6a2";
+      pen.fillRect(col * 16, row * 16, 16, 16);
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.repeat.set(6, 4.5);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}

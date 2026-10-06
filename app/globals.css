@@ -1,26 +1,333 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f3efe7;
+  --paper-deep: #e6dfd3;
+  --card: #fffcf8;
+  --ink: #1a1613;
+  --ink-soft: #3f3a34;
+  --muted: #736b62;
+  --line: #e2dacd;
+  --clay: #c24d2c;
+  --clay-deep: #9a391d;
+  --sand: #b08968;
+  --forest: #1b2e27;
+  --forest-2: #274038;
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 @theme inline {
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-clay: var(--clay);
+  --color-clay-deep: var(--clay-deep);
+  --color-sand: var(--sand);
+  --color-forest: var(--forest);
+  --color-forest-2: var(--forest-2);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), sans-serif;
+}
+
+::selection {
+  background: #c24d2c;
+  color: white;
+}
+
+:focus-visible {
+  outline: 2px solid #c24d2c;
+  outline-offset: 3px;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.rise {
+  animation: rise 0.7s ease both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.accralife-map .leaflet-pane,
+.accralife-map .leaflet-control {
+  z-index: 1 !important;
+}
+
+.accralife-map .leaflet-top,
+.accralife-map .leaflet-bottom {
+  z-index: 2 !important;
+}
+
+.sim .arm,
+.sim .forearm,
+.sim .leg,
+.sim .shin {
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
+.sim .torso {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.sim-tall.sim-idle .sim-bob,
+.sim-tall.sim-walk .sim-bob,
+.sim-tall.sim-act .sim-bob {
+  transform-origin: 50px 156px;
+}
+
+.sim-idle .sim-bob,
+.sim-idle .arm,
+.sim-idle .arm-back {
+  animation: none;
+}
+
+.sim-walk .sim-bob {
+  animation: sim-walk-bob 0.28s ease-in-out infinite;
+  transform-box: view-box;
+  transform-origin: 100px 360px;
+}
+
+.sim-walk .leg {
+  animation: sim-step 0.52s ease-in-out infinite;
+}
+
+.sim-walk .leg-r {
+  animation-direction: reverse;
+}
+
+.sim-walk .leg-l .shin {
+  animation: sim-knee 0.52s ease-in-out infinite;
+}
+
+.sim-walk .leg-r .shin {
+  animation: sim-knee 0.52s ease-in-out infinite reverse;
+}
+
+.sim-walk .arm {
+  animation: sim-swing 0.52s ease-in-out infinite;
+}
+
+.sim-walk .arm-front {
+  animation-direction: reverse;
+}
+
+.sim-walk .forearm {
+  animation: sim-elbow 0.52s ease-in-out infinite;
+}
+
+.sim-walk .torso {
+  animation: sim-hip 0.52s ease-in-out infinite;
+}
+
+.sim-act .arm-back {
+  animation: sim-reach-l 0.35s ease forwards;
+}
+
+.sim-act .arm-front {
+  animation: sim-reach-r 0.35s ease forwards;
+}
+
+.sim-act .sim-bob {
+  animation: none;
+}
+
+.sim .eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sim-blink 4.4s infinite;
+}
+
+.sim-shadow-walk {
+  animation: sim-shadow 0.28s ease-in-out infinite;
+}
+
+@keyframes sim-breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes sim-walk-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes sim-step {
+  0%,
+  100% {
+    transform: rotate(16deg);
+  }
+  50% {
+    transform: rotate(-16deg);
+  }
+}
+
+@keyframes sim-knee {
+  0%,
+  100% {
+    transform: rotate(-20deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes sim-swing {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
+@keyframes sim-elbow {
+  0%,
+  100% {
+    transform: rotate(8deg);
+  }
+  50% {
+    transform: rotate(26deg);
+  }
+}
+
+@keyframes sim-arm-idle {
+  0%,
+  100% {
+    transform: rotate(6deg);
+  }
+  50% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes sim-hip {
+  0%,
+  100% {
+    transform: rotate(2.5deg);
+  }
+  50% {
+    transform: rotate(-2.5deg);
+  }
+}
+
+@keyframes sim-reach-l {
+  to {
+    transform: rotate(62deg);
+  }
+}
+
+@keyframes sim-reach-r {
+  to {
+    transform: rotate(-62deg);
+  }
+}
+
+@keyframes sim-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  94%,
+  97% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes sim-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scaleX(0.82);
+    opacity: 0.22;
+  }
+}
+
+.game-splash {
+  animation: splash-hold 1.35s ease forwards;
+}
+
+@keyframes splash-hold {
+  0%,
+  60% {
+    opacity: 1;
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .rise,
+  .game-splash {
+    animation: none;
+    visibility: hidden;
+  }
+  .sim-bob,
+  .sim .arm,
+  .sim .leg,
+  .sim .shin,
+  .sim .forearm,
+  .sim .torso,
+  .sim .eye,
+  .sim-shadow-walk {
+    animation: none !important;
+  }
 }
