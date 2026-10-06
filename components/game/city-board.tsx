@@ -255,7 +255,12 @@ export function CityBoard({
                   <span className="truncate">{tag}</span>
                 </span>
               ) : (
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ring-white/80">{spot.emoji}</span>
+                <>
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-base shadow-[0_6px_14px_rgba(22,32,60,.18)] ring-2 ring-white/80">{spot.emoji}</span>
+                  <span className="mt-1 max-w-[6.5rem] truncate rounded-full bg-[#121212]/78 px-2 py-0.5 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
+                    {spot.name}
+                  </span>
+                </>
               )}
             </button>
           );
