@@ -31,6 +31,7 @@ export function SiteFooter() {
             <li><Link href="/submit/event">Submit an event</Link></li>
             <li><Link href="/saved">Saved</Link></li>
             <li><Link href="/login">Sign in</Link></li>
+            <li><Link href="/login?as=admin&next=/admin">Admin desk</Link></li>
           </ul>
         </div>
       </div>

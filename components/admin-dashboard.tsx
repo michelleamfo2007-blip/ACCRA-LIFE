@@ -26,9 +26,26 @@ type Snapshot = {
   places: { slug: string; name: string; area: string; featured: boolean }[];
 };
 
-type GameSnap = { reports: { who: string; reason: string; quote: string; at: string; by: string }[] };
+type GameSnap = {
+  reports: { who: string; reason: string; quote: string; at: string; by: string }[];
+  players: {
+    username: string;
+    name: string;
+    email: string;
+    createdAt: string;
+    hasLife: boolean;
+    home: string | null;
+    homeArea: string | null;
+    where: string | null;
+    cash: number | null;
+    dream: string | null;
+    seen: string | null;
+    online: boolean;
+  }[];
+  stats: { players: number; online: number; withLife: number; houses: number };
+};
 
-const tabs = ["Overview", "Photos", "Places", "Events", "Reviews", "Submissions", "Users", "Reports", "Game chat"] as const;
+const tabs = ["Overview", "Players", "Photos", "Places", "Events", "Reviews", "Submissions", "Users", "Reports", "Game chat"] as const;
 
 export function AdminDashboard() {
   const [data, setData] = useState<Snapshot | null>(null);
@@ -89,7 +106,7 @@ export function AdminDashboard() {
   }
 
   useEffect(() => {
-    if (tab === "Game chat") void loadGame();
+    if (tab === "Game chat" || tab === "Players" || tab === "Overview") void loadGame();
   }, [tab]);
 
   if (error) return <p className="px-5 py-16 text-ink-soft">{error}</p>;
@@ -113,7 +130,10 @@ export function AdminDashboard() {
         {tab === "Overview" ? (
           <div className="space-y-6">
             <div className="grid gap-3 sm:grid-cols-3">
-              <Stat label="Users" value={data.stats.users} />
+              <Stat label="Site users" value={data.stats.users} />
+              <Stat label="Game players" value={game?.stats.players ?? 0} />
+              <Stat label="Online now" value={game?.stats.online ?? 0} />
+              <Stat label="Houses started" value={game?.stats.withLife ?? 0} />
               <Stat label="Places" value={data.stats.places} />
               <Stat label="Events" value={data.stats.events} />
               <Stat label="Reviews" value={data.stats.reviews} />
@@ -151,6 +171,63 @@ export function AdminDashboard() {
                   <Row key={item.name} label={item.name} value={`${item.views} views · ${item.reservations} tickets`} />
                 ))}
               </Panel>
+            </div>
+          </div>
+        ) : null}
+
+        {tab === "Players" ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Stat label="Accounts" value={game?.stats.players ?? 0} />
+              <Stat label="Online" value={game?.stats.online ?? 0} />
+              <Stat label="With a life" value={game?.stats.withLife ?? 0} />
+              <Stat label="Houses" value={game?.stats.houses ?? 0} />
+            </div>
+            {!game ? <p className="text-sm text-muted">Loading players…</p> : null}
+            {game && game.players.length === 0 ? <p className="text-sm text-muted">No game accounts yet.</p> : null}
+            <div className="space-y-3">
+              {game?.players.map((player) => (
+                <article key={player.username} className="rounded-3xl border border-line bg-card p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-display text-2xl">
+                        {player.name}{" "}
+                        <span className="text-base font-semibold text-muted">@{player.username}</span>
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        {player.email || "No email"} · joined {formatShortDate(player.createdAt)}
+                        {player.seen ? ` · last seen ${formatShortDate(player.seen)}` : ""}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${player.online ? "bg-[#006B3F] text-white" : "bg-[#f4f7fb] text-muted"}`}>
+                      {player.online ? "Online" : player.hasLife ? "Offline" : "No life yet"}
+                    </span>
+                  </div>
+                  {player.hasLife ? (
+                    <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <p>
+                        <span className="text-muted">House · </span>
+                        {player.home ?? "—"}
+                        {player.homeArea ? ` (${player.homeArea})` : ""}
+                      </p>
+                      <p>
+                        <span className="text-muted">Now · </span>
+                        {player.where ?? "—"}
+                      </p>
+                      <p>
+                        <span className="text-muted">Cash · </span>
+                        {player.cash != null ? `₵${player.cash.toLocaleString("en-GH")}` : "—"}
+                      </p>
+                      <p>
+                        <span className="text-muted">Dream · </span>
+                        {player.dream ?? "—"}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-muted">Account created, life not started.</p>
+                  )}
+                </article>
+              ))}
             </div>
           </div>
         ) : null}

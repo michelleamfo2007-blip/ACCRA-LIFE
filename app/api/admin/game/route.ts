@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/server/guard";
+import { crowdCounts, listPlayersForAdmin } from "@/lib/server/live";
 import { clearGameReport, listGameReports, mutePlayer, unmutePlayer } from "@/lib/server/moderate";
 
 async function editor() {
@@ -11,7 +12,19 @@ async function editor() {
 export async function GET() {
   const user = await editor();
   if (!user) return NextResponse.json({ error: "Editors only." }, { status: 403 });
-  return NextResponse.json({ reports: await listGameReports() });
+  const [reports, players, crowd] = await Promise.all([listGameReports(), listPlayersForAdmin(), crowdCounts()]);
+  const withLife = players.filter((player) => player.hasLife).length;
+  const online = players.filter((player) => player.online).length;
+  return NextResponse.json({
+    reports,
+    players,
+    stats: {
+      players: crowd.players || players.length,
+      online: crowd.online || online,
+      withLife,
+      houses: withLife,
+    },
+  });
 }
 
 export async function PATCH(request: Request) {

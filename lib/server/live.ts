@@ -165,6 +165,51 @@ export async function crowdCounts() {
   return { players: players ?? 0, online };
 }
 
+export type AdminPlayer = {
+  username: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  hasLife: boolean;
+  home: string | null;
+  homeArea: string | null;
+  where: string | null;
+  cash: number | null;
+  dream: string | null;
+  seen: string | null;
+  online: boolean;
+};
+
+export async function listPlayersForAdmin(limit = 200): Promise<AdminPlayer[]> {
+  const client = db();
+  if (!client) return [];
+  const { data, error } = await client.from("players").select("username, name, email, birth_id, life, created_at").order("created_at", { ascending: false }).limit(limit);
+  if (error || !data) return [];
+  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const { homeById, spotById } = await import("@/lib/game/world");
+  return (data as PlayerRow[]).map((row) => {
+    const life = row.life as (Life & { seen?: string }) | null;
+    const home = life?.homeId ? homeById(life.homeId) : null;
+    const whereId = life?.where ?? null;
+    const where = whereId === "home" ? home?.name ?? "Home" : whereId ? spotById(whereId)?.name ?? whereId : null;
+    const seen = typeof life?.seen === "string" ? life.seen : null;
+    return {
+      username: row.username,
+      name: row.name,
+      email: row.email,
+      createdAt: row.created_at,
+      hasLife: Boolean(life),
+      home: home?.name ?? null,
+      homeArea: home?.area ?? null,
+      where,
+      cash: typeof life?.cash === "number" ? Math.round(life.cash) : null,
+      dream: life?.dream ?? null,
+      seen,
+      online: Boolean(seen && seen >= since),
+    };
+  });
+}
+
 export type FoundPlayer = { username: string; name: string; where: string | null; look?: Life["look"]; spot?: SpotPos | null };
 
 function cleanQuery(query: string) {
