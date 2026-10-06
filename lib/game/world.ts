@@ -761,17 +761,40 @@ export function dayIndex(minutes: number) {
   return Math.floor(minutes / 1440);
 }
 
-export function clockLabel(minutes: number) {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const day = dayIndex(minutes);
-  const rem = minutes % 1440;
-  const hour = Math.floor(rem / 60);
-  const mins = rem % 60;
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 || 12;
-  const date = new Date(2026, 9, 5 + day);
-  const month = date.toLocaleString("en-GH", { month: "short" });
-  return `${days[day % 7]} ${date.getDate()} ${month} · ${hour12}:${String(mins).padStart(2, "0")} ${suffix}`;
+export function realMinutes(at = Date.now()) {
+  return Math.floor(at / 60000);
+}
+
+export function accraHour(at = new Date()) {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Accra",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(at);
+  return Number(hour);
+}
+
+export function accraDateLabel(at = new Date()) {
+  return new Intl.DateTimeFormat("en-GH", {
+    timeZone: "Africa/Accra",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(at);
+}
+
+export function clockLabel(_minutes?: number, at = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GH", {
+    timeZone: "Africa/Accra",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("weekday")} ${part("day")} ${part("month")} · ${part("hour")}:${part("minute")} ${part("dayPeriod").toUpperCase()}`;
 }
 
 export function hourOf(minutes: number) {
@@ -830,7 +853,7 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
     loan: birth.loan,
     weeklyLoan: birth.weeklyLoan,
     learn: birth.learn,
-    minutes: 20 * 60 + 46,
+    minutes: realMinutes(),
     skills: {
       hustle: birth.hustle,
       cooking: birth.cooking,
@@ -874,10 +897,12 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
     next.needs.hygiene = clampNeed(next.needs.hygiene - 1.1 * hours);
     next.needs.bladder = clampNeed(next.needs.bladder - 2.2 * hours);
   }
-  next.minutes = to;
-  const notes = settleBills(next, from, to);
-  const hour = hourOf(to);
-  const day = dayIndex(to);
+  const real = from >= 1_000_000;
+  const clockTo = real ? realMinutes() : to;
+  next.minutes = clockTo;
+  const notes = settleBills(next, real ? Math.min(from, clockTo) : from, clockTo);
+  const hour = real ? accraHour() : hourOf(clockTo);
+  const day = dayIndex(clockTo);
   if (hour >= 5 && hour < 19) next.dumsor = false;
   if ((hour >= 19 || hour < 5) && next.outageCheckedDay !== day) {
     next.outageCheckedDay = day;
@@ -892,7 +917,7 @@ function settleBills(life: Life, from: number, to: number) {
   const start = dayIndex(from);
   const end = dayIndex(to);
   for (let day = start + 1; day <= end; day += 1) {
-    if (day % 7 !== 5 || life.lastRentAt === day) continue;
+    if (new Date(day * 86400000).getUTCDay() !== 6 || life.lastRentAt === day) continue;
     life.lastRentAt = day;
     const rent = homeById(life.homeId).rent;
     const loanPay = Math.min(life.loan, life.weeklyLoan);
@@ -1071,14 +1096,6 @@ export function dreamStatus(life: Life) {
   if (life.dream === "star") return { label: "Music", current: life.skills.music, max: 10 };
   if (life.dream === "padi") return { label: "Close friends", current: Math.min(4, life.relations.filter((person) => person.score >= 70).length), max: 4 };
   return { label: life.funded ? "Funded" : "Coding", current: life.funded ? 1 : Math.min(4, life.skills.coding), max: life.funded ? 1 : 4 };
-}
-
-export function crowdNow() {
-  const now = new Date();
-  const evening = now.getHours() >= 17 || now.getHours() < 1;
-  const online = (evening ? 2480 : 1620) + ((now.getDate() * 37) % 420);
-  const visits = 186400 + now.getMonth() * 1800 + now.getDate() * 90;
-  return { online, visits };
 }
 
 export const KENKEY_VERB = eat({

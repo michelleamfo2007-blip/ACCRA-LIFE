@@ -7,6 +7,7 @@ import {
   JOBS,
   careerLevel,
   cedis,
+  accraDateLabel,
   clockLabel,
   dreamStatus,
   handleOf,
@@ -65,7 +66,14 @@ export function Handset({
   const [blocked, setBlocked] = useState<string[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>(() => openingUnread(life));
   const [groups, setGroups] = useState<string[]>([]);
-  const clock = clockLabel(life.minutes);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const clock = now == null ? "" : clockLabel(undefined, new Date(now));
   const time = clock.split(" · ")[1] ?? clock;
 
   useEffect(() => {
@@ -135,7 +143,7 @@ export function Handset({
             <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
               {app === "home" && !thread ? (
-                <HomeScreen date={longDate(life.minutes)} time={time} inbox={unreadTotal} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
+                <HomeScreen date={now == null ? "Accra" : longDate(new Date(now))} time={time || "--:--"} inbox={unreadTotal} onOpen={setApp} onRide={onRide} onMarket={onMarket} />
               ) : null}
               {app === "messages" ? (
                 <MessagesApp
@@ -261,12 +269,8 @@ function npcReply(name: string, text: string) {
   return lines[n];
 }
 
-function longDate(minutes: number) {
-  const day = Math.floor(minutes / 1440);
-  const date = new Date(2026, 9, 5 + day);
-  const weekday = date.toLocaleString("en-GH", { weekday: "long" });
-  const month = date.toLocaleString("en-GH", { month: "long" });
-  return `${weekday} ${date.getDate()} ${month} · Accra`;
+function longDate(at = new Date()) {
+  return `${accraDateLabel(at)} · Accra`;
 }
 
 function HomeScreen({

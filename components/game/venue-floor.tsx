@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
-import { cedis, hourOf, peopleAt, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
+import { accraHour, cedis, peopleAt, spotById, type Life, type Spot, type Verb } from "@/lib/game/world";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
 const SHIRTS = ["#2f6fed", "#f5c542", "#ec4899", "#3cba78", "#f4efe6", "#e5484d"];
@@ -31,7 +31,7 @@ export function VenueFloor({
 }) {
   const spot = spotById(life.where);
   const people = peopleAt(spot.id);
-  const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
+  const night = accraHour() >= 19 || accraHour() < 5;
   const kind = sceneKind(spot);
   const [who, setWho] = useState<string | null>(null);
   const [lines, setLines] = useState<{ from: "you" | "them"; text: string }[]>([]);

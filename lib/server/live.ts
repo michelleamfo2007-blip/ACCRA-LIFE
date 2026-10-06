@@ -133,8 +133,24 @@ export async function createPlayer(player: CloudPlayer) {
 export async function savePlayer(player: CloudPlayer) {
   const client = db();
   if (!client) return false;
-  const { error } = await client.from("players").update({ life: player.life, name: player.name, email: player.email }).eq("username", player.username);
+  const life = { ...player.life, seen: new Date().toISOString() };
+  const { error } = await client.from("players").update({ life, name: player.name, email: player.email }).eq("username", player.username);
   return !error;
+}
+
+export async function crowdCounts() {
+  const client = db();
+  if (!client) return { players: 0, online: 0 };
+  const { count: players } = await client.from("players").select("*", { count: "exact", head: true });
+  const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  const filtered = await client.from("players").select("*", { count: "exact", head: true }).filter("life->>seen", "gte", since);
+  if (!filtered.error) return { players: players ?? 0, online: filtered.count ?? 0 };
+  const { data } = await client.from("players").select("life");
+  const online = (data ?? []).filter((row) => {
+    const seen = (row as { life?: { seen?: string } }).life?.seen;
+    return typeof seen === "string" && seen >= since;
+  }).length;
+  return { players: players ?? 0, online };
 }
 
 export async function loginPlayer(username: string, passwordHash: string) {

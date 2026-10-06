@@ -29,14 +29,14 @@ import {
   buyItem,
   cedis,
   clockLabel,
-  crowdNow,
   freshLife,
   gemSpotId,
   giftCash,
   receiveCash,
   goTo,
   homeById,
-  hourOf,
+  accraHour,
+  realMinutes,
   huntGem,
   meetPerson,
   moodOf,
@@ -95,17 +95,30 @@ export function GameApp() {
       if (!snap.session) return;
       const account = snap.accounts.find((item) => item.username === snap.session);
       if (!account?.life) return;
-      const timed = passTime(account.life, 5);
-      if (timed.notes.length) timed.life.inbox = [...timed.notes, ...timed.life.inbox].slice(0, 20);
-      commitLife(account.username, timed.life);
+      const now = realMinutes();
+      let life = account.life;
+      if (life.minutes < 1_000_000) {
+        const day = Math.floor(now / 1440);
+        life = { ...life, minutes: now, lastRentAt: day, outageCheckedDay: day };
+        commitLife(account.username, life);
+      } else {
+        const delta = now - life.minutes;
+        if (delta >= 1) {
+          const timed = passTime(life, Math.min(delta, 180));
+          if (delta > 180) timed.life.minutes = now;
+          if (timed.notes.length) timed.life.inbox = [...timed.notes, ...timed.life.inbox].slice(0, 20);
+          life = timed.life;
+          commitLife(account.username, life);
+        }
+      }
       if (account.cloud) {
         void fetch("/api/live/life", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ life: timed.life }),
+          body: JSON.stringify({ life }),
         });
       }
-    }, 10000);
+    }, 15000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -137,6 +150,29 @@ export function GameApp() {
   );
 }
 
+function useCityCrowd() {
+  const [crowd, setCrowd] = useState({ players: 0, online: 0 });
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      fetch("/api/live/crowd")
+        .then((res) => res.json())
+        .then((data: { players?: number; online?: number }) => {
+          if (stop || typeof data?.players !== "number") return;
+          setCrowd({ players: data.players, online: typeof data.online === "number" ? data.online : 0 });
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = window.setInterval(load, 20000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, []);
+  return crowd;
+}
+
 function Guest({
   onAuth,
   flash,
@@ -150,7 +186,7 @@ function Guest({
   const [boards, setBoards] = useState(true);
   const [spotId, setSpotId] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState(false);
-  const crowd = crowdNow();
+  const crowd = useCityCrowd();
   const spot = SPOTS.find((item) => item.id === spotId) ?? null;
 
   return (
@@ -607,10 +643,17 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [enRoute, setEnRoute] = useState<string | null>(null);
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
   const [onAir, setOnAir] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, []);
   if (!life) return null;
   const mood = moodOf(life.needs);
   const quest = questFor(life);
-  const crowd = crowdNow();
+  const crowd = useCityCrowd();
   const place = placeId ? spotById(placeId) : null;
 
   function apply(result: StepResult) {
@@ -624,13 +667,15 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   }
 
   function paySomeone(name: string, amount: number, username?: string) {
+    const mine = account.life;
+    if (!mine) return "No life yet.";
     const snap = parseRaw(getRaw());
     const other = snap.accounts.find((item) => {
       if (!item.life || item.username === account.username) return false;
       if (username && item.username === username) return true;
       return item.name === name || item.username === name;
     });
-    const paid = giftCash(life, other?.name ?? name, amount);
+    const paid = giftCash(mine, other?.name ?? name, amount);
     if (paid.error) {
       flash(paid.error);
       return paid.error;
@@ -656,7 +701,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       <Soundtrack tune={tuneFor(life.where, onAir)} />
       {tab === "map" ? (
         <CityBoard
-          night={hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5}
+          night={now != null && (accraHour(new Date(now)) >= 19 || accraHour(new Date(now)) < 5)}
           filter={filter}
           boards={boards}
           onSelect={(id) => {
@@ -718,13 +763,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-full bg-white px-3 py-2 text-sm shadow-lg">
               <span>🌙</span>
-              <span className="truncate font-semibold">{clockLabel(life.minutes)}</span>
+              <span className="truncate font-semibold">{now == null ? "Accra" : clockLabel(undefined, new Date(now))}</span>
               <span className="text-[#c5ceda]">|</span>
               <span>
                 {mood.emoji} {mood.label}
               </span>
-              <span className="hidden text-[#5c6b82] sm:inline">👀 {(crowd.visits / 1000).toFixed(0)}k</span>
-              <span className="hidden text-[#2f9d62] sm:inline">● {(crowd.online / 1000).toFixed(1)}k online</span>
+              <span className="shrink-0 text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
+              <span className="shrink-0 text-[#2f9d62]">● {crowd.online.toLocaleString("en-GH")} online</span>
             </div>
             <button type="button" className="rounded-full bg-white px-3 py-2 text-sm font-bold shadow-lg" onClick={() => setWalletOpen(true)}>
               {cedis(life.cash)} +
@@ -1179,13 +1224,13 @@ function tagsFor(verb: Verb) {
   return tags;
 }
 
-function TopBrand({ crowd, onSignup, onLogin }: { crowd: { online: number; visits: number }; onSignup: () => void; onLogin: () => void }) {
+function TopBrand({ crowd, onSignup, onLogin }: { crowd: { players: number; online: number }; onSignup: () => void; onLogin: () => void }) {
   return (
     <div className="absolute left-3 right-3 top-3 z-20 flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-lg">
       <span className="text-xl">👑</span>
       <span className="font-display text-lg tracking-tight">Accra Life</span>
+      <span className="text-xs font-semibold text-[#5c6b82]">{crowd.players.toLocaleString("en-GH")}</span>
       <span className="text-xs font-semibold text-[#2f9d62]">● {crowd.online.toLocaleString("en-GH")} online</span>
-      <span className="hidden text-xs text-[#5c6b82] sm:inline">👀 {Math.round(crowd.visits / 1000)}k visits</span>
       <span className="ml-auto flex gap-2">
         <button type="button" onClick={onSignup} className="rounded-full bg-[#3cba78] px-3 py-1.5 text-sm font-bold text-white">
           Sign up
