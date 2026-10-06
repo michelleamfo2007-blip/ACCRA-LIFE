@@ -77,6 +77,21 @@ export const CLUB_IDS = new Set([
   "plus233",
 ]);
 
+/** Food-first rooms — calm lively playlist, not club heat. */
+export const EATERY_IDS = new Set([
+  "auntie-muni",
+  "asanka",
+  "jamestown-coffee",
+  "kishitei",
+  "dez-amis",
+  "vine-brasa",
+  "honeysuckle",
+  "la-borracha",
+  "el-padrino",
+  "polo-club",
+  "lizzys",
+]);
+
 export const ACCRA_SPOTS: Spot[] = [
   {
     id: "twist",

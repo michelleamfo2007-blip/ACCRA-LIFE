@@ -1,0 +1,80 @@
+{
+  "source": "FreeVibeVault",
+  "license": "CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "Music by FreeVibeVault via FreeVibeVault (CC BY 4.0)",
+  "note": "Real Amapiano instrumentals: club playlist is hotter; restaurant playlist is calm and lively.",
+  "files": {
+    "club-01.mp3": {
+      "title": "Taxi Rank Circuit",
+      "url": "https://freevibevault.com/track/ye1s3nv1hlgkjdy9esy78o3b",
+      "mp3": "https://cdn.freevibevault.com/2026/08/ee30f40f-85c5-4bd5-9e64-c317d457d772.mp3",
+      "role": "club"
+    },
+    "club-02.mp3": {
+      "title": "Pool Deck Transit",
+      "url": "https://freevibevault.com/track/u5qr593x82apg2fpw74jari1",
+      "mp3": "https://cdn.freevibevault.com/2026/08/d05c62e7-aed4-4bdf-8e3d-eeb39e2b4c77.mp3",
+      "role": "club"
+    },
+    "club-03.mp3": {
+      "title": "Acacia Run",
+      "url": "https://freevibevault.com/track/w1vu4y23qnf95k8oskokwr29",
+      "mp3": "https://cdn.freevibevault.com/2026/08/37d8de91-58c0-41fa-bf26-ba08d60f480d.mp3",
+      "role": "club"
+    },
+    "club-04.mp3": {
+      "title": "Tide Circuit",
+      "url": "https://freevibevault.com/track/bjixtzj9njxl7dt6f08qlpp9",
+      "mp3": "https://cdn.freevibevault.com/2026/08/e7499d58-a306-418a-b5a6-68acd7d84b8c.mp3",
+      "role": "club"
+    },
+    "club-05.mp3": {
+      "title": "Balcony Circuit",
+      "url": "https://freevibevault.com/track/pz8daa0wl1fe69uqnp7gohqa",
+      "mp3": "https://cdn.freevibevault.com/2026/06/d3624426-6674-4867-9858-e94ee60fda82.mp3",
+      "role": "club"
+    },
+    "club-06.mp3": {
+      "title": "Pierline Rendezvous",
+      "url": "https://freevibevault.com/track/iw1itr1xehxna2qlookbxc5n",
+      "mp3": "https://cdn.freevibevault.com/2026/08/fbf0620b-3297-44da-86c5-e8f938723dd5.mp3",
+      "role": "club"
+    },
+    "eatery-01.mp3": {
+      "title": "Marina Sequence",
+      "url": "https://freevibevault.com/track/ryiju9ix42tr0tr1svlhe7fh",
+      "mp3": "https://cdn.freevibevault.com/2026/06/61e3937b-fa23-468e-bf7b-141a93d47166.mp3",
+      "role": "eatery"
+    },
+    "eatery-02.mp3": {
+      "title": "Harbor Streak",
+      "url": "https://freevibevault.com/track/x7456fe4g2kjbc9dq90usq0l",
+      "mp3": "https://cdn.freevibevault.com/2026/08/de076bf2-35a8-4603-a307-81435f08a883.mp3",
+      "role": "eatery"
+    },
+    "eatery-03.mp3": {
+      "title": "Terrace Afterglow",
+      "url": "https://freevibevault.com/track/j96u60c8jg4dqlm2a0bxzm1f",
+      "mp3": "https://cdn.freevibevault.com/2026/08/d12895d9-c218-48e7-92ed-cfe4b92c6f83.mp3",
+      "role": "eatery"
+    },
+    "eatery-04.mp3": {
+      "title": "Lantern After Rain",
+      "url": "https://freevibevault.com/track/f63dzbhyxti8wdqszyvedhpv",
+      "mp3": "https://cdn.freevibevault.com/2026/08/3699a4ab-07d4-4da3-b38a-5f886bd69556.mp3",
+      "role": "eatery"
+    },
+    "eatery-05.mp3": {
+      "title": "Courtyard Mosaic",
+      "url": "https://freevibevault.com/track/uvj1kaqp0nvz3eousagrexp2",
+      "mp3": "https://cdn.freevibevault.com/2026/08/09ff33c7-381c-48e8-9797-39cc0bb0c1c2.mp3",
+      "role": "eatery"
+    },
+    "eatery-06.mp3": {
+      "title": "Veranda Ledger",
+      "url": "https://freevibevault.com/track/pb9opjjxzd1av9vdyoqpn3l4",
+      "mp3": "https://cdn.freevibevault.com/2026/08/25877df3-2e4b-41c9-9b3f-f0660ab63b2a.mp3",
+      "role": "eatery"
+    }
+  }
+}

@@ -1,16 +1,42 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { CLUB_IDS, EATERY_IDS } from "@/lib/game/accra-spots";
 import { isNightlife } from "@/lib/game/club-night";
 
-export type TuneId = "city" | "club" | "beach" | "radio";
+export type TuneId = "city" | "club" | "eatery" | "beach" | "radio";
 
 const BEACHES = new Set(["beach", "bojo", "kokrobite"]);
+
+/** Real Amapiano beds (CC BY FreeVibeVault) — clubs hot, restaurants calm lively. */
+const PLAYLISTS: Partial<Record<TuneId, { src: string; title: string }[]>> = {
+  club: [
+    { src: "/music/club-01.mp3", title: "Taxi Rank Circuit" },
+    { src: "/music/club-02.mp3", title: "Pool Deck Transit" },
+    { src: "/music/club-03.mp3", title: "Acacia Run" },
+    { src: "/music/club-04.mp3", title: "Tide Circuit" },
+    { src: "/music/club-05.mp3", title: "Balcony Circuit" },
+    { src: "/music/club-06.mp3", title: "Pierline Rendezvous" },
+  ],
+  eatery: [
+    { src: "/music/eatery-01.mp3", title: "Marina Sequence" },
+    { src: "/music/eatery-02.mp3", title: "Harbor Streak" },
+    { src: "/music/eatery-03.mp3", title: "Terrace Afterglow" },
+    { src: "/music/eatery-04.mp3", title: "Lantern After Rain" },
+    { src: "/music/eatery-05.mp3", title: "Courtyard Mosaic" },
+    { src: "/music/eatery-06.mp3", title: "Veranda Ledger" },
+  ],
+};
+
+const FILE_GAIN: Partial<Record<TuneId, number>> = {
+  club: 0.72,
+  eatery: 0.46,
+};
 
 export function tuneFor(where: string, station = false): TuneId {
   if (station || where === "joy") return "radio";
   if (isNightlife(where, CLUB_IDS) || where === "republic") return "club";
+  if (EATERY_IDS.has(where)) return "eatery";
   if (BEACHES.has(where)) return "beach";
   return "city";
 }
@@ -116,6 +142,38 @@ const TUNES: Record<TuneId, Tune> = {
       [12, [41, 48, 53, 57]],
     ],
   },
+  eatery: {
+    label: "Table groove",
+    bpm: 104,
+    gain: 0.42,
+    kick: [0, 7, 8, 14],
+    snare: [4, 12],
+    hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    openHat: [6, 14],
+    clap: [4, 12],
+    bass: [
+      [0, 45],
+      [4, 45],
+      [8, 43],
+      [12, 41],
+    ],
+    log: [
+      [0, 57],
+      [3, 60],
+      [8, 55],
+      [11, 57],
+    ],
+    lead: [
+      [0, 69],
+      [4, 72],
+      [8, 71],
+      [12, 69],
+    ],
+    chord: [
+      [0, [57, 60, 64]],
+      [8, [55, 59, 62]],
+    ],
+  },
   beach: {
     label: "Shore breeze",
     bpm: 90,
@@ -197,11 +255,16 @@ let currentTune: TuneId = "city";
 
 export function Soundtrack({ tune }: { tune: TuneId }) {
   const engine = useRef<Engine | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const trackRef = useRef(0);
   const wantRef = useRef(true);
+  const tuneRef = useRef(tune);
   const [playing, setPlaying] = useState(false);
+  const [trackTitle, setTrackTitle] = useState<string | null>(null);
   currentTune = tune;
+  tuneRef.current = tune;
 
-  function ensure() {
+  function ensureSynth() {
     if (engine.current) return engine.current;
     const ctx = new AudioContext();
     const bus = ctx.createGain();
@@ -236,29 +299,87 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
     return made;
   }
 
-  async function start() {
-    const made = ensure();
+  function hushSynth() {
+    const made = engine.current;
+    if (!made) return;
+    made.live = false;
+    made.master.gain.cancelScheduledValues(made.ctx.currentTime);
+    made.master.gain.setTargetAtTime(0.0001, made.ctx.currentTime, 0.04);
+    void made.ctx.suspend();
+  }
+
+  function ensureAudio() {
+    if (audioRef.current) return audioRef.current;
+    const el = new Audio();
+    el.preload = "auto";
+    el.loop = false;
+    el.addEventListener("ended", () => {
+      if (!wantRef.current) return;
+      trackRef.current += 1;
+      void playFile(tuneRef.current);
+    });
+    audioRef.current = el;
+    return el;
+  }
+
+  async function playFile(id: TuneId) {
+    const list = PLAYLISTS[id];
+    if (!list?.length) return false;
+    hushSynth();
+    const el = ensureAudio();
+    const track = list[trackRef.current % list.length];
+    el.volume = FILE_GAIN[id] ?? 0.55;
+    if (el.src !== new URL(track.src, window.location.origin).href) {
+      el.src = track.src;
+    }
+    setTrackTitle(track.title);
+    try {
+      await el.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function startSynth() {
+    const made = ensureSynth();
     if (made.ctx.state === "suspended") await made.ctx.resume();
-    wantRef.current = true;
     made.live = true;
     if (made.next < made.ctx.currentTime) made.next = made.ctx.currentTime + 0.05;
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.removeAttribute("src");
+    }
+    setTrackTitle(null);
+  }
+
+  async function start() {
+    wantRef.current = true;
     setPlaying(true);
     try {
       localStorage.setItem("accralife-music", "1");
     } catch {
       /* ignore */
     }
+    const list = PLAYLISTS[tuneRef.current];
+    if (list?.length) {
+      const ok = await playFile(tuneRef.current);
+      if (!ok) await startSynth();
+      return;
+    }
+    await startSynth();
   }
 
   function stop() {
     wantRef.current = false;
     setPlaying(false);
-    const made = engine.current;
-    if (made) made.live = false;
-    if (made) {
-      made.master.gain.cancelScheduledValues(made.ctx.currentTime);
-      made.master.gain.setTargetAtTime(0.0001, made.ctx.currentTime, 0.05);
-      void made.ctx.suspend();
+    setTrackTitle(null);
+    hushSynth();
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
     }
     try {
       localStorage.setItem("accralife-music", "0");
@@ -280,35 +401,49 @@ export function Soundtrack({ tune }: { tune: TuneId }) {
     return () => {
       window.removeEventListener("pointerdown", wake);
       const made = engine.current;
-      if (!made) return;
-      window.clearInterval(made.timer);
-      void made.ctx.close();
-      engine.current = null;
+      if (made) {
+        window.clearInterval(made.timer);
+        void made.ctx.close();
+        engine.current = null;
+      }
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+        audioRef.current = null;
+      }
     };
   }, []);
 
-  // Keep club heat label lively when the tune changes
   useEffect(() => {
-    const made = engine.current;
-    if (!made || !made.live) return;
-    made.next = Math.max(made.next, made.ctx.currentTime + 0.02);
+    if (!playing || !wantRef.current) return;
+    trackRef.current = 0;
+    void start();
   }, [tune]);
 
   const song = TUNES[tune];
   const hot = playing && tune === "club";
+  const soft = playing && tune === "eatery";
+  const label = playing ? trackTitle ?? song.label : "Play music";
   return (
     <button
       type="button"
       data-music={playing ? tune : "off"}
       aria-pressed={playing}
-      aria-label={playing ? `Pause ${song.label}` : `Play ${song.label}`}
+      aria-label={playing ? `Pause ${label}` : `Play ${song.label}`}
       onClick={() => (playing ? stop() : void start())}
-      className={`absolute right-2 top-[max(7.5rem,calc(env(safe-area-inset-top)+6.6rem))] z-30 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-lg sm:right-3 sm:px-3 sm:py-2 sm:text-sm ${
-        hot ? "bg-[#CE1126] text-white shadow-[0_0_18px_rgba(206,17,38,.45)]" : playing ? "bg-[#121212] text-white" : "bg-white text-[#121212]"
+      className={`absolute right-2 top-[max(7.5rem,calc(env(safe-area-inset-top)+6.6rem))] z-30 flex max-w-[12rem] items-center gap-1.5 truncate rounded-full px-2.5 py-1.5 text-xs font-semibold shadow-lg sm:right-3 sm:max-w-[16rem] sm:px-3 sm:py-2 sm:text-sm ${
+        hot
+          ? "bg-[#CE1126] text-white shadow-[0_0_18px_rgba(206,17,38,.45)]"
+          : soft
+            ? "bg-[#1a3a2a] text-[#d8f0e2]"
+            : playing
+              ? "bg-[#121212] text-white"
+              : "bg-white text-[#121212]"
       }`}
     >
       <span aria-hidden>{playing ? (hot ? "🔥" : "♫") : "♪"}</span>
-      <span>{playing ? song.label : "Play music"}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
