@@ -2564,7 +2564,7 @@ function MapFilterBar({
   );
 }
 
-type SitePerson = { username: string; name: string; where: string | null; town?: string | null };
+type SitePerson = { username: string; name: string; where: string | null; town?: string | null; online?: boolean };
 
 function placeLine(person: SitePerson) {
   if (!person.where || person.where === "home") return "At home";
@@ -2632,7 +2632,10 @@ function PeopleMenu({ onPick }: { onPick: (person: SitePerson) => void }) {
         {state === "ready" && !shown.length ? <p className="px-3 py-2 text-xs text-[#5c6b82]">Nobody else is on the map yet.</p> : null}
         {shown.map((person) => (
           <button key={person.username} type="button" onClick={() => onPick(person)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#f6e7b0]">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#006B3F] text-[11px] font-bold text-white">{person.name.slice(0, 1).toUpperCase()}</span>
+            <span className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#d7e4f5] text-[11px] font-bold text-[#1d2433]">
+              {person.name.slice(0, 1).toUpperCase()}
+              {person.online ? <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#fff8e6] bg-[#22c55e]" aria-hidden /> : null}
+            </span>
             <span className="min-w-0">
               <span className="block truncate text-xs font-bold">{person.name}</span>
               <span className="block truncate text-[10px] text-[#5c6b82]">

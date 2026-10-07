@@ -33,12 +33,10 @@ export function sprayCash(life: Life, id: SprayId, name: string): StepResult {
   const pack = sprayPack(id);
   if (!pack) return { life, notes: [], error: "That spray is not on the menu." };
   if (spraysLeft(life) <= 0) return { life, notes: [], error: "Enough spray for tonight. Let somebody else rain." };
-  if ((life.cool?.spray ?? 0) > life.minutes) return { life, notes: [], error: "The floor is still wet with the last one. Wait a minute." };
   if (life.cash < pack.cost) return { life, notes: [], error: `You need ${cedis(pack.cost)} to spray.` };
   const next = cloneLife(life);
   const day = Math.floor(next.minutes / 1440);
   next.cash -= pack.cost;
-  next.cool = { ...(next.cool ?? {}), spray: next.minutes + 2 };
   next.stats = {
     ...(next.stats ?? {}),
     sprayDay: day,

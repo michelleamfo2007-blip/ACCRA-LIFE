@@ -903,13 +903,13 @@ function PersonTag({
       {quiet ? null : (
         <span className="relative mb-1 flex flex-col items-center">
           {bubble ? <span className="mb-1 max-w-[9rem] truncate rounded-full bg-[#121212] px-2.5 py-0.5 text-[10px] font-semibold text-white shadow">{bubble}</span> : null}
-          {online || tone === "blue" ? <span className="mb-0.5 h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
         </span>
       )}
       <span className="relative">
         {mark ? <span className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full border-2 border-[#FCD116] shadow-[0_0_10px_rgba(252,209,22,.8)]" aria-hidden /> : null}
         <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
+        {online ? <span className="absolute bottom-2 right-0 h-3 w-3 rounded-full border-2 border-white bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
       </span>
     </>
   );

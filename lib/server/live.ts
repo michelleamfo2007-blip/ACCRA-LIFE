@@ -265,13 +265,14 @@ export async function listPlayersForAdmin(limit = 200): Promise<AdminPlayer[]> {
   });
 }
 
-export type FoundPlayer = { username: string; name: string; where: string | null; town?: string | null; look?: Life["look"]; spot?: SpotPos | null };
+export type FoundPlayer = { username: string; name: string; where: string | null; town?: string | null; online?: boolean; look?: Life["look"]; spot?: SpotPos | null };
 
 /** Public directory for the map People menu. Names and where they are. No email, cash, or home. */
 export async function listSitePeople(): Promise<FoundPlayer[]> {
   const client = db();
   if (!client) return [];
   const { data } = await client.from("players").select("username, name, life").limit(80);
+  const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   const rows = ((data ?? []) as { username: string; name: string; life?: { where?: string; town?: string; seen?: string } | null }[]).slice();
   rows.sort((a, b) => (b.life?.seen ?? "").localeCompare(a.life?.seen ?? ""));
   return rows.slice(0, 40).map((row) => ({
@@ -279,6 +280,7 @@ export async function listSitePeople(): Promise<FoundPlayer[]> {
     name: row.name,
     where: row.life?.where ?? null,
     town: row.life?.town ?? null,
+    online: Boolean(row.life?.seen && row.life.seen >= since),
   }));
 }
 
@@ -296,6 +298,7 @@ export async function findPlayers(query: string, where?: string, except?: string
   else return [];
   const { data } = await request.limit(30);
   const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const activeSince = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   const people = ((data ?? []) as { username: string; name: string; life?: { where?: string; seen?: string; look?: Life["look"]; spot?: SpotPos } | null }[])
     .filter((row) => row.username !== except)
     .filter((row) => q || (typeof row.life?.seen === "string" && row.life.seen >= since))
@@ -303,6 +306,7 @@ export async function findPlayers(query: string, where?: string, except?: string
       username: row.username,
       name: row.name,
       where: row.life?.where ?? null,
+      online: Boolean(row.life?.seen && row.life.seen >= activeSince),
       look: where && !q ? row.life?.look : undefined,
       spot: where && !q && row.life?.spot?.where === where ? row.life.spot : null,
     }));
