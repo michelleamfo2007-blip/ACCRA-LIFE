@@ -1076,6 +1076,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     void fetch("/api/live/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: host, text: "🚪 I'm at your place!" }) }).catch(() => undefined);
   }
 
+  function leaveVisit() {
+    setVisit(null);
+    setTab("map");
+  }
+
   function shareSpot(x: number, y: number) {
     if (!account.cloud || !life || life.where === "home") return;
     const where = life.where;
@@ -1508,7 +1513,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               <button
                 key={id}
                 type="button"
-                onClick={() => setTab(id)}
+                onClick={() => {
+                  if (visit) setVisit(null);
+                  setTab(id);
+                }}
                 className={`relative rounded-full px-3 py-2 text-sm font-semibold sm:px-4 ${tab === id ? "bg-[#121212] text-white" : ""} ${touring && tourCard.pulse === id ? "ring-2 ring-[#FCD116] ring-offset-2 animate-pulse" : ""}`}
               >
                 {label}
@@ -1724,15 +1732,20 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         />
       ) : null}
       {visit ? (
-        <div className="absolute inset-0 z-[45] bg-[#d7ecf8]">
-          <div className="pointer-events-none absolute inset-0">
-            <RoomView life={{ ...life, homeId: visit.homeId, look: visit.look, inventory: visit.inventory, furniture: visit.furniture, floor: visit.floor, stored: [], dumsor: false }} onAct={() => {}} onMap={() => {}} onAsk={() => {}} />
+        <div className="absolute inset-x-0 top-0 bottom-[max(4.4rem,calc(env(safe-area-inset-bottom)+3.8rem))] z-[70] overflow-hidden bg-[#d7ecf8]">
+          <div className="absolute inset-0">
+            <RoomView life={{ ...life, homeId: visit.homeId, look: visit.look, inventory: visit.inventory, furniture: visit.furniture, floor: visit.floor, stored: [], dumsor: false }} onAct={() => {}} onMap={leaveVisit} onAsk={() => {}} />
           </div>
-          <div className="absolute left-1/2 top-[max(0.75rem,env(safe-area-inset-top))] z-10 -translate-x-1/2 rounded-full bg-white px-4 py-2 text-sm font-bold shadow-lg">
-            🏠 At @{visit.username}&apos;s place · {homeById(visit.homeId).area}
+          <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[80] flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate rounded-full bg-white px-4 py-2 text-sm font-bold shadow-lg">
+              🏠 At @{visit.username}&apos;s · {homeById(visit.homeId).area}
+            </p>
+            <button type="button" onClick={leaveVisit} className="shrink-0 rounded-full bg-[#121212] px-4 py-2 text-sm font-bold text-white shadow-lg">
+              Leave
+            </button>
           </div>
-          <div className="absolute inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 mx-auto max-w-md space-y-2 rounded-3xl bg-white p-3 shadow-2xl">
-            <p className="text-sm text-[#5c6b82]">{homeLook(visit.homeId).label}. {visit.furniture.length ? `${visit.furniture.length} pieces laid out.` : "Still bare walls."}</p>
+          <div className="absolute inset-x-3 bottom-3 z-[80] mx-auto max-h-[46vh] max-w-md space-y-2 overflow-auto rounded-3xl bg-white p-3 shadow-2xl">
+            <p className="text-sm text-[#5c6b82]">{homeLook(visit.homeId).label}. {visit.furniture.length ? `${visit.furniture.length} pieces laid out.` : "Still bare walls."} The door takes you back out.</p>
             <div className="grid grid-cols-2 gap-2">
               {(
                 [
@@ -1753,7 +1766,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => setVisit(null)} className="w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
+            <button type="button" onClick={leaveVisit} className="w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
               Say bye and leave
             </button>
           </div>
