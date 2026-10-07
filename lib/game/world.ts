@@ -1459,6 +1459,12 @@ export function collectStamp(life: Life, placeId: string, notes: string[]) {
   }
 }
 
+export function carFuelBlock(life: Life, fuel: number) {
+  if (!life.car) return "You do not have a car yet.";
+  if (life.car.fuel < fuel) return fuel > FUEL_PER_TRIP ? `A trip that far needs ${fuel} litres. Fill up in the Garage app.` : "The tank is nearly empty. Fill up in the Garage app.";
+  return null;
+}
+
 export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepResult {
   if (life.where === placeId) return { life, notes: [] };
   const ride = farRide(base, life.where, placeId);
@@ -1466,15 +1472,16 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   const fuel = ride.fuel ?? FUEL_PER_TRIP;
   if (ride.cost > 0 && life.cash < ride.cost) return { life, notes: [], error: `You need ${cedis(ride.cost)} for ${ride.label.toLowerCase()}.` };
   if (ride.id === "car") {
-    if (!life.car) return { life, notes: [], error: "You do not have a car yet." };
-    if (life.car.fuel < fuel) return { life, notes: [], error: fuel > FUEL_PER_TRIP ? `A trip that far needs ${fuel} litres. Fill up in the Garage app.` : "The tank is nearly empty. Fill up in the Garage app." };
+    const blocked = carFuelBlock(life, fuel);
+    if (blocked) return { life, notes: [], error: blocked };
   }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
   timed.life.where = placeId;
   bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   const noteExtra = "note" in ride && typeof (ride as { note?: string }).note === "string" ? ` (${(ride as { note?: string }).note})` : "";
-  timed.notes.unshift(`${ride.label} to ${spotById(placeId).name}${fare}${noteExtra}`);
+  const heading = ride.id === "car" ? "Drove your car" : ride.label;
+  timed.notes.unshift(`${heading} to ${spotById(placeId).name}${fare}${noteExtra}`);
   collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
     timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel };

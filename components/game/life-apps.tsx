@@ -496,7 +496,7 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
               </Btn>
             )}
           </div>
-          <p className="mt-2 text-xs text-[#5c6b82]">Pick Drive on any ride menu. No fare, just fuel, and you skip the trotro wait.</p>
+          <p className="mt-2 text-xs text-[#5c6b82]">On the map, Drive is ready. You take this car yourself. No fare, just fuel.</p>
         </Card>
       ) : null}
       <Label>ABOSSEY OKAI CAR LOT</Label>

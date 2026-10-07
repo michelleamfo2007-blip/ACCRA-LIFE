@@ -29,7 +29,7 @@ export function LowPolyHuman({
   outfit?: string;
   body?: "woman" | "man";
   crown?: boolean;
-  pose?: "idle" | "walk" | "act" | "sit";
+  pose?: "idle" | "walk" | "act" | "sit" | "drive";
   face?: 1 | -1;
   yaw?: number;
   passive?: boolean;
@@ -100,7 +100,7 @@ export function Figure({
   outfit: string;
   body: "woman" | "man";
   crown?: boolean;
-  pose: "idle" | "walk" | "act" | "sit";
+  pose: "idle" | "walk" | "act" | "sit" | "drive";
   turn: number;
 }) {
   const woman = body === "woman";
@@ -114,19 +114,26 @@ export function Figure({
   const torso = useRef<Group>(null);
 
   useFrame(({ clock }) => {
-    const sitting = pose === "sit";
+    const sitting = pose === "sit" || pose === "drive";
+    const driving = pose === "drive";
     const swing = pose === "walk" ? Math.sin(clock.elapsedTime * 7) * 0.42 : 0;
     const bob = pose === "act" ? Math.sin(clock.elapsedTime * 5) * 0.08 : 0;
     if (root.current) root.current.position.y = sitting ? 0.42 : 0;
     if (torso.current) {
       torso.current.position.y = sitting ? 0.08 : 0;
       torso.current.position.z = sitting ? 0.08 : 0;
-      torso.current.rotation.x = sitting ? 0.18 : bob;
+      torso.current.rotation.x = sitting ? 0.12 : bob;
     }
     if (left.current) left.current.rotation.x = sitting ? -1.45 : swing;
     if (right.current) right.current.rotation.x = sitting ? -1.45 : -swing;
-    if (armL.current) armL.current.rotation.x = sitting ? -0.55 : pose === "act" ? -0.55 + bob : -swing * 0.65;
-    if (armR.current) armR.current.rotation.x = sitting ? -0.4 : pose === "act" ? -0.35 - bob : swing * 0.65;
+    if (armL.current) {
+      armL.current.rotation.x = driving ? -1.2 : sitting ? -0.55 : pose === "act" ? -0.55 + bob : -swing * 0.65;
+      armL.current.rotation.z = driving ? 0.42 : 0;
+    }
+    if (armR.current) {
+      armR.current.rotation.x = driving ? -1.2 : sitting ? -0.4 : pose === "act" ? -0.35 - bob : swing * 0.65;
+      armR.current.rotation.z = driving ? -0.42 : 0;
+    }
   });
 
   const shoulder = woman ? 0.22 : 0.26;

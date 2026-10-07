@@ -4,11 +4,22 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import type { FlightPhase } from "@/components/game/flight-outside";
+import { carOf } from "@/lib/game/garage";
 import type { Weather } from "@/lib/game/sky";
 import { accraHour, cedis, shiftNote, shiftPerformance, type Life, type Ride } from "@/lib/game/world";
 
 const FlightOutside = dynamic(() => import("@/components/game/flight-outside").then((mod) => mod.FlightOutside), { ssr: false });
 const AccraRoad = dynamic(() => import("@/components/game/accra-road").then((mod) => mod.AccraRoad), { ssr: false });
+
+const DRIVE_LINES = [
+  "You pull out in your own car. A trotro tries to cut in and you hold the lane.",
+  "Liberation Road is thick. You know this stretch.",
+  "An okada filters past and the rider nods.",
+  "The lights change. You ease through with the rest of the line.",
+  "A taxi honks twice. You let them go.",
+  "Your lane opens up past the next junction.",
+  "Almost there. You indicate and ease toward the curb.",
+];
 
 const LINES = [
   "Liberation Road is thick. A trotro cuts in without asking.",
@@ -106,6 +117,7 @@ export function StreetRide({
   const fare = ride.cost ? cedis(ride.cost) : "Free";
   const arriveRef = useRef(onArrive);
   const finished = useRef(false);
+  const owned = ride.id === "car" ? carOf(life.car?.id) : null;
   const night = accraHour() >= 19 || accraHour() < 5;
   const traffic = useMemo(() => makeRideTraffic(`${ride.id}:${place}`), [ride.id, place]);
   const slogan = RIDE_SLOGANS[ride.id] || "SAFE JOURNEY";
@@ -145,7 +157,7 @@ export function StreetRide({
   return (
     <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0a1020]" : "bg-[#7eb8e0]"}`}>
       {camera === "chase" ? (
-        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} sky={sky} />
+        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} sky={sky} carId={life.car?.id} />
       ) : null}
       {sky?.rain ? <div className={`rain-layer pointer-events-none absolute inset-0 z-[5] ${sky.flood ? "rain-heavy" : ""}`} aria-hidden /> : null}
       {sky?.harmattan && !sky.rain ? <div className="harmattan-layer pointer-events-none absolute inset-0 z-[5]" aria-hidden /> : null}
@@ -243,16 +255,16 @@ export function StreetRide({
 
       <div className="absolute right-3 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.4rem))] z-10 w-[min(240px,68vw)] rounded-3xl bg-white/95 p-3 text-[#121212] shadow-xl">
         <p className="text-sm font-bold leading-snug">
-          {boarding ? `Boarding the ${ride.label.toLowerCase()}…` : `On the way to ${place}…`}
+          {boarding ? (ride.id === "car" ? "Getting into your car…" : `Boarding the ${ride.label.toLowerCase()}…`) : ride.id === "car" ? `Driving to ${place}…` : `On the way to ${place}…`}
         </p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e8edf5]">
           <div className="h-full rounded-full bg-[#006B3F]" style={{ width: `${progress * 100}%` }} />
         </div>
         <p className="mt-1.5 text-[11px] font-semibold text-[#5c6b82]">
-          {ride.label} · {fare} · {left}m left
+          {owned ? `Your ${owned.short}` : ride.label} · {owned ? "fuel" : fare} · {left}m left
         </p>
         <p className="mt-1 text-[11px] leading-4 text-[#5c6b82]">
-          {boarding ? "Door open. Find your seat." : progress > 0.9 ? `${place} is just ahead.` : sky?.flood ? "The road is under water. Everyone is crawling." : sky?.rain ? RAIN_LINES[line] : sky?.harmattan ? "Harmattan haze. The city is a pale gold and the morning is cool." : LINES[line]}
+          {boarding ? (ride.id === "car" ? "Keys in. You're getting behind the wheel." : "Door open. Find your seat.") : progress > 0.9 ? `${place} is just ahead.` : sky?.flood ? "The road is under water. Everyone is crawling." : sky?.rain ? RAIN_LINES[line] : sky?.harmattan ? "Harmattan haze. The city is a pale gold and the morning is cool." : (ride.id === "car" ? DRIVE_LINES : LINES)[line]}
         </p>
         <div className="mt-2.5 flex gap-2">
           {onMap ? (
@@ -375,8 +387,9 @@ function Vehicle({
     );
   }
   if (ride === "car") {
+    const paint = carOf(life.car?.id)?.paint ?? "#2f3a4a";
     return (
-      <div className={`cab ${night ? "ride-lit" : ""}`} style={{ background: "#2f3a4a" }}>
+      <div className={`cab ${night ? "ride-lit" : ""}`} style={{ background: paint }}>
         <span className="cab-glass">{rider}</span>
         <span className="ride-brake" />
         <span className="wheel wheel-back" />

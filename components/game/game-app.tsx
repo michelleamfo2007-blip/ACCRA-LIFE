@@ -78,6 +78,7 @@ import {
   layPiece,
   receiveCash,
   goTo,
+  carFuelBlock,
   homeById,
   homeLook,
   accraHour,
@@ -925,7 +926,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [clean, setClean] = useState(false);
   const [hintsOpen, setHintsOpen] = useState(false);
   const [doOpen, setDoOpen] = useState(false);
-  const [rideId, setRideId] = useState<(typeof RIDES)[number]["id"]>("trotro");
+  const [rideId, setRideId] = useState<Ride["id"]>(life?.car ? "car" : "trotro");
   const [trip, setTrip] = useState<{ name: string; placeId: string; ride: Ride } | null>(null);
   const [flight, setFlight] = useState<{ routeId: string; cabin: Cabin } | null>(null);
   const [shiftId, setShiftId] = useState<string | null>(null);
@@ -976,6 +977,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, []);
+  useEffect(() => {
+    if (life?.car) setRideId("car");
+    else setRideId((current) => (current === "car" ? "trotro" : current));
+  }, [life?.car?.id]);
   if (!life) return null;
   const mood = moodOf(life.needs);
   const quest = questFor(life);
@@ -1597,6 +1602,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               flash(ride.blocked);
               return;
             }
+            if (ride.id === "car") {
+              const blocked = carFuelBlock(life, ride.fuel ?? 6);
+              if (blocked) {
+                flash(blocked);
+                return;
+              }
+            }
             setTrip({ name: place.name, placeId: place.id, ride });
             setPlaceId(null);
           }}
@@ -2075,11 +2087,11 @@ function PlaceSheet({
   from: string;
   here: boolean;
   people: string[];
-  rideId: (typeof RIDES)[number]["id"];
+  rideId: Ride["id"];
   sky: Weather;
   car: Ride | null;
   extra: Verb[];
-  onRide: (id: (typeof RIDES)[number]["id"]) => void;
+  onRide: (id: Ride["id"]) => void;
   onClose: () => void;
   onGo: () => void;
   onAct: (verb: Verb) => void;
@@ -2164,7 +2176,7 @@ function PlaceSheet({
           {far ? <p className="mt-2 text-xs font-semibold text-[#7a3b0c]">🛣️ Out of town. About {Math.round(far / 60)}h on the intercity bus, a bit faster by taxi or your own car.</p> : null}
           {sky.rain && !far ? <p className="mt-2 text-xs font-semibold text-[#1f4e79]">🌧️ {sky.label} Roads are slow. The train runs on time.</p> : null}
           <button type="button" onClick={onGo} disabled={Boolean(ride.blocked)} className="mt-3 w-full rounded-full bg-[#006B3F] py-3.5 font-bold text-white disabled:opacity-40">
-            {ride.blocked ? ride.blocked : `Go · ${ride.cost ? cedis(ride.cost) : "Free"} · ${ride.minutes >= 90 ? `${Math.floor(ride.minutes / 60)}h ${ride.minutes % 60 ? `${ride.minutes % 60}m` : ""}`.trim() : `${ride.minutes}m`}`}
+            {ride.blocked ? ride.blocked : `Go · ${ride.id === "car" ? "Your car" : ride.cost ? cedis(ride.cost) : "Free"} · ${ride.minutes >= 90 ? `${Math.floor(ride.minutes / 60)}h ${ride.minutes % 60 ? `${ride.minutes % 60}m` : ""}`.trim() : `${ride.minutes}m`}`}
           </button>
         </>
       )}

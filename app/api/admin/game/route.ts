@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/server/guard";
 import { clearGameReport, listGameReports, mutePlayer, unmutePlayer } from "@/lib/server/moderate";
-import { crowdCounts, listPlayersForAdmin, topUpJoinWallets } from "@/lib/server/live";
+import { crowdCounts, giftPlayer, listPlayersForAdmin, topUpJoinWallets } from "@/lib/server/live";
 
 async function editor() {
   const user = await currentUser();
@@ -43,6 +43,10 @@ export async function PATCH(request: Request) {
   if (action === "clear") {
     const error = await clearGameReport(String(body?.by ?? ""), String(body?.who ?? ""), String(body?.at ?? ""));
     return error ? NextResponse.json({ error }, { status: 400 }) : NextResponse.json({ ok: true });
+  }
+  if (action === "gift") {
+    const result = await giftPlayer(String(body?.who ?? ""), Number(body?.amount ?? 0));
+    return "error" in result ? NextResponse.json({ error: result.error }, { status: 400 }) : NextResponse.json({ ok: true, ...result });
   }
   if (action === "topup-wallets") {
     const result = await topUpJoinWallets();

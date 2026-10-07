@@ -1,11 +1,11 @@
 import { FUEL_PER_TRIP, cedis, cloneLife, logLine, passTime, type Life, type Ride, type StepResult } from "@/lib/game/world";
 
 export const CARS = [
-  { id: "vitz", label: "Used Toyota Vitz", emoji: "🚗", price: 18000, minutes: 12, hail: 25 },
-  { id: "corolla", label: "Toyota Corolla", emoji: "🚙", price: 38000, minutes: 11, hail: 40 },
-  { id: "rav4", label: "Toyota RAV4", emoji: "🚙", price: 85000, minutes: 10, hail: 60 },
-  { id: "benz", label: "Mercedes C-Class", emoji: "🚘", price: 170000, minutes: 9, hail: 90 },
-  { id: "cruiser", label: "Land Cruiser V8", emoji: "🛻", price: 420000, minutes: 9, hail: 140 },
+  { id: "vitz", label: "Used Toyota Vitz", short: "Vitz", emoji: "🚗", price: 18000, minutes: 12, hail: 25, paint: "#f2f5f8", suv: false, scale: 0.86 },
+  { id: "corolla", label: "Toyota Corolla", short: "Corolla", emoji: "🚙", price: 38000, minutes: 11, hail: 40, paint: "#b7c3ce", suv: false, scale: 1 },
+  { id: "rav4", label: "Toyota RAV4", short: "RAV4", emoji: "🚙", price: 85000, minutes: 10, hail: 60, paint: "#2c4638", suv: true, scale: 1 },
+  { id: "benz", label: "Mercedes C-Class", short: "Benz", emoji: "🚘", price: 170000, minutes: 9, hail: 90, paint: "#16181c", suv: false, scale: 1.04 },
+  { id: "cruiser", label: "Land Cruiser V8", short: "Cruiser", emoji: "🛻", price: 420000, minutes: 9, hail: 140, paint: "#efe6d4", suv: true, scale: 1.14 },
 ] as const;
 
 export const INSURANCE = 150;

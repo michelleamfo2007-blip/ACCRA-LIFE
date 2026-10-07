@@ -206,6 +206,35 @@ export type AdminPlayer = {
   online: boolean;
 };
 
+function purseOf(life: (Life & { seen?: string }) | null) {
+  if (!life || typeof life.cash !== "number") return null;
+  const seen = new Set(life.seenTransfers ?? []);
+  const pending = (life.transfers ?? []).filter((note) => note.id && !seen.has(note.id)).reduce((sum, note) => sum + note.delta, 0);
+  return Math.round(life.cash + pending);
+}
+
+const GIFT_CAP = 2_000_000;
+
+/** Desk gift. Lands as a wallet transfer so a live session cannot overwrite it. */
+export async function giftPlayer(username: string, amount: number) {
+  const who = username.trim().toLowerCase();
+  const value = Math.round(amount);
+  if (!/^[a-z0-9_]{3,16}$/.test(who)) return { error: "That player is not in Accra." } as const;
+  if (!Number.isFinite(value) || value < 1) return { error: "Enter an amount in cedis." } as const;
+  if (value > GIFT_CAP) return { error: `Gifts stop at ${cedis(GIFT_CAP)}.` } as const;
+  const player = await readPlayer(who);
+  if (!player?.life) return { error: "They have not started a life yet." } as const;
+  const note = `The desk sent you ${cedis(value)}.`;
+  const life: Life = {
+    ...player.life,
+    transfers: [...(player.life.transfers ?? []), { id: noteId(who), delta: value, note }].slice(-80),
+  };
+  const saved = await savePlayer({ ...player, life });
+  if (!saved) return { error: "The gift did not save." } as const;
+  const cash = purseOf(life) ?? life.cash;
+  return { note: `Sent ${cedis(value)} to ${player.name}. Wallet is ${cedis(cash)}.`, cash } as const;
+}
+
 export async function listPlayersForAdmin(limit = 200): Promise<AdminPlayer[]> {
   const client = db();
   if (!client) return [];
@@ -228,7 +257,7 @@ export async function listPlayersForAdmin(limit = 200): Promise<AdminPlayer[]> {
       home: home?.name ?? null,
       homeArea: home?.area ?? null,
       where,
-      cash: typeof life?.cash === "number" ? Math.round(life.cash) : null,
+    cash: purseOf(life),
       dream: life?.dream ?? null,
       seen,
       online: Boolean(seen && seen >= since),

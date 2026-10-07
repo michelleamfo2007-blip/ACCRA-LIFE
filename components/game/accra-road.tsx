@@ -1,6 +1,7 @@
 "use client";
 
 import { Figure } from "@/components/game/low-poly-human";
+import { carOf } from "@/lib/game/garage";
 import {
   ASPHALT,
   BUMPS,
@@ -45,6 +46,8 @@ import {
   SphereGeometry,
   SpotLight,
   SRGBColorSpace,
+  TorusGeometry,
+  Vector3,
   BoxGeometry,
   type Material,
   type Texture,
@@ -690,6 +693,8 @@ function place(group: Group, dist: number, lat: number, y: number, face: 1 | -1,
   group.rotation.set(0, Math.atan2(frame.tx * face, frame.tz * face), 0);
 }
 
+const _seat = new Vector3();
+
 function heroKind(ride: RideId): Kind | null {
   if (ride === "trek") return null;
   if (ride === "train") return "coach";
@@ -705,7 +710,7 @@ function heroLat(ride: RideId) {
   return LANES[PLAYER_LANE].lat;
 }
 
-function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boolean): World {
+function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boolean, carId?: string | null): World {
   const bins: Bins = { geo: new Set(), mat: new Set(), tex: new Set() };
   const root = new Group();
   root.name = "accra-road";
@@ -923,17 +928,43 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
     actors.push(actor);
   }
 
-  const kind = heroKind(ride);
+  const owned = ride === "car" ? carOf(carId) : null;
+  const kind = owned?.suv ? "suv" : heroKind(ride);
   let hero: Actor | null = null;
   let spot: SpotLight | null = null;
   if (kind) {
-    const color = kind === "taxi" ? "#f0c014" : kind === "trotro" ? "#f7f4ef" : kind === "coach" ? "#f4efe6" : "#2a3344";
+    const color = owned ? owned.paint : kind === "taxi" ? "#f0c014" : kind === "trotro" ? "#f7f4ef" : kind === "coach" ? "#f4efe6" : "#2a3344";
     hero = makeVehicle(bins, kind, color, shadows, slogan, rubber, glass, steel, shadowMat);
     hero.lane = PLAYER_LANE;
     hero.dir = 1;
     hero.dist = PLAYER_START;
     hero.cruise = ride === "train" ? 14 : ride === "okada" ? 13 : 11.6;
     hero.speed = 0;
+    if (owned) {
+      hero.group.scale.setScalar(owned.scale);
+      hero.group.userData.seatY = owned.suv ? 0.4 : 0.18;
+      for (const mesh of hero.paint) {
+        if (mesh.position.y > 0.9) {
+          mesh.scale.y = 0.22;
+          mesh.position.y += owned.suv ? 0.28 : 0.22;
+        }
+      }
+      hero.detail.traverse((obj) => {
+        if (obj instanceof Mesh && obj.material === glass) {
+          const pane = glass.clone();
+          pane.opacity = 0.18;
+          pane.depthWrite = false;
+          obj.material = trackMat(bins, pane);
+        }
+      });
+      const wheel = new Mesh(
+        trackGeo(bins, new TorusGeometry(0.15, 0.02, 6, 12)),
+        trackMat(bins, new MeshStandardMaterial({ color: "#141414", roughness: 0.4, metalness: 0.25 })),
+      );
+      wheel.position.set(-0.3, owned.suv ? 1.08 : 0.9, 0.22);
+      wheel.rotation.x = 0.7;
+      hero.detail.add(wheel);
+    }
     root.add(hero.group);
     spot = new SpotLight("#ffe2b0", 0, 28, 0.5, 0.5, 1);
     spot.position.set(0, 0.95, kind === "coach" ? 4 : 1.6);
@@ -1074,6 +1105,7 @@ function RoadSim({
   skyRef,
   ride,
   sunRef,
+  driverRef,
 }: {
   worldRef: { current: World | null };
   walkerRef: { current: Group | null };
@@ -1084,6 +1116,7 @@ function RoadSim({
   skyRef: { current: RoadSky | undefined };
   ride: RideId;
   sunRef: { current: DirectionalLight | null };
+  driverRef: { current: Group | null };
 }) {
   const { camera, scene } = useThree();
   const boardT = useRef(0);
@@ -1209,6 +1242,20 @@ function RoadSim({
     }
 
     const walker = walkerRef.current;
+    const driver = driverRef.current;
+    const driving = ride === "car" && !boarding && Boolean(world.hero);
+    if (driver) {
+      driver.visible = driving;
+      if (driving && world.hero) {
+        world.hero.group.updateMatrixWorld();
+        const seatY = typeof world.hero.group.userData.seatY === "number" ? world.hero.group.userData.seatY : 0.18;
+        _seat.set(-0.28, seatY, -0.04);
+        _seat.applyMatrix4(world.hero.group.matrixWorld);
+        driver.position.copy(_seat);
+        driver.quaternion.copy(world.hero.group.quaternion);
+        driver.scale.setScalar(0.46);
+      }
+    }
     if (walker) {
       const show = ride === "trek" || boarding;
       walker.visible = show;
@@ -1303,6 +1350,7 @@ export function AccraRoad({
   slogan,
   look,
   sky,
+  carId,
 }: {
   ride: RideId;
   night: boolean;
@@ -1311,12 +1359,14 @@ export function AccraRoad({
   slogan: string;
   look: Look;
   sky?: RoadSky;
+  carId?: string | null;
 }) {
   const budget = useBudget();
   const reduce = useReduce();
   const mobile = budget < 12;
   const worldRef = useRef<World | null>(null);
   const walkerRef = useRef<Group>(null);
+  const driverRef = useRef<Group>(null);
   const sunRef = useRef<DirectionalLight>(null);
   const nightRef = useRef(night);
   const boardingRef = useRef(boarding);
@@ -1331,14 +1381,14 @@ export function AccraRoad({
   skyRef.current = sky;
 
   useLayoutEffect(() => {
-    const world = buildWorld(budget, ride, slogan, !mobile);
+    const world = buildWorld(budget, ride, slogan, !mobile, carId);
     worldRef.current = world;
     setGen((n) => n + 1);
     return () => {
       world.dispose();
       if (worldRef.current === world) worldRef.current = null;
     };
-  }, [budget, ride, slogan, mobile]);
+  }, [budget, ride, slogan, mobile, carId]);
 
   const start = blankFrame();
   frameAt(PLAYER_START, start);
@@ -1386,9 +1436,24 @@ export function AccraRoad({
             turn={0}
           />
         </group>
+        <group ref={driverRef} visible={false}>
+          <Figure
+            skin={look.skin}
+            shirt={look.cloth}
+            pants="#243044"
+            hair={look.hair}
+            cloth={look.cloth}
+            pattern={look.pattern}
+            outfit={look.outfit}
+            body={look.body}
+            pose="drive"
+            turn={0}
+          />
+        </group>
         <RoadSim
           worldRef={worldRef}
           walkerRef={walkerRef}
+          driverRef={driverRef}
           nightRef={nightRef}
           boardingRef={boardingRef}
           slowingRef={slowingRef}

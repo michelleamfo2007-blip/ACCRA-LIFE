@@ -52,6 +52,7 @@ export function AdminDashboard() {
   const [game, setGame] = useState<GameSnap | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("Overview");
   const [error, setError] = useState("");
+  const [giftNote, setGiftNote] = useState("");
 
   async function load() {
     const response = await fetch("/api/admin");
@@ -97,11 +98,17 @@ export function AdminDashboard() {
   }
 
   async function gameAct(body: object) {
-    await fetch("/api/admin/game", {
+    const response = await fetch("/api/admin/game", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    const payload = (await response.json().catch(() => null)) as { error?: string; note?: string } | null;
+    if (!response.ok) {
+      setGiftNote(payload?.error || "That did not go through.");
+      return;
+    }
+    setGiftNote(payload?.note || "");
     await loadGame();
   }
 
@@ -189,6 +196,7 @@ export function AdminDashboard() {
               <Stat label="Houses" value={game?.stats.houses ?? 0} />
             </div>
             {!game ? <p className="text-sm text-muted">Loading players…</p> : null}
+            {giftNote ? <p className="text-sm font-semibold text-ink">{giftNote}</p> : null}
             {game && game.players.length === 0 ? <p className="text-sm text-muted">No game accounts yet.</p> : null}
             <div className="space-y-3">
               {game?.players.map((player) => (
@@ -229,8 +237,9 @@ export function AdminDashboard() {
                       </p>
                     </div>
                   ) : (
-                    <p className="mt-3 text-sm text-muted">Account created, life not started.</p>
+                    <p className="mt-3 text-sm text-muted">Account created, life not started. Start a life before the desk can send cedis.</p>
                   )}
+                  {player.hasLife ? <GiftCash username={player.username} onGive={(amount) => gameAct({ action: "gift", who: player.username, amount })} /> : null}
                 </article>
               ))}
             </div>
@@ -370,6 +379,51 @@ export function AdminDashboard() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+function GiftCash({ username, onGive }: { username: string; onGive: (amount: number) => Promise<void> }) {
+  const [amount, setAmount] = useState("500");
+  const [busy, setBusy] = useState(false);
+  const packs = [100, 500, 2000, 10000];
+
+  async function send(value: number) {
+    if (busy || !Number.isFinite(value) || value < 1) return;
+    setBusy(true);
+    try {
+      await onGive(value);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      className="mt-3 flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send(Math.round(Number(amount)));
+      }}
+    >
+      <label className="text-xs font-semibold text-muted" htmlFor={`gift-${username}`}>
+        Send cedis
+      </label>
+      <input
+        id={`gift-${username}`}
+        inputMode="numeric"
+        value={amount}
+        onChange={(event) => setAmount(event.target.value.replace(/[^\d]/g, ""))}
+        className="w-28 rounded-full border border-line bg-paper px-3 py-2 text-sm font-semibold"
+      />
+      <button type="submit" disabled={busy || !amount} className="rounded-full bg-[#006B3F] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">
+        {busy ? "Sending…" : "Give"}
+      </button>
+      {packs.map((pack) => (
+        <button key={pack} type="button" disabled={busy} onClick={() => void send(pack)} className="rounded-full border border-line px-3 py-2 text-xs font-semibold">
+          ₵{pack.toLocaleString("en-GH")}
+        </button>
+      ))}
+    </form>
   );
 }
 
