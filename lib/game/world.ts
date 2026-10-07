@@ -187,6 +187,15 @@ export const FIXTURES = [
   { id: "fix-toilet", name: "Toilet", x: -4.7, z: 3.3, color: "#f7f7f7" },
   { id: "fix-shower", name: "Shower", x: -5.15, z: 1.9, color: "#d5e4f2" },
   { id: "fix-radio", name: "Radio", x: 0.35, z: 1.35, color: "#c4894f" },
+  { id: "fix-wall-bed", name: "Bedroom wall", x: 3.4, z: -1.35, color: "#f3ead8" },
+  { id: "fix-wall-bath", name: "Bathroom wall", x: -3.15, z: 2.85, color: "#e7d8c4" },
+  { id: "fix-wall-side", name: "Side wall", x: -4.6, z: 1.25, color: "#f3ead8" },
+] as const;
+
+export const DIVIDERS = [
+  { id: "fix-wall-bed", along: "x" as const, length: 3.2 },
+  { id: "fix-wall-bath", along: "z" as const, length: 3.1 },
+  { id: "fix-wall-side", along: "x" as const, length: 2.6 },
 ] as const;
 
 export const WIDEN_COST = [800, 2000] as const;
@@ -963,7 +972,7 @@ export const SHOP_CATEGORIES = [
 ] as const;
 
 export type ShopCategory = (typeof SHOP_CATEGORIES)[number]["id"];
-export type ShopKind = "chair" | "sofa" | "bed" | "table" | "fan" | "ac" | "box" | "food" | "lamp" | "floor" | "fridge" | "stove" | "sink" | "toilet" | "shower" | "tv" | "desk" | "guitar" | "weights" | "plant" | "rug" | "curtain" | "tank" | "statue" | "dog" | "cat" | "bird" | "throne" | "painting" | "vault" | "jet";
+export type ShopKind = "chair" | "sofa" | "bed" | "table" | "fan" | "ac" | "box" | "food" | "lamp" | "floor" | "fridge" | "stove" | "sink" | "toilet" | "shower" | "tv" | "desk" | "guitar" | "weights" | "plant" | "rug" | "curtain" | "tank" | "statue" | "dog" | "cat" | "bird" | "throne" | "painting" | "vault" | "jet" | "wall";
 
 export type ShopItem = {
   id: string;
@@ -992,7 +1001,9 @@ export const SHOP: ShopItem[] = [
   { id: "parquet", name: "Wood floor", price: 520, detail: "Boards instead of tile. The room sounds different.", category: "design", size: "floor", stars: 3, color: "#c4894f", accent: "#8d5a32", kind: "floor" },
   { id: "marble", name: "Marble floor", price: 1600, detail: "Pale stone. The mini-flat look, bought by the metre.", category: "design", size: "floor", stars: 4, color: "#f6f3ec", accent: "#ddd6c8", kind: "floor" },
   { id: "kente", name: "Kente throw", price: 80, detail: "A cloth for the wall. The room looks like somebody lives here.", category: "design", size: "wall", stars: 2, color: "#c4563a", kind: "box" },
-  { id: "mattress", name: "Thicker mattress", price: 480, detail: "Sleep gives more of you back.", category: "sleep", size: "2×1", stars: 3, color: "#6d4aff", kind: "bed" },
+  { id: "partition", name: "Bedroom wall", price: 420, detail: "Drag it across the room to split off another bedroom. Rotate it to run the other way.", category: "design", size: "3×1", stars: 2, color: "#f4efe6", kind: "wall" },
+  { id: "partition-b", name: "Second bedroom wall", price: 420, detail: "One more wall, for a third room.", category: "design", size: "3×1", stars: 2, color: "#efe4d4", kind: "wall" },
+  { id: "mattress", name: "Thicker mattress", price: 480, detail: "A second bed you can drag into another room. Sleep gives more of you back.", category: "sleep", size: "2×1", stars: 3, color: "#6d4aff", kind: "bed" },
   { id: "pillow", name: "Extra pillow", price: 40, detail: "One more place to put your head.", category: "sleep", size: "1×1", stars: 1, color: "#f4efe6", kind: "box" },
   { id: "net", name: "Mosquito net", price: 35, detail: "Treated net. Malaria season hits you far less.", category: "sleep", size: "1×1", stars: 1, color: "#e8f1ea", kind: "box" },
   { id: "pan", name: "Good cooking pot", price: 150, detail: "Home jollof fills the plate properly.", category: "kitchen", size: "1×1", stars: 2, color: "#8d5a32", kind: "box" },
@@ -1011,9 +1022,9 @@ export const SHOP: ShopItem[] = [
   { id: "book", name: "Exam past questions", price: 60, detail: "A stack that makes the coding and the hustle less guesswork.", category: "skills", size: "1×1", stars: 2, color: "#2f6fed", kind: "box" },
   { id: "bulb", name: "Rechargeable bulb", price: 25, detail: "A small sun for when ECG takes the evening.", category: "light", size: "wall", stars: 1, color: "#fff4c2", kind: "lamp" },
   { id: "generator", name: "Small generator", price: 900, detail: "Dumsor becomes a story instead of a blackout.", category: "light", size: "1×1", stars: 3, color: "#355f86", kind: "box" },
-  { id: "foam", name: "Foam mattress", price: 120, detail: "A thin blue one. Better than the bare board.", category: "sleep", size: "1×2", stars: 1, color: "#4f86d6", kind: "bed" },
-  { id: "spring", name: "Spring bed", price: 520, detail: "A proper frame and an orange cover.", category: "sleep", size: "1×2", stars: 2, color: "#e07a3d", kind: "bed" },
-  { id: "king", name: "King bed", price: 1800, detail: "Wide enough that nobody is hanging off the edge.", category: "sleep", size: "2×2", stars: 3, color: "#5b3cc4", kind: "bed" },
+  { id: "foam", name: "Foam mattress", price: 120, detail: "A thin blue bed you can put in a second room.", category: "sleep", size: "1×2", stars: 1, color: "#4f86d6", kind: "bed" },
+  { id: "spring", name: "Spring bed", price: 520, detail: "A proper frame and an orange cover. Drag it into its own bedroom.", category: "sleep", size: "1×2", stars: 2, color: "#e07a3d", kind: "bed" },
+  { id: "king", name: "King bed", price: 1800, detail: "Wide enough that nobody is hanging off the edge. It stands in the room as its own bed.", category: "sleep", size: "2×2", stars: 3, color: "#5b3cc4", kind: "bed" },
   { id: "cooler-box", name: "Cooler box", price: 45, detail: "Ice and drinks when the fridge is a rumour.", category: "kitchen", size: "1×1", stars: 1, color: "#2f6fed", kind: "fridge" },
   { id: "kerosene", name: "Kerosene stove", price: 70, detail: "One burner, a green stand, and a careful match.", category: "kitchen", size: "1×1", stars: 1, color: "#3d4a3a", kind: "stove" },
   { id: "gas-cooker", name: "Gas cooker", price: 560, detail: "Four rings. Jollof no longer depends on charcoal.", category: "kitchen", size: "1×1", stars: 3, color: "#f4f7fa", accent: "#c4894f", kind: "stove" },

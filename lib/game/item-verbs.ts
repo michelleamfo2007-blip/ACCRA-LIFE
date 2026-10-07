@@ -18,6 +18,7 @@ const EMOJI: Partial<Record<ShopItem["kind"], string>> = {
   chair: "🪑",
   sofa: "🛋️",
   bed: "🛏️",
+  wall: "🧱",
   table: "🍽️",
   fan: "🌀",
   ac: "❄️",

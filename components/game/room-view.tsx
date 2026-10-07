@@ -310,6 +310,14 @@ export function RoomView({
         placing={Boolean(draft)}
         focus={draft ? { x: draft.x, z: draft.z } : null}
         onPick={(id) => {
+          if (id.startsWith("fix-wall")) {
+            if (draft?.id === id) return;
+            setArrange(false);
+            setPicked(null);
+            setFixture(null);
+            setDraft(fixtureAt(life, id));
+            return;
+          }
           setDraft(null);
           setFixture(null);
           setPicked(id);
@@ -493,7 +501,7 @@ function ArrangeTray({
   onWiden: () => void;
   onPick: (piece: Placed) => void;
 }) {
-  const pieces = SHOP.filter((item) => life.inventory.includes(item.id) && !item.consume && item.kind !== "floor" && item.kind !== "bed");
+  const pieces = SHOP.filter((item) => life.inventory.includes(item.id) && !item.consume && item.kind !== "floor");
   const span = life.span ?? 0;
   const widen = span < WIDEN_COST.length ? WIDEN_COST[span] : null;
   return (
@@ -504,7 +512,7 @@ function ArrangeTray({
           Done
         </button>
       </div>
-      <p className="mt-1 text-xs text-[#5c6b82]">The bed, stove, and the rest move too. Tap one, drag it, then Place.</p>
+      <p className="mt-1 text-xs text-[#5c6b82]">Walls move too. Drag one to split off a bedroom, then rotate it. Buy another wall or a second bed in the shop.</p>
       {widen != null ? (
         <button type="button" onClick={onWiden} className="mt-3 w-full rounded-full bg-[#006B3F] py-2.5 text-sm font-bold text-white">
           Push the walls out · {cedis(widen)}

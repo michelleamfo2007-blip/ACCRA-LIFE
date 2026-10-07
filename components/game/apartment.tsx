@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, ExtrudeGeometry, RepeatWrapping, Shape, SphereGeometry, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { Figure } from "@/components/game/low-poly-human";
-import { FIXTURES, fixtureAt, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
+import { DIVIDERS, FIXTURES, fixtureAt, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
 export function Apartment({
   life,
@@ -100,11 +100,19 @@ export function Apartment({
       <FixtureSpot piece={spotOf(built, "fix-radio")} active={picked === "fix-radio"}>
         <Radio onGo={onGo} />
       </FixtureSpot>
+      {DIVIDERS.map((wall) => {
+        const spot = FIXTURES.find((item) => item.id === wall.id);
+        return (
+          <FixtureSpot key={wall.id} piece={spotOf(built, wall.id)} active={picked === wall.id}>
+            <Divider at={[spot?.x ?? 0, spot?.z ?? 0]} along={wall.along} length={wall.length} color={spot?.color ?? "#f3ead8"} onPick={() => onPick?.(wall.id)} />
+          </FixtureSpot>
+        );
+      })}
       {placing && onDrag ? <PlacePad onDrag={onDrag} span={span} /> : null}
       {!placing && onWalk ? <WalkPad onWalk={onWalk} span={span} /> : null}
       {pieces.map((piece) => {
         const item = SHOP.find((entry) => entry.id === piece.id);
-        if (!item || item.consume || item.kind === "bed") return null;
+        if (!item || item.consume) return null;
         const active = picked === piece.id;
         return (
           <group
@@ -336,6 +344,12 @@ function PlacePad({ onDrag, span = 0 }: { onDrag: (x: number, z: number) => void
 
 function Prop({ item }: { item: ShopItem }) {
   const color = item.color;
+  if (item.kind === "wall") {
+    return <Box color={color} position={[0, 0.85, 0]} size={[3.2, 1.7, 0.16]} flat={false} />;
+  }
+  if (item.kind === "bed") {
+    return <GuestBed color={color} wide={item.size.startsWith("2")} />;
+  }
   if (item.kind === "chair") {
     return (
       <group>
@@ -630,9 +644,6 @@ function Walls({ grade, span = 0 }: { grade: HomeGrade; span?: number }) {
       <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} flat={false} />
       <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} flat={false} />
       <Box color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} flat={false} />
-      <Box color={look.wall} position={[3.4, y, -1.35]} size={[3.2, h, 0.16]} flat={false} />
-      <Box color={look.side} position={[-3.15, y, 2.85]} size={[0.16, h, 3.1]} flat={false} />
-      <Box color={look.wall} position={[-4.6, y, 1.25]} size={[2.6, h, 0.16]} flat={false} />
       <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[0, 0.07, -halfD + 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
       <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[halfW - 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
       {grade === "mid" || grade === "high" ? <WoodFloor pale={grade === "high"} /> : null}
@@ -713,6 +724,33 @@ function Door({ color, x, onGo }: { color: string; x: number; onGo: (id: string)
         <cylinderGeometry args={[0.025, 0.025, 0.08, 10]} />
         <meshStandardMaterial color="#c4a46a" metalness={0.4} roughness={0.35} />
       </mesh>
+    </group>
+  );
+}
+
+function Divider({ at, along, length, color, onPick }: { at: [number, number]; along: "x" | "z"; length: number; color: string; onPick: () => void }) {
+  const size: [number, number, number] = along === "x" ? [length, 1.7, 0.16] : [0.16, 1.7, length];
+  return (
+    <group position={[at[0], 0, at[1]]} onClick={(event) => { event.stopPropagation(); onPick(); }}>
+      <Box color={color} position={[0, 0.85, 0]} size={size} flat={false} />
+    </group>
+  );
+}
+
+function GuestBed({ color, wide }: { color: string; wide?: boolean }) {
+  const span = wide ? 2.05 : 1.5;
+  return (
+    <group>
+      <Pole color="#6b4428" position={[-span * 0.38, 0.12, -0.75]} height={0.22} radius={0.04} />
+      <Pole color="#6b4428" position={[span * 0.38, 0.12, -0.75]} height={0.22} radius={0.04} />
+      <Pole color="#6b4428" position={[-span * 0.38, 0.12, 0.75]} height={0.22} radius={0.04} />
+      <Pole color="#6b4428" position={[span * 0.38, 0.12, 0.75]} height={0.22} radius={0.04} />
+      <Cushion color="#6b4428" position={[0, 0.28, 0]} size={[span, 0.1, 1.85]} />
+      <Cushion color="#f7f4ef" position={[0, 0.4, 0.06]} size={[span * 0.86, 0.18, 1.55]} />
+      <Cushion color={color} position={[0, 0.46, 0.32]} size={[span * 0.8, 0.1, 0.9]} />
+      <Cushion color="#6b4428" position={[0, 0.64, -0.86]} size={[span, 0.5, 0.08]} />
+      <Puff color="#fffaf4" position={[-0.26, 0.5, -0.48]} size={[0.36, 0.1, 0.22]} />
+      <Puff color="#fff" position={[0.26, 0.5, -0.48]} size={[0.36, 0.1, 0.22]} />
     </group>
   );
 }

@@ -184,6 +184,7 @@ function Piece({ item }: { item: ShopItem }) {
   if (kind === "chair" || kind === "throne") return <PlasticChair color={color} />;
   if (kind === "sofa") return <Sofa color={color} seats={size.startsWith("3") ? 3 : 2} />;
   if (kind === "bed") return <Bed color={color} />;
+  if (kind === "wall") return <Crate color={color} />;
   if (kind === "table" || kind === "desk") return <Table color={color} />;
   if (kind === "fan") return <Fan />;
   if (kind === "ac") return <AirCon />;
