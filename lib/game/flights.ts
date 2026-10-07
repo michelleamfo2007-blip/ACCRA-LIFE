@@ -55,7 +55,16 @@ export const CABINS: Record<
   },
 };
 
-export const FLIGHT_GAP = 240;
+export const FLIGHT_GAP = 40;
+
+export function boardingWaitLabel(wait: number) {
+  if (wait >= 60) {
+    const hours = Math.floor(wait / 60);
+    const mins = wait % 60;
+    return mins ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${Math.max(1, wait)} min`;
+}
 
 export const ROUTES = [
   { id: "accra-kumasi", from: "kotoka", to: "kumasi", label: "Accra → Kumasi", minutes: 50 },
@@ -90,7 +99,7 @@ export function canBoard(life: Life, routeId: string, cabinId: string) {
   const board = boardHint(life, routeId);
   if (board) return board;
   const wait = flightWait(life);
-  if (wait > 0) return `Security already saw you today. Next flight in ${Math.ceil(wait / 60)}h.`;
+  if (wait > 0) return `The plane is turning around. Next boarding in ${boardingWaitLabel(wait)}.`;
   if (life.cash < cabin.cost) return `You need ${cedis(cabin.cost)} for ${cabin.label.toLowerCase()}.`;
   if (life.needs.energy < 15) return "Too tired to fly. Rest first.";
   return null;

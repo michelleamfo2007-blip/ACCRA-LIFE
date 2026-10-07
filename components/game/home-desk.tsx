@@ -50,6 +50,7 @@ export function HomeDesk({
   const knocking = doorGuests(life);
   const [cookOpen, setCookOpen] = useState(false);
   const [doorOpen, setDoorOpen] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
   const [share, setShare] = useState<string | undefined>(guests[0]?.name);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<HomeFriend[]>([]);
@@ -81,8 +82,8 @@ export function HomeDesk({
   }
 
   return (
-    <div className="pointer-events-auto absolute left-2 top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))] z-30 w-[min(16.5rem,calc(100%-5.5rem))] space-y-2 sm:left-3">
-      <div className="rounded-2xl bg-white/95 p-3 shadow-lg">
+    <div className="pointer-events-auto absolute left-2 top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))] z-30 w-[min(14.25rem,calc(100%-6.5rem))] space-y-1.5 sm:left-3">
+      <div className="rounded-2xl bg-white/95 p-2 shadow-lg">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-bold uppercase tracking-wide text-[#006B3F]">Home life</p>
           <p className="text-[11px] font-semibold text-[#5c6b82]">🛒 {pantry} groceries</p>
@@ -120,9 +121,9 @@ export function HomeDesk({
             ))}
           </div>
         )}
-        {react ? <p className="mt-2 rounded-xl bg-[#f4f7fb] px-2.5 py-1.5 text-[11px] font-medium text-[#243044]">{react}</p> : null}
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => { setCookOpen((open) => !open); setDoorOpen(false); }} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-[11px] font-bold text-white">
+        {react ? <p className="mt-1.5 line-clamp-2 rounded-xl bg-[#f4f7fb] px-2 py-1 text-[11px] font-medium leading-4 text-[#243044]">{react}</p> : null}
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <button type="button" onClick={() => { setCookOpen((open) => !open); setDoorOpen(false); }} className="rounded-full bg-[#006B3F] px-2.5 py-1 text-[10px] font-bold text-white">
             🍲 Cook
           </button>
           <button
@@ -131,18 +132,18 @@ export function HomeDesk({
               setDoorOpen((open) => !open);
               setCookOpen(false);
             }}
-            className="rounded-full bg-[#121212] px-3 py-1.5 text-[11px] font-bold text-white"
+            className="rounded-full bg-[#121212] px-2.5 py-1 text-[10px] font-bold text-white"
           >
             🚪 Invite over
           </button>
           {onArrange ? (
-            <button type="button" onClick={onArrange} className="rounded-full bg-[#121212] px-3 py-1.5 text-[11px] font-bold text-white">
-              Arrange inside
+            <button type="button" onClick={onArrange} className="rounded-full bg-[#121212] px-2.5 py-1 text-[10px] font-bold text-white">
+              Arrange
             </button>
           ) : null}
           {onBuyHint ? (
-            <button type="button" onClick={onBuyHint} className="rounded-full bg-[#fff4c2] px-3 py-1.5 text-[11px] font-bold text-[#7a3b0c]">
-              Upgrade home
+            <button type="button" onClick={onBuyHint} className="rounded-full bg-[#fff4c2] px-2.5 py-1 text-[10px] font-bold text-[#7a3b0c]">
+              Upgrade
             </button>
           ) : null}
         </div>
@@ -269,14 +270,18 @@ export function HomeDesk({
       ) : null}
 
       {tips.length && !cookOpen && !doorOpen ? (
-        <div className="rounded-2xl bg-[#121212]/85 px-3 py-2 text-[11px] text-white shadow">
+        <button type="button" onClick={() => setTipsOpen((open) => !open)} className="w-full rounded-xl bg-[#121212]/85 px-2.5 py-1.5 text-left text-[11px] text-white shadow">
           <p className="font-bold text-[#FCD116]">Next for the place</p>
-          {tips.slice(0, 2).map((tip) => (
-            <p key={tip.id} className="mt-1 opacity-95">
-              {tip.label} — {tip.why}
-            </p>
-          ))}
-        </div>
+          {tipsOpen ? (
+            tips.slice(0, 2).map((tip) => (
+              <p key={tip.id} className="mt-1 opacity-95">
+                {tip.label} — {tip.why}
+              </p>
+            ))
+          ) : (
+            <p className="truncate opacity-90">{tips[0].label}</p>
+          )}
+        </button>
       ) : null}
     </div>
   );
@@ -312,10 +317,10 @@ function GuestCard({
                 ? "Just arrived"
                 : "Gisting";
   return (
-    <div className="rounded-xl bg-[#f4f7fb] p-2.5">
+    <div className="rounded-xl bg-[#f4f7fb] p-2">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-bold text-[#121212]">{title}</p>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-bold text-[#121212]">{title}</p>
           {guest.username && guest.name !== title ? <p className="text-[11px] text-[#5c6b82]">{guest.name}</p> : null}
           <p className="text-[10px] font-semibold uppercase tracking-wide text-[#006B3F]">
             {guest.username ? "Player" : tier.label} · {doing}

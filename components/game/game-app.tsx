@@ -996,7 +996,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const showCity = Boolean(city.events.length || city.match || city.weather.rain || city.weather.harmattan);
   const showGuide = Boolean(guide && (guide.done(life) || guide.title !== quest.title));
   const extraHints = [showGem, showCity, life.dumsor, showGuide, Boolean(sick)].filter(Boolean).length;
-  const phoneHint = hintsOpen ? "" : "hidden sm:block";
+  const phoneHint = hintsOpen ? "" : "hidden";
   const homeRide = farRide(car && (life.car?.fuel ?? 0) >= 6 && !carSpoilt(life) ? car : rideIn(RIDES[1], city.weather), life.where, "home");
   const touring = !life.tour && !trip && !flight && !shiftId && !payday;
   const tourCard = TOUR.find((item) => item.id === tourStep) ?? TOUR[0];
@@ -1349,10 +1349,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 : `${enRouteGuests(life)[0].name} · ${enRouteGuests(life)[0].ride} from ${enRouteGuests(life)[0].from} · ${minutesAway(life, enRouteGuests(life)[0])}m`}
             </button>
           ) : null}
-          <div className={`absolute left-2 z-20 max-w-[min(11.5rem,calc(100%-5.5rem))] space-y-2 sm:left-3 sm:max-w-[min(13rem,calc(100%-5.5rem))] ${tab === "map" ? "top-[max(7.4rem,calc(env(safe-area-inset-top)+6.6rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
+          <div className={`absolute left-2 z-20 max-w-[min(10rem,calc(100%-6.5rem))] space-y-1 sm:left-3 ${tab === "map" ? "top-[max(7.4rem,calc(env(safe-area-inset-top)+6.6rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
             <button
               type="button"
-              className="w-full rounded-full bg-white px-3 py-2 text-left shadow"
+              className="w-full truncate rounded-full bg-white px-2.5 py-1 text-left text-xs font-bold shadow"
               onClick={() => {
                 const sendHome = (spot: string) => {
                   if (life.where !== "home") {
@@ -1387,13 +1387,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 setTab("map");
               }}
             >
-              <p className="text-sm font-bold">{quest.title}</p>
-              <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : phoneHint}`}>{quest.detail}</p>
+              {quest.title}
             </button>
             {showGem ? (
-              <button type="button" className={`w-full rounded-full bg-white px-3 py-2 text-left shadow ${phoneHint}`} onClick={() => setTab("map")}>
-                <p className="text-sm font-bold">{tab === "map" ? <span className="sm:hidden">💎 Gem at {spotById(gemSpotId(life.minutes)).name}</span> : null}<span className={tab === "map" ? "hidden sm:inline" : ""}>Daily gem hunt</span></p>
-                <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : ""}`}>Look around {spotById(gemSpotId(life.minutes)).name}. Next find is {cedis(40)}.</p>
+              <button type="button" className={`w-full truncate rounded-full bg-white px-2.5 py-1 text-left text-xs font-bold shadow ${phoneHint}`} onClick={() => setTab("map")}>
+                Gem · {spotById(gemSpotId(life.minutes)).name}
               </button>
             ) : null}
             {showCity ? (
@@ -1416,7 +1414,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             {guide && showGuide ? (
               <button
                 type="button"
-                className={`w-full rounded-2xl px-3 py-2 text-left shadow ${phoneHint} ${guide.done(life) ? "bg-[#FCD116]" : "bg-white"}`}
+                className={`w-full truncate rounded-full px-2.5 py-1 text-left text-xs font-bold shadow ${phoneHint} ${guide.done(life) ? "bg-[#FCD116]" : "bg-white"}`}
                 onClick={() => {
                   if (guide.done(life)) {
                     apply(claimGuide(life, guide.id));
@@ -1430,9 +1428,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                   setTab(guide.id === "eat" ? "home" : "map");
                 }}
               >
-                <p className="text-[10px] font-bold uppercase tracking-wide text-[#006B3F]">🧭 Getting started</p>
-                <p className="text-sm font-bold">{guide.done(life) ? `${guide.title} ✓ Tap for ₵25` : guide.title}</p>
-                {guide.done(life) ? null : <p className={`text-xs text-[#5c6b82] ${tab === "map" ? "hidden sm:block" : ""}`}>{guide.hint}</p>}
+                {guide.done(life) ? `${guide.title} ✓ ₵25` : guide.title}
               </button>
             ) : null}
             {sick ? (
@@ -1447,7 +1443,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             ) : null}
             <div className="flex flex-wrap gap-1.5">
               {extraHints ? (
-                <button type="button" className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold shadow sm:hidden" onClick={() => setHintsOpen((open) => !open)}>
+                <button type="button" className="rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold shadow" onClick={() => setHintsOpen((open) => !open)}>
                   {hintsOpen ? "▴ Less" : `▾ ${extraHints} more`}
                 </button>
               ) : null}

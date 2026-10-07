@@ -27,7 +27,7 @@ import {
   stars,
 } from "@/lib/game/kitchen";
 import { TRIP_IDS } from "@/lib/game/more-spots";
-import { CABINS, ROUTES, canBoard, flightWait, type Cabin } from "@/lib/game/flights";
+import { CABINS, ROUTES, boardingWaitLabel, canBoard, flightWait, type Cabin } from "@/lib/game/flights";
 import { GOODS, buyPrice, isSupply } from "@/lib/game/trade";
 import { checkInReward, checkedIn, weeklyAt } from "@/lib/game/weekly";
 import { SPOTS, STAMP_BONUS, cedis, spotById, type Life, type StepResult } from "@/lib/game/world";
@@ -90,7 +90,7 @@ export function TripsApp({ life, onBack, onGo, onApply, onFly }: { life: Life; o
             );
           })}
         </div>
-        {wait > 0 ? <p className="mt-2 text-xs font-semibold text-[#CE1126]">Next boarding in {Math.ceil(wait / 60)}h.</p> : null}
+        {wait > 0 ? <p className="mt-2 text-xs font-semibold text-[#CE1126]">Next boarding in {boardingWaitLabel(wait)}.</p> : null}
         <div className="mt-3 grid gap-2">
           {ROUTES.map((route) => {
             const here = life.where === route.from;

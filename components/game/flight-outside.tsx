@@ -11,7 +11,7 @@ export function FlightOutside({ phase, progress, night }: { phase: FlightPhase; 
   const sky = night && air ? "#102848" : night ? "#1a3358" : "#8ec5e8";
   return (
     <div className="absolute inset-0" style={{ background: sky }}>
-      <Canvas camera={{ position: [-4, 4.2, 12], fov: 30 }} dpr={[1, 1.6]}>
+      <Canvas camera={{ position: [-10, 7, 26], fov: 42 }} dpr={[1, 1.6]}>
         <color attach="background" args={[sky]} />
         <fog attach="fog" args={[night && air ? "#1a4068" : night ? "#243044" : "#9ec8e8", 50, 150]} />
         <ambientLight intensity={0.85} />
@@ -32,9 +32,9 @@ function FlightWorld({ phase, progress, night }: { phase: FlightPhase; progress:
   const pose = useMemo(() => {
     if (phase === "boarding") return { x: -1.2, y: 1.34, z: 0, pitch: 0, yaw: -0.38, camY: 7, camZ: 16 };
     if (phase === "taxi") return { x: 2 + progress * 4, y: 1.34, z: 0, pitch: 0, yaw: -0.22, camY: 7, camZ: 15 };
-    if (phase === "climb") return { x: 4, y: 4 + progress * 8, z: -6, pitch: -0.28, yaw: -0.1, camY: 10, camZ: 20 };
-    if (phase === "cruise") return { x: 2, y: 14, z: -10, pitch: -0.05, yaw: 0.08, camY: 16, camZ: 22 };
-    if (phase === "descent") return { x: 0, y: 8, z: -4, pitch: 0.18, yaw: 0.05, camY: 12, camZ: 18 };
+    if (phase === "climb") return { x: 4, y: 4 + progress * 8, z: -6, pitch: 0.22, yaw: -0.08, camY: 10, camZ: 20 };
+    if (phase === "cruise") return { x: 2, y: 14, z: -10, pitch: 0.04, yaw: 0.06, camY: 16, camZ: 22 };
+    if (phase === "descent") return { x: 0, y: 8, z: -4, pitch: -0.14, yaw: 0.04, camY: 12, camZ: 18 };
     return { x: 3, y: 1.34, z: 2, pitch: 0, yaw: -0.2, camY: 7, camZ: 15 };
   }, [phase, progress]);
 
@@ -53,10 +53,10 @@ function FlightWorld({ phase, progress, night }: { phase: FlightPhase; progress:
 
     ground.current.position.x = air ? -((performance.now() / 1000) * (phase === "cruise" ? 16 : 10)) % 48 : 0;
     const parked = !air;
-    camera.position.x = MathUtils.damp(camera.position.x, g.position.x + (parked ? -2.2 : -7), 2.2, dt);
-    camera.position.y = MathUtils.damp(camera.position.y, g.position.y + (parked ? 2.35 : 4.2), 2.2, dt);
-    camera.position.z = MathUtils.damp(camera.position.z, g.position.z + (parked ? 10.2 : 15), 2.2, dt);
-    camera.lookAt(g.position.x + 0.15, g.position.y + 0.15, g.position.z);
+    camera.position.x = MathUtils.damp(camera.position.x, g.position.x + (parked ? -8 : -10), 2.2, dt);
+    camera.position.y = MathUtils.damp(camera.position.y, g.position.y + (parked ? 5 : 6.5), 2.2, dt);
+    camera.position.z = MathUtils.damp(camera.position.z, g.position.z + (parked ? 20 : 30), 2.2, dt);
+    camera.lookAt(g.position.x, g.position.y + 0.2, g.position.z);
     shadow.current.position.x = g.position.x;
     shadow.current.position.z = g.position.z;
     shadow.current.scale.set(air ? 0.55 : 1, 1, air ? 0.55 : 1);
@@ -302,40 +302,69 @@ function Fields() {
 
 const RED = "#c8102e";
 const GOLD = "#f5c518";
+const WHITE = "#f7f8fa";
+const BELLY = "#d5dbe3";
 
-function paintSkin() {
+function paintTitle() {
   const canvas = document.createElement("canvas");
-  canvas.width = 1024;
-  canvas.height = 512;
+  canvas.width = 512;
+  canvas.height = 96;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return new CanvasTexture(canvas);
-  ctx.fillStyle = "#f7f8fa";
-  ctx.fillRect(0, 0, 1024, 512);
-  const side = (around: number, flip: boolean) => {
-    const y = (1 - around) * 512;
-    ctx.save();
-    ctx.translate(470, y);
-    if (flip) ctx.scale(-1, 1);
+  if (ctx) {
+    ctx.clearRect(0, 0, 512, 96);
     ctx.fillStyle = RED;
-    ctx.fillRect(-340, -6, 620, 14);
-    ctx.font = "700 34px Georgia, 'Times New Roman', serif";
+    ctx.font = "700 54px Georgia, 'Times New Roman', serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("PASSION AIRWAYS", 10, -26);
-    ctx.fillStyle = "#1e293b";
-    ctx.font = "700 15px ui-monospace, monospace";
-    ctx.textAlign = "left";
-    ctx.fillText("9G-PAD", -300, 20);
-    ctx.fillStyle = "#16324a";
-    for (let i = 0; i < 12; i += 1) ctx.fillRect(-150 + i * 28, 8, 14, 10);
-    ctx.restore();
-  };
-  side(0.75, false);
-  side(0.25, true);
-  ctx.fillStyle = "#10283a";
-  ctx.beginPath();
-  ctx.ellipse(900, 256, 42, 28, 0, 0, Math.PI * 2);
-  ctx.fill();
+    ctx.fillText("PASSION AIRWAYS", 256, 48);
+  }
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  return tex;
+}
+
+function paintBlur() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.clearRect(0, 0, 128, 128);
+    const hub = ctx.createRadialGradient(64, 64, 4, 64, 64, 60);
+    hub.addColorStop(0, "#f8fafc");
+    hub.addColorStop(0.18, "#9aa6b5");
+    hub.addColorStop(0.45, "rgba(80,92,108,0.55)");
+    hub.addColorStop(1, "rgba(40,48,60,0.15)");
+    ctx.fillStyle = hub;
+    ctx.beginPath();
+    ctx.arc(64, 64, 60, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(230,236,242,0.55)";
+    ctx.lineWidth = 3;
+    for (let blade = 0; blade < 10; blade += 1) {
+      ctx.beginPath();
+      ctx.arc(64, 64, 46, blade * 0.62, blade * 0.62 + 0.35);
+      ctx.stroke();
+    }
+  }
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  return tex;
+}
+
+function paintStreak() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const wash = ctx.createLinearGradient(0, 0, 256, 0);
+    wash.addColorStop(0, "rgba(255,255,255,0)");
+    wash.addColorStop(0.35, "rgba(255,255,255,0.75)");
+    wash.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 18, 256, 28);
+  }
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
   return tex;
@@ -365,72 +394,71 @@ function paintMark() {
 
 function buildFuselage() {
   const pts = [
-    new Vector2(0.02, 0),
-    new Vector2(0.2, 0.28),
-    new Vector2(0.48, 0.75),
-    new Vector2(0.78, 1.45),
-    new Vector2(0.94, 2.3),
-    new Vector2(0.99, 3.5),
-    new Vector2(0.99, 5.6),
-    new Vector2(0.9, 6.7),
-    new Vector2(0.58, 7.55),
-    new Vector2(0.26, 8.15),
-    new Vector2(0.04, 8.5),
+    new Vector2(0, 0),
+    new Vector2(0.16, 0.22),
+    new Vector2(0.46, 0.62),
+    new Vector2(0.78, 1.15),
+    new Vector2(0.92, 1.85),
+    new Vector2(0.96, 3.1),
+    new Vector2(0.96, 6.35),
+    new Vector2(0.9, 7.15),
+    new Vector2(0.7, 7.75),
+    new Vector2(0.4, 8.25),
+    new Vector2(0.12, 8.6),
+    new Vector2(0, 8.8),
   ];
-  const geo = new LatheGeometry(pts, 32, Math.PI / 2);
-  geo.translate(0, -4.25, 0);
+  const geo = new LatheGeometry(pts, 40);
+  geo.translate(0, -4.4, 0);
   geo.rotateZ(-Math.PI / 2);
-  const uv = geo.getAttribute("uv");
-  for (let i = 0; i < uv.count; i += 1) {
-    const around = uv.getX(i);
-    const along = uv.getY(i);
-    uv.setXY(i, along, around);
-  }
-  uv.needsUpdate = true;
   geo.computeVertexNormals();
   return geo;
 }
 
 function buildWing(flip: boolean) {
   const shape = new Shape();
-  shape.moveTo(1.45, 0.42);
-  shape.lineTo(-1.05, 0.55);
-  shape.lineTo(-2.35, 5.05);
-  shape.lineTo(-0.35, 4.85);
+  shape.moveTo(1.25, 0.2);
+  shape.lineTo(-0.85, 0.08);
+  shape.quadraticCurveTo(-1.15, 2.2, -1.9, 4.55);
+  shape.lineTo(-0.05, 4.7);
+  shape.quadraticCurveTo(0.85, 2.3, 1.25, 0.2);
   shape.closePath();
-  const geo = new ExtrudeGeometry(shape, { depth: 0.09, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.03, bevelSegments: 1 });
+  const geo = new ExtrudeGeometry(shape, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.03, bevelSegments: 1 });
   geo.rotateX(-Math.PI / 2);
-  if (flip) geo.scale(1, 1, -1);
+  geo.scale(1, 1, flip ? -1 : 1);
   return geo;
 }
 
 function buildFin() {
   const shape = new Shape();
-  shape.moveTo(0.15, 0.2);
-  shape.lineTo(-1.45, 0.05);
-  shape.lineTo(-1.15, 1.85);
-  shape.lineTo(-0.05, 1.65);
+  shape.moveTo(0.45, 0);
+  shape.lineTo(-0.95, 0.05);
+  shape.lineTo(-1.25, 2.15);
+  shape.lineTo(-0.15, 1.95);
   shape.closePath();
-  return new ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: false });
+  const geo = new ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: false });
+  geo.translate(0, 0, -0.04);
+  return geo;
 }
 
 function buildTailplane(flip: boolean) {
   const shape = new Shape();
-  shape.moveTo(0.15, 0.12);
-  shape.lineTo(-1.05, 0.18);
-  shape.lineTo(-1.25, 1.35);
-  shape.lineTo(-0.15, 1.2);
+  shape.moveTo(0.55, 0.05);
+  shape.lineTo(-0.55, 0.02);
+  shape.lineTo(-1.15, 1.55);
+  shape.lineTo(0.05, 1.4);
   shape.closePath();
-  const geo = new ExtrudeGeometry(shape, { depth: 0.05, bevelEnabled: false });
+  const geo = new ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: false });
   geo.rotateX(-Math.PI / 2);
-  if (flip) geo.scale(1, 1, -1);
+  geo.scale(1, 1, flip ? -1 : 1);
   return geo;
 }
 
 function AirlinerMesh({ phase }: { phase: FlightPhase }) {
   const air = phase === "climb" || phase === "cruise" || phase === "descent";
-  const skin = useMemo(() => paintSkin(), []);
   const mark = useMemo(() => paintMark(), []);
+  const title = useMemo(() => paintTitle(), []);
+  const blur = useMemo(() => paintBlur(), []);
+  const streak = useMemo(() => paintStreak(), []);
   const fuse = useMemo(() => buildFuselage(), []);
   const wing = useMemo(() => buildWing(false), []);
   const wingL = useMemo(() => buildWing(true), []);
@@ -441,7 +469,7 @@ function AirlinerMesh({ phase }: { phase: FlightPhase }) {
   const fanR = useRef<Group>(null);
 
   useFrame(() => {
-    const spin = performance.now() / 40;
+    const spin = air ? performance.now() / 28 : performance.now() / 90;
     if (fanL.current) fanL.current.rotation.x = spin;
     if (fanR.current) fanR.current.rotation.x = spin;
   });
@@ -449,55 +477,75 @@ function AirlinerMesh({ phase }: { phase: FlightPhase }) {
   return (
     <group>
       <mesh geometry={fuse} castShadow>
-        <meshStandardMaterial map={skin} color="#f7f7f8" roughness={0.62} metalness={0.06} />
+        <meshStandardMaterial color={WHITE} roughness={0.45} metalness={0.08} />
       </mesh>
-      <mesh geometry={wing} position={[0.2, -0.15, 0.15]} rotation={[0.08, 0, 0]}>
-        <meshStandardMaterial color="#f4f5f7" roughness={0.7} side={DoubleSide} />
+      <mesh position={[0.1, -0.62, 0]} scale={[2.6, 0.28, 0.72]}>
+        <sphereGeometry args={[0.7, 18, 12]} />
+        <meshStandardMaterial color={BELLY} roughness={0.6} />
       </mesh>
-      <mesh geometry={wingL} position={[0.2, -0.15, -0.15]} rotation={[-0.08, 0, 0]}>
-        <meshStandardMaterial color="#f4f5f7" roughness={0.7} side={DoubleSide} />
+      <mesh geometry={wing} position={[0.15, -0.22, 0.12]} rotation={[0.07, 0, 0]} castShadow>
+        <meshStandardMaterial color="#eef1f4" roughness={0.55} side={DoubleSide} />
       </mesh>
-      <mesh position={[-0.85, 0.08, 4.95]}>
-        <boxGeometry args={[0.7, 0.22, 0.08]} />
+      <mesh geometry={wingL} position={[0.15, -0.22, -0.12]} rotation={[-0.07, 0, 0]} castShadow>
+        <meshStandardMaterial color="#eef1f4" roughness={0.55} side={DoubleSide} />
+      </mesh>
+      <mesh position={[-0.7, 0.42, 4.72]} rotation={[0.15, 0.35, 0]}>
+        <boxGeometry args={[0.42, 0.72, 0.06]} />
         <meshStandardMaterial color={RED} />
       </mesh>
-      <mesh position={[-0.85, 0.08, -4.95]}>
-        <boxGeometry args={[0.7, 0.22, 0.08]} />
+      <mesh position={[-0.7, 0.42, -4.72]} rotation={[-0.15, -0.35, 0]}>
+        <boxGeometry args={[0.42, 0.72, 0.06]} />
         <meshStandardMaterial color={RED} />
       </mesh>
-      <Engine fan={fanL} side={1} />
-      <Engine fan={fanR} side={-1} />
-      <mesh geometry={fin} position={[-3.55, 0.35, -0.04]}>
-        <meshStandardMaterial color={RED} roughness={0.5} side={DoubleSide} />
+      {[1, -1].map((side) => (
+        <group key={side}>
+          <mesh position={[0.55, 0.28, 0.98 * side]}>
+            <boxGeometry args={[4.6, 0.14, 0.05]} />
+            <meshStandardMaterial color="#16324a" roughness={0.25} metalness={0.15} />
+          </mesh>
+          <mesh position={[0.55, 0.12, 1.0 * side]}>
+            <boxGeometry args={[5.4, 0.07, 0.04]} />
+            <meshStandardMaterial color={RED} />
+          </mesh>
+          <mesh position={[1.15, 0.48, 1.02 * side]} rotation={[0, side === 1 ? 0 : Math.PI, 0]}>
+            <planeGeometry args={[2.5, 0.38]} />
+            <meshBasicMaterial map={title} transparent />
+          </mesh>
+        </group>
+      ))}
+      <Engine fan={fanL} blur={blur} side={1} />
+      <Engine fan={fanR} blur={blur} side={-1} />
+      <mesh geometry={fin} position={[-3.35, 0.42, 0]} castShadow>
+        <meshStandardMaterial color={RED} roughness={0.45} side={DoubleSide} />
       </mesh>
-      <mesh position={[-4.15, 1.35, 0.05]}>
-        <planeGeometry args={[0.7, 0.7]} />
+      <mesh position={[-3.85, 1.55, 0.06]}>
+        <planeGeometry args={[0.72, 0.72]} />
         <meshBasicMaterial map={mark} transparent />
       </mesh>
-      <mesh position={[-4.15, 1.35, -0.05]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[0.7, 0.7]} />
+      <mesh position={[-3.85, 1.55, -0.06]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[0.72, 0.72]} />
         <meshBasicMaterial map={mark} transparent />
       </mesh>
-      <mesh geometry={tailL} position={[-3.7, 0.42, 0.12]}>
-        <meshStandardMaterial color="#f7f8fa" roughness={0.6} side={DoubleSide} />
+      <mesh geometry={tailL} position={[-3.55, 0.48, 0.1]}>
+        <meshStandardMaterial color={WHITE} roughness={0.5} side={DoubleSide} />
       </mesh>
-      <mesh geometry={tailR} position={[-3.7, 0.42, -0.12]}>
-        <meshStandardMaterial color="#f7f8fa" roughness={0.6} side={DoubleSide} />
+      <mesh geometry={tailR} position={[-3.55, 0.48, -0.1]}>
+        <meshStandardMaterial color={WHITE} roughness={0.5} side={DoubleSide} />
       </mesh>
-      <mesh position={[3.85, 0.18, 0]} scale={[1.15, 0.72, 0.9]}>
-        <sphereGeometry args={[0.38, 16, 12]} />
-        <meshStandardMaterial color="#16324a" roughness={0.15} metalness={0.25} />
-      </mesh>
+      {[0.42, -0.42, 0.72, -0.72].map((z) => (
+        <mesh key={z} position={[3.35, 0.32, z]} rotation={[0, z > 0 ? 0.7 : -0.7, 0.15 * Math.sign(z)]}>
+          <boxGeometry args={[0.34, 0.2, 0.04]} />
+          <meshStandardMaterial color="#10283a" roughness={0.12} metalness={0.35} />
+        </mesh>
+      ))}
       {air ? (
         <group>
-          <mesh position={[-2.4, -0.78, 1.85]}>
-            <boxGeometry args={[2.8, 0.04, 0.08]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
-          </mesh>
-          <mesh position={[-2.4, -0.78, -1.85]}>
-            <boxGeometry args={[2.8, 0.04, 0.08]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.4} />
-          </mesh>
+          {[1, -1].map((side) => (
+            <mesh key={side} position={[-4.2, -0.55, 2.05 * side]}>
+              <planeGeometry args={[7.5, 0.55]} />
+              <meshBasicMaterial map={streak} transparent opacity={0.7} depthWrite={false} />
+            </mesh>
+          ))}
         </group>
       ) : null}
       {!air ? <Gear /> : null}
@@ -506,31 +554,35 @@ function AirlinerMesh({ phase }: { phase: FlightPhase }) {
   );
 }
 
-function Engine({ fan, side }: { fan: RefObject<Group | null>; side: 1 | -1 }) {
+function Engine({ fan, blur, side }: { fan: RefObject<Group | null>; blur: CanvasTexture; side: 1 | -1 }) {
   const z = 2.15 * side;
   return (
-    <group position={[0.55, -0.72, z]}>
+    <group position={[0.35, -0.68, z]}>
       <mesh rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.38, 0.46, 1.55, 20]} />
-        <meshStandardMaterial color="#e8eaef" roughness={0.4} metalness={0.28} />
+        <cylinderGeometry args={[0.34, 0.4, 1.45, 22]} />
+        <meshStandardMaterial color="#e7ebf0" roughness={0.35} metalness={0.35} />
       </mesh>
-      <mesh position={[0.72, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.28, 0.28, 0.08, 16]} />
-        <meshStandardMaterial color="#1c2430" />
+      <mesh position={[0.62, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.34, 0.045, 8, 22]} />
+        <meshStandardMaterial color="#f8fafc" metalness={0.45} roughness={0.3} />
       </mesh>
-      <group ref={fan} position={[0.78, 0, 0]}>
+      <mesh position={[0.7, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <circleGeometry args={[0.3, 20]} />
+        <meshBasicMaterial color="#1c2430" />
+      </mesh>
+      <group ref={fan} position={[0.74, 0, 0]}>
         <mesh rotation={[0, Math.PI / 2, 0]}>
-          <boxGeometry args={[0.02, 0.48, 0.07]} />
-          <meshStandardMaterial color="#d5dde6" />
-        </mesh>
-        <mesh rotation={[0, Math.PI / 2, Math.PI / 2]}>
-          <boxGeometry args={[0.02, 0.48, 0.07]} />
-          <meshStandardMaterial color="#d5dde6" />
+          <circleGeometry args={[0.28, 24]} />
+          <meshBasicMaterial map={blur} transparent />
         </mesh>
       </group>
-      <mesh position={[-0.15, 0.42, 0]}>
-        <boxGeometry args={[0.7, 0.08, 0.12]} />
-        <meshStandardMaterial color="#d5dae2" />
+      <mesh position={[-0.72, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.16, 0.28, 0.28, 14]} />
+        <meshStandardMaterial color="#2c3440" metalness={0.4} roughness={0.4} />
+      </mesh>
+      <mesh position={[0.05, 0.38, 0]}>
+        <boxGeometry args={[0.85, 0.1, 0.1]} />
+        <meshStandardMaterial color="#d5dbe3" />
       </mesh>
     </group>
   );
@@ -564,15 +616,15 @@ function Gear() {
 function NavLights() {
   return (
     <group>
-      <mesh position={[-0.4, 0.12, 5.05]}>
+      <mesh position={[-0.55, 0.55, 4.7]}>
         <sphereGeometry args={[0.07, 8, 8]} />
         <meshBasicMaterial color="#ef4444" />
       </mesh>
-      <mesh position={[-0.4, 0.12, -5.05]}>
+      <mesh position={[-0.55, 0.55, -4.7]}>
         <sphereGeometry args={[0.07, 8, 8]} />
         <meshBasicMaterial color="#22c55e" />
       </mesh>
-      <mesh position={[-4.55, 2.05, 0]}>
+      <mesh position={[-4.35, 2.45, 0]}>
         <sphereGeometry args={[0.05, 8, 8]} />
         <meshBasicMaterial color="#ffffff" />
       </mesh>
