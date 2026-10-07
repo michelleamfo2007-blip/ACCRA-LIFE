@@ -9,6 +9,7 @@ import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-
 import { HomeApp, InviteApp, TurfApp } from "@/components/game/ladder-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
 import { AlertsApp, BankApp, CalendarApp, CommunityApp, FeedApp, FleetApp, FootballApp, GuideApp, MarketApp, PetsApp, StoriesApp } from "@/components/game/town-apps";
+import { HUSTLES, MONEY_LINE, doHustle, hustleLabel, hustleLock, nextMoneyStep } from "@/lib/game/money-path";
 import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
@@ -460,7 +461,7 @@ export function Handset({
                 />
               ) : null}
               {app === "work" ? (
-                <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} onPromote={(jobId) => onSocial(askPromotion(life, jobId))} />
+                <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} onPromote={(jobId) => onSocial(askPromotion(life, jobId))} onHustle={(id) => onSocial(doHustle(life, id))} onOpen={setApp} />
               ) : null}
               {app === "goals" ? <GoalsScreen life={life} onBack={() => setApp("home")} /> : null}
               {app === "momo" ? <MomoScreen life={life} username={username} onBack={() => setApp("home")} onRepay={onRepay} onLogout={onLogout} /> : null}
@@ -633,7 +634,7 @@ function HomeScreen({
         </AppIcon>
       </div>
       <Section title="Life">
-        <AppIcon label="Jobs" color="#006B3F" onClick={() => onOpen("work")}>
+        <AppIcon label="Money" color="#006B3F" onClick={() => onOpen("work")}>
           <Briefcase />
         </AppIcon>
         <AppIcon label="Home" color="#0b3d6b" onClick={() => onOpen("house")}>
@@ -984,12 +985,43 @@ function BoutiqueScreen({ life, onBack, onWear }: { life: Life; onBack: () => vo
   );
 }
 
-function WorkScreen({ life, onBack, onWork, onPromote }: { life: Life; onBack: () => void; onWork: (jobId: string) => void; onPromote: (jobId: string) => void }) {
+function WorkScreen({ life, onBack, onWork, onPromote, onHustle, onOpen }: { life: Life; onBack: () => void; onWork: (jobId: string) => void; onPromote: (jobId: string) => void; onHustle: (id: string) => void; onOpen: (app: AppId) => void }) {
+  const step = nextMoneyStep(life);
+  const openLabel = step?.app === "biz" ? "Business" : step?.app === "fleet" ? "Fleet" : step?.app === "land" ? "Land" : step?.app === "bank" ? "Bank" : "School";
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f4f7fb] text-[#121212]">
-      <AppHeader title="Jobs" onBack={onBack} />
+      <AppHeader title="Make money" onBack={onBack} />
       <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 py-3">
-        <p className="px-1 text-xs text-[#5c6b82]">Career level {careerLevel(life)}. Ask for a promotion at the workplace when you have enough shifts.</p>
+        <div className="rounded-2xl bg-[#006B3F] px-4 py-3 text-white">
+          <p className="text-sm font-semibold">{MONEY_LINE}</p>
+          <p className="mt-1 text-xs text-white/80">Work, then save, then buy something that pays you back.</p>
+          {step ? (
+            <>
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-[#FCD116]">Next · {step.title}</p>
+              <p className="text-xs text-white/85">{step.detail}</p>
+              {step.app ? (
+                <button type="button" onClick={() => onOpen(step.app!)} className="mt-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#121212]">
+                  Open {openLabel}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <p className="mt-3 text-sm font-semibold">You are stacking. Keep buying things that earn while you sleep.</p>
+          )}
+        </div>
+        <p className="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-[#8b97ab]">Starter hustles</p>
+        {HUSTLES.map((verb) => {
+          const locked = hustleLock(life, verb);
+          return (
+            <button key={verb.id} type="button" disabled={Boolean(locked)} onClick={() => onHustle(verb.id)} className="block w-full rounded-2xl bg-white px-4 py-3 text-left shadow-sm disabled:opacity-50">
+              <span className="font-semibold">{verb.label}</span>
+              <span className="mt-1 block text-sm text-[#5c6b82]">
+                {hustleLabel(life, verb)} · {verb.minutes} min
+              </span>
+            </button>
+          );
+        })}
+        <p className="px-1 pt-2 text-xs font-semibold uppercase tracking-wide text-[#8b97ab]">Jobs · career {careerLevel(life)}</p>
         {JOBS.map((job) => {
           const held = rankOf(life, job.id);
           const title = JOB_RANKS[held.rank] ?? JOB_RANKS[0];

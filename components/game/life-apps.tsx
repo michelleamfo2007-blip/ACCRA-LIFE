@@ -3,9 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
 import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, nextMusicMove, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
-import { CROPS, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, collectRent, cropOf, farmSize, goToCourt, harvestBed, landOf, payGuards, plantCrop, plotsOf, rentDue, sellPlot, stageCost, waterBeds } from "@/lib/game/estate";
+import { CROPS, HOUSES, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, cropOf, evictTenant, farmSize, goToCourt, harvestBed, houseOf, landOf, payGuards, plantCrop, plotsOf, rentDue, rentRate, roomsOf, sellPlot, setRentAsk, stageCost, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
-import { CARS, CAR_PAINTS, INSURANCE, RESPRAY, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, insureCar, repaintCar, sellCar, tradeIn } from "@/lib/game/garage";
+import { CARS, CAR_PAINTS, INSURANCE, PLATE_FEE, RESPRAY, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, insureCar, nameCar, plateCar, repaintCar, sellCar, tradeIn } from "@/lib/game/garage";
 import { CLINIC_FEE, CLINIC_NHIS, MEDS_FEE, NHIS_FEE, buyNhis, hasNhis, restSick, seeClinic, selfMedicate, sickness } from "@/lib/game/health";
 import { MAX_ORDERS, STYLES, TAILOR_COLORS, collectOrder, orderStyle, styleOf, wearFit } from "@/lib/game/tailor";
 import { moveHome } from "@/lib/game/ladder";
@@ -80,6 +80,7 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
   const here = plots.filter((plot) => plot.area === area);
   return (
     <Screen title="Land and houses" life={life} color="#6b4423" onBack={onBack}>
+      <p className="text-xs text-[#5c6b82]">Buy land, pick the house, build it, then live in it or rent the rooms. Nima is cheap. Airport Residential is not. Stack plots and the rent stacks too.</p>
       <PlotYard
         area={area}
         plots={plots}
@@ -126,18 +127,56 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
               </div>
             ) : plot.guard === "court" ? (
               <p className="mt-3 text-sm text-[#5c6b82]">The court is clearing the land guards. Back in {wait((plot.guardUntil ?? life.minutes) - life.minutes)}.</p>
+            ) : plot.stage === 0 ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm">{houseOf(plot)?.line ?? "Choose what you are building. Bigger houses cost more at every stage and rent for more."}</p>
+                <div className="flex flex-wrap gap-2">
+                  {HOUSES.map((house) => (
+                    <Btn key={house.id} kind={plot.house === house.id ? "dark" : "light"} onClick={() => onApply(chooseHouse(life, plot.id, house.id))}>
+                      {house.label}
+                    </Btn>
+                  ))}
+                </div>
+                {plot.house ? (
+                  <Btn kind="dark" onClick={() => onApply(buildNext(life, plot.id))}>
+                    Start {STAGES[1].toLowerCase()} · {cedis(stageCost(plot))}
+                  </Btn>
+                ) : null}
+              </div>
             ) : finished ? (
               <div className="mt-3 space-y-2">
                 <p className="text-sm">
-                  {plot.tenants}/{land.rooms} rooms let · {cedis(land.rent)} a room a day
+                  {houseOf(plot)?.label ?? "House"} · {plot.tenants}/{roomsOf(plot)} rooms let · {cedis(rentRate(plot))} a room a day
                 </p>
                 <p className={`text-sm font-semibold ${due > 0 ? "text-[#006B3F]" : "text-[#5c6b82]"}`}>{due > 0 ? `Rent due: ${cedis(due)}` : "No rent due yet."}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Btn kind={(plot.rentAsk ?? 1) < 1 ? "dark" : "light"} onClick={() => onApply(setRentAsk(life, plot.id, 0.8))}>
+                    Lower rent
+                  </Btn>
+                  <Btn kind={(plot.rentAsk ?? 1) === 1 ? "dark" : "light"} onClick={() => onApply(setRentAsk(life, plot.id, 1))}>
+                    Fair rent
+                  </Btn>
+                  <Btn kind={(plot.rentAsk ?? 1) > 1 ? "dark" : "light"} onClick={() => onApply(setRentAsk(life, plot.id, 1.35))}>
+                    Raise rent
+                  </Btn>
+                </div>
+                {(plot.people ?? []).map((person) => (
+                  <div key={person.id} className="flex items-center gap-2 rounded-xl bg-[#f6f1ea] px-3 py-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{person.name}</span>
+                      <span className="block text-xs text-[#5c6b82]">{person.note}</span>
+                    </span>
+                    <button type="button" onClick={() => onApply(evictTenant(life, plot.id, person.id))} className="text-xs font-semibold text-[#CE1126]">
+                      Evict
+                    </button>
+                  </div>
+                ))}
                 <div className="grid grid-cols-2 gap-2">
                   <Btn kind="green" disabled={due < 1} onClick={() => onApply(collectRent(life, plot.id))}>
                     Collect rent
                   </Btn>
-                  <Btn kind="light" disabled={plot.tenants >= land.rooms} onClick={() => onApply(advertRooms(life, plot.id))}>
-                    Find tenants ₵50
+                  <Btn kind="light" disabled={plot.tenants >= roomsOf(plot)} onClick={() => onApply(advertRooms(life, plot.id))}>
+                    Find a tenant ₵50
                   </Btn>
                 </div>
                 {life.homeId === "own-house" ? (
@@ -479,14 +518,18 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
   const hail = hailWait(life);
   const insured = (life.car?.insuredUntil ?? 0) > life.minutes;
   const [selling, setSelling] = useState(false);
+  const [nick, setNick] = useState(life.car?.name ?? "");
+  const [plate, setPlate] = useState(life.car?.plate ?? "");
   return (
     <Screen title="Garage" life={life} color="#243044" onBack={onBack}>
+      <p className="text-xs text-[#5c6b82]">Buy a car, name it, put your plate on it, drive it, or let it work the ride app. A finished house is where it sleeps.</p>
       {car && life.car ? (
         <Card tone={insured ? "good" : "warn"}>
           <div className="flex items-center gap-3">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-[#e7edf5] text-2xl">{car.emoji}</span>
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold">{car.label}</span>
+              <span className="block font-semibold">{life.car.name ? `${life.car.name} · ${car.short}` : car.label}</span>
+              {life.car.plate ? <span className="mt-1 inline-block rounded bg-[#f5c518] px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-[#121212]">{life.car.plate}</span> : null}
               <span className={`block text-xs ${insured ? "text-[#006B3F]" : "text-[#CE1126]"}`}>{insured ? `Insured · ${wait(life.car.insuredUntil - life.minutes)} left` : "No insurance. Checkpoints will fine you."}</span>
             </span>
           </div>
@@ -496,6 +539,18 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
             {carSpoilt(life) ? "Spoilt. Kojo, Esi and Kwame are at the fitting shop on the map." : `Condition ${carCondition(life)}%${carCondition(life) < 35 ? " · it is knocking" : ""}`}
           </p>
           <Bar value={carCondition(life) / 100} color={carSpoilt(life) || carCondition(life) < 35 ? "#CE1126" : "#006B3F"} />
+          <div className="mt-3 flex gap-2">
+            <input value={nick} onChange={(event) => setNick(event.target.value)} placeholder="Name the car" maxLength={16} className="h-10 min-w-0 flex-1 rounded-full bg-[#f4f7fb] px-3 text-sm outline-none" />
+            <Btn kind="dark" onClick={() => onApply(nameCar(life, nick))}>
+              Name
+            </Btn>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input value={plate} onChange={(event) => setPlate(event.target.value.toUpperCase())} placeholder="GR 2040" maxLength={8} className="h-10 min-w-0 flex-1 rounded-full bg-[#f4f7fb] px-3 text-sm uppercase outline-none" />
+            <Btn kind="gold" onClick={() => onApply(plateCar(life, plate))}>
+              Plate {cedis(PLATE_FEE)}
+            </Btn>
+          </div>
           <p className="mt-3 text-xs font-semibold text-[#5c6b82]">Colour · respray {cedis(RESPRAY)}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {CAR_PAINTS.map((paint) => {

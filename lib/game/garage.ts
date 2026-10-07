@@ -11,6 +11,7 @@ export const CARS = [
 export const INSURANCE = 150;
 export const FUEL_PRICE = 0.6;
 export const RESPRAY = 40;
+export const PLATE_FEE = 120;
 const HAIL_GAP = 90;
 const WEEK = 10080;
 
@@ -108,6 +109,27 @@ export function insureCar(life: Life): StepResult {
   next.cash -= INSURANCE;
   next.car = { ...life.car, insuredUntil: Math.max(life.car.insuredUntil, life.minutes) + WEEK };
   return { life: next, notes: ["Insured for 7 days. The sticker is on the windscreen."] };
+}
+
+export function nameCar(life: Life, raw: string): StepResult {
+  if (!life.car) return { life, notes: [], error: "Buy a car first." };
+  const name = raw.trim().slice(0, 16);
+  if (name.length < 2) return { life, notes: [], error: "Give the car a real name." };
+  const next = cloneLife(life);
+  next.car = { ...life.car, name };
+  return { life: next, notes: [`The car answers to ${name} now.`] };
+}
+
+export function plateCar(life: Life, raw: string): StepResult {
+  if (!life.car) return { life, notes: [], error: "Buy a car first." };
+  const plate = raw.trim().toUpperCase().replace(/\s+/g, " ").slice(0, 8);
+  if (!/^[A-Z0-9][A-Z0-9 -]{1,7}$/.test(plate)) return { life, notes: [], error: "Plates are letters and numbers, up to 8 characters." };
+  if (life.car.plate === plate) return { life, notes: [], error: "That plate is already on the car." };
+  if (life.cash < PLATE_FEE) return { life, notes: [], error: `A custom plate costs ${cedis(PLATE_FEE)}.` };
+  const next = cloneLife(life);
+  next.cash -= PLATE_FEE;
+  next.car = { ...life.car, plate };
+  return { life: next, notes: [`DVLA plate ${plate} is on the car. ${cedis(PLATE_FEE)}.` ] };
 }
 
 export function repaintCar(life: Life, hex: string): StepResult {

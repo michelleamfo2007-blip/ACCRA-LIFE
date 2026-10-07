@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, ExtrudeGeometry, RepeatWrapping, Shape, SphereGeometry, SRGBColorSpace, type PerspectiveCamera } from "three";
+import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
+import { modelFor, PlacedModel } from "@/components/game/kit-mesh";
 import { Figure } from "@/components/game/low-poly-human";
-import { DIVIDERS, FIXTURES, fixtureAt, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
+import { DIVIDERS, FIXTURES, fixtureAt, hangSpot, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
 export function Apartment({
   life,
@@ -114,11 +116,13 @@ export function Apartment({
         const item = SHOP.find((entry) => entry.id === piece.id);
         if (!item || item.consume) return null;
         const active = picked === piece.id;
+        const hung = hangSpot(item.id, piece.x, piece.z, span);
+        const onBed = item.id === "net";
         return (
           <group
             key={piece.id}
-            position={[piece.x, 0, piece.z]}
-            rotation={[0, (piece.rot * Math.PI) / 2, 0]}
+            position={onBed ? [bedSpot.x, 0, bedSpot.z] : [hung?.x ?? piece.x, hung?.y ?? 0, hung?.z ?? piece.z]}
+            rotation={[0, ((hung?.rot ?? piece.rot) * Math.PI) / 2, 0]}
             onClick={(event) => {
               event.stopPropagation();
               onPick?.(piece.id);
@@ -344,214 +348,37 @@ function PlacePad({ onDrag, span = 0 }: { onDrag: (x: number, z: number) => void
 
 function Prop({ item }: { item: ShopItem }) {
   const color = item.color;
+  const kit = modelFor(item);
   if (item.kind === "wall") {
     return <Box color={color} position={[0, 0.85, 0]} size={[3.2, 1.7, 0.16]} flat={false} />;
   }
-  if (item.kind === "bed") {
-    return <GuestBed color={color} wide={item.size.startsWith("2")} />;
-  }
-  if (item.kind === "chair") {
-    return (
-      <group>
-        <mesh position={[0, 0.34, 0.02]}>
-          <cylinderGeometry args={[0.2, 0.22, 0.08, 18]} />
-          <meshStandardMaterial color={color} roughness={0.55} />
-        </mesh>
-        <Cushion color={color} position={[0, 0.58, -0.18]} size={[0.4, 0.32, 0.1]} />
-        <Pole color="#4a3424" position={[-0.16, 0.16, -0.14]} height={0.3} />
-        <Pole color="#4a3424" position={[0.16, 0.16, -0.14]} height={0.3} />
-        <Pole color="#4a3424" position={[-0.16, 0.16, 0.16]} height={0.3} />
-        <Pole color="#4a3424" position={[0.16, 0.16, 0.16]} height={0.3} />
-      </group>
-    );
-  }
-  if (item.kind === "sofa") {
-    return <Lounge color={color} wide={item.size.startsWith("3") ? 1.9 : 1.55} />;
-  }
-  if (item.kind === "table") {
-    return (
-      <group>
-        <Cushion color={color} position={[0, 0.46, 0]} size={[1.2, 0.08, 0.72]} />
-        <Pole color="#6b4428" position={[-0.46, 0.22, -0.26]} height={0.42} />
-        <Pole color="#6b4428" position={[0.46, 0.22, -0.26]} height={0.42} />
-        <Pole color="#6b4428" position={[-0.46, 0.22, 0.26]} height={0.42} />
-        <Pole color="#6b4428" position={[0.46, 0.22, 0.26]} height={0.42} />
-      </group>
-    );
-  }
-  if (item.kind === "fan") {
-    return (
-      <group>
-        <Pole color="#9aa3ad" position={[0, 0.55, 0]} height={1.05} radius={0.03} />
-        <mesh position={[0, 1.08, 0.08]}>
-          <cylinderGeometry args={[0.2, 0.2, 0.06, 16]} />
-          <meshLambertMaterial color={color} />
-        </mesh>
-        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.18, 0.2, 0.04, 16]} />
-          <meshLambertMaterial color="#c5ced6" />
-        </mesh>
-      </group>
-    );
-  }
-  if (item.kind === "ac") {
-    return <Box color={color} position={[0, 0.7, 0]} size={[0.85, 0.28, 0.28]} />;
-  }
-  if (item.kind === "lamp") {
-    return (
-      <group>
-        <Pole color="#d7dde4" position={[0, 0.38, 0]} height={0.7} radius={0.035} />
-        <mesh position={[0, 0.78, 0]}>
-          <sphereGeometry args={[0.16, 16, 12]} />
-          <meshLambertMaterial color={color} emissive={color} emissiveIntensity={0.35} />
-        </mesh>
-        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.12, 0.14, 0.04, 12]} />
-          <meshLambertMaterial color="#c5ced6" />
-        </mesh>
-      </group>
-    );
-  }
-  if (item.kind === "fridge") {
-    const tall = item.id === "double-fridge";
-    return <Icebox tall={tall} color={color} />;
-  }
-  if (item.kind === "stove") {
-    return <Cooker />;
-  }
-  if (item.kind === "sink") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.36, 0]} size={[0.7, 0.42, 0.46]} />
-        <Box color="#f7f7f7" position={[0, 0.6, 0]} size={[0.36, 0.06, 0.24]} />
-      </group>
-    );
-  }
-  if (item.kind === "toilet") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.22, 0.08]} size={[0.36, 0.22, 0.42]} />
-        <Box color={color} position={[0, 0.42, -0.16]} size={[0.32, 0.4, 0.12]} />
-      </group>
-    );
-  }
-  if (item.kind === "shower") {
-    return <Box color={color} position={[0, 0.7, 0]} size={[0.55, 1.3, 0.55]} />;
-  }
-  if (item.kind === "tv") {
-    const wide = item.size.startsWith("2");
-    return <Screen wide={wide} color={color} />;
-  }
-  if (item.kind === "desk") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.42, 0]} size={[0.9, 0.08, 0.5]} />
-        <Box color="#8a623c" position={[-0.36, 0.2, 0]} size={[0.06, 0.4, 0.4]} />
-        <Box color="#8a623c" position={[0.36, 0.2, 0]} size={[0.06, 0.4, 0.4]} />
-        <Box color="#9aa7b2" position={[0.12, 0.52, 0]} size={[0.28, 0.16, 0.2]} />
-        <Box color="#f3b7c4" position={[-0.28, 0.28, 0.28]} size={[0.22, 0.28, 0.22]} />
-      </group>
-    );
-  }
-  if (item.kind === "guitar") {
-    return (
-      <group>
-        <Box color="#5c4030" position={[0, 0.55, 0]} size={[0.06, 0.7, 0.06]} />
-        <Box color={color} position={[0, 0.22, 0]} size={[0.28, 0.18, 0.18]} />
-      </group>
-    );
-  }
-  if (item.kind === "weights") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.22, 0]} size={[0.7, 0.16, 0.22]} />
-        <Box color="#c4563a" position={[0, 0.34, 0]} size={[0.36, 0.1, 0.1]} />
-      </group>
-    );
-  }
-  if (item.kind === "plant") {
-    return (
-      <group>
-        <mesh position={[0, 0.14, 0]}>
-          <cylinderGeometry args={[0.12, 0.1, 0.22, 12]} />
-          <meshLambertMaterial color="#c4a46a" />
-        </mesh>
-        <mesh position={[0, 0.42, 0]}>
-          <sphereGeometry args={[0.2, 12, 10]} />
-          <meshLambertMaterial color={color} />
-        </mesh>
-        <mesh position={[-0.12, 0.58, 0.04]}>
-          <sphereGeometry args={[0.12, 10, 8]} />
-          <meshLambertMaterial color={item.accent ?? "#1f8a70"} />
-        </mesh>
-        <mesh position={[0.14, 0.56, -0.02]}>
-          <sphereGeometry args={[0.11, 10, 8]} />
-          <meshLambertMaterial color={color} />
-        </mesh>
-      </group>
-    );
-  }
-  if (item.kind === "rug") {
-    return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <circleGeometry args={[0.85, 24]} />
-        <meshLambertMaterial color={color} />
-      </mesh>
-    );
-  }
-  if (item.kind === "curtain") {
-    return <Box color={color} position={[0, 0.7, 0]} size={[0.7, 1.2, 0.08]} />;
-  }
-  if (item.kind === "tank") {
-    return (
-      <group>
-        <Box color="#1c1c1c" position={[0, 0.16, 0]} size={[0.7, 0.16, 0.4]} />
-        <Box color={color} position={[0, 0.48, 0]} size={[0.66, 0.42, 0.36]} />
-        <Box color="#1c1c1c" position={[0, 0.74, 0]} size={[0.7, 0.08, 0.4]} />
-      </group>
-    );
-  }
-  if (item.kind === "statue" || item.kind === "vault") {
-    return <Box color={color} position={[0, item.kind === "vault" ? 0.45 : 0.32, 0]} size={item.kind === "vault" ? [0.55, 0.85, 0.4] : [0.4, 0.55, 0.28]} />;
-  }
-  if (item.kind === "dog" || item.kind === "cat") {
-    const small = item.kind === "cat";
-    return (
-      <group>
-        <Box color={color} position={[0, small ? 0.16 : 0.22, 0]} size={small ? [0.42, 0.18, 0.2] : [0.58, 0.26, 0.26]} />
-        <Box color={color} position={[small ? 0.2 : 0.28, small ? 0.26 : 0.36, 0]} size={small ? [0.16, 0.14, 0.14] : [0.22, 0.18, 0.18]} />
-      </group>
-    );
-  }
-  if (item.kind === "bird") {
-    return (
-      <group>
-        <Box color="#5c4030" position={[0, 0.35, 0]} size={[0.06, 0.7, 0.06]} />
-        <mesh position={[0, 0.75, 0]}>
-          <sphereGeometry args={[0.12, 10, 8]} />
-          <meshLambertMaterial color={color} />
-        </mesh>
-      </group>
-    );
-  }
-  if (item.kind === "throne") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.28, 0]} size={[0.55, 0.16, 0.5]} />
-        <Box color={color} position={[0, 0.7, -0.18]} size={[0.55, 0.7, 0.12]} />
-        <Box color="#c4a46a" position={[0, 1.1, -0.18]} size={[0.12, 0.16, 0.12]} />
-      </group>
-    );
-  }
-  if (item.kind === "painting") {
-    return (
-      <group position={[0, 0.72, 0]}>
-        <Box color="#f4efe6" position={[0, 0, 0]} size={[0.78, 0.62, 0.04]} />
-        <Box color={color} position={[0, 0, 0.03]} size={[0.62, 0.46, 0.02]} />
-        <Box color={item.accent ?? "#FCD116"} position={[-0.08, -0.04, 0.045]} size={[0.22, 0.16, 0.01]} />
-      </group>
-    );
-  }
+  if (item.kind === "fan") return <StandingFan />;
+  if (item.id === "bucket") return <BathBucket color={color} />;
+  if (item.id === "bowl-set") return <BowlAndPitcher />;
+  if (item.id === "curtains") return <SilkCurtains color={color} />;
+  if (item.kind === "tank") return <Aquarium />;
+  if (item.kind === "statue") return <GoldLion />;
+  if (item.kind === "dog") return <CompoundDog />;
+  if (item.kind === "cat") return <HouseCat />;
+  if (item.kind === "bird") return <AfricanGrey />;
+  if (item.kind === "throne") return <StuddedThrone />;
+  if (item.kind === "painting") return <OldPainting />;
+  if (item.kind === "vault") return <BullionVault />;
+  if (item.id === "solar") return <SolarKit />;
+  if (item.kind === "guitar") return <GuitarProp color={color} />;
+  if (item.kind === "weights") return <WeightRack />;
+  if (item.kind === "ac") return <WallAircon />;
+  if (item.id === "kente") return <KenteCloth />;
+  if (item.id === "net") return <MosquitoNet />;
+  if (item.id === "pillow") return <BedPillow />;
+  if (item.id === "pan") return <CookingPot />;
+  if (item.id === "kerosene") return <GasCooker simple />;
+  if (item.kind === "stove") return <GasCooker />;
+  if (item.id === "counter") return <KitchenCounter />;
+  if (item.kind === "sink") return <KitchenSink />;
+  if (item.kind === "tv") return <LuxuryTv wide={item.size.startsWith("2")} />;
+  if (item.id === "transistor") return <TransistorRadio />;
+  if (kit) return <PlacedModel file={kit.file} tall={kit.tall} span={kit.span} />;
   if (item.kind === "jet") {
     const heavy = item.id === "heavy-jet";
     const body = heavy ? 1.55 : 1.25;
@@ -755,23 +582,10 @@ function GuestBed({ color, wide }: { color: string; wide?: boolean }) {
   );
 }
 
-function Bed({ color, grade, wide, onGo }: { color: string; grade: HomeGrade; wide?: boolean; onGo: (id: string) => void }) {
-  const frame = grade === "hall" ? "#8b9094" : grade === "low" ? "#5c4030" : grade === "high" ? "#c4a46a" : "#6b4428";
-  const sheet = grade === "low" ? "#d9cbb6" : grade === "high" ? "#fffdf8" : "#f7f4ef";
-  const span = wide ? 2.2 : 1.7;
-  const linen = wide ? 1.95 : 1.48;
+function Bed({ wide, onGo }: { color: string; grade: HomeGrade; wide?: boolean; onGo: (id: string) => void }) {
   return (
     <group position={[2.15, 0, -2.35]} onClick={(event) => { event.stopPropagation(); onGo("bed"); }}>
-      <Pole color={frame} position={[-span * 0.38, 0.12, -0.82]} height={0.22} radius={0.045} />
-      <Pole color={frame} position={[span * 0.38, 0.12, -0.82]} height={0.22} radius={0.045} />
-      <Pole color={frame} position={[-span * 0.38, 0.12, 0.82]} height={0.22} radius={0.045} />
-      <Pole color={frame} position={[span * 0.38, 0.12, 0.82]} height={0.22} radius={0.045} />
-      <Cushion color={frame} position={[0, 0.28, 0]} size={[span, 0.1, 2.05]} />
-      <Cushion color={sheet} position={[0, 0.4, 0.08]} size={[linen, 0.22, 1.72]} />
-      <Cushion color={color} position={[0, 0.46, 0.42]} size={[linen * 0.92, 0.12, 1.05]} />
-      <Cushion color={frame} position={[0, 0.72, -0.96]} size={[span, 0.62, 0.1]} />
-      <Puff color={grade === "high" ? "#fff" : "#f4efe6"} position={[-0.32, 0.52, -0.55]} size={[0.42, 0.12, 0.26]} />
-      <Puff color="#fff" position={[0.32, 0.52, -0.55]} size={[0.42, 0.12, 0.26]} />
+      <PlacedModel file={wide ? "furniture/bedDouble.glb" : "furniture/bedSingle.glb"} span={wide ? 2.15 : 1.9} />
     </group>
   );
 }
@@ -779,7 +593,7 @@ function Bed({ color, grade, wide, onGo }: { color: string; grade: HomeGrade; wi
 function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
   return (
     <group position={[-1.55, 0, -0.15]} onClick={(event) => { event.stopPropagation(); onGo("chair"); }}>
-      <Lounge color={color} wide={1.7} />
+      <PlacedModel file="furniture/loungeSofa.glb" span={1.7} />
     </group>
   );
 }
@@ -787,7 +601,7 @@ function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
 function Fridge({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[4.55, 0, 1.7]} onClick={(event) => { event.stopPropagation(); onGo("cooler"); }}>
-      <Icebox tall color="#f4f7fa" />
+      <PlacedModel file="furniture/kitchenFridgeLarge.glb" tall={1.45} />
     </group>
   );
 }
@@ -795,7 +609,9 @@ function Fridge({ onGo }: { onGo: (id: string) => void }) {
 function Stove({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[4.4, 0, 3.05]} onClick={(event) => { event.stopPropagation(); onGo("stove"); }}>
-      <Cooker />
+      <group scale={1.25}>
+        <GasCooker />
+      </group>
     </group>
   );
 }
@@ -803,15 +619,7 @@ function Stove({ onGo }: { onGo: (id: string) => void }) {
 function Toilet({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[-4.7, 0, 3.3]} onClick={(event) => { event.stopPropagation(); onGo("toilet"); }}>
-      <mesh position={[0, 0.22, 0.08]}>
-        <sphereGeometry args={[0.2, 16, 12]} />
-        <meshLambertMaterial color="#f7f7f7" />
-      </mesh>
-      <mesh position={[0, 0.28, 0.08]} rotation={[-Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.16, 0.035, 8, 16]} />
-        <meshLambertMaterial color="#e7eef2" />
-      </mesh>
-      <Cushion color="#f4f7f8" position={[0, 0.48, -0.16]} size={[0.34, 0.42, 0.14]} />
+      <PlacedModel file="furniture/toilet.glb" tall={0.72} />
     </group>
   );
 }
@@ -819,18 +627,7 @@ function Toilet({ onGo }: { onGo: (id: string) => void }) {
 function Shower({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[-5.15, 0, 1.9]} onClick={(event) => { event.stopPropagation(); onGo("shower"); }}>
-      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.38, 0.4, 0.06, 16]} />
-        <meshLambertMaterial color="#e7eef3" />
-      </mesh>
-      <mesh position={[0, 0.7, -0.32]}>
-        <boxGeometry args={[0.72, 1.15, 0.04]} />
-        <meshLambertMaterial color="#d5e4f2" transparent opacity={0.45} />
-      </mesh>
-      <mesh position={[0, 1.22, -0.2]}>
-        <sphereGeometry args={[0.06, 10, 8]} />
-        <meshLambertMaterial color="#c5d0da" />
-      </mesh>
+      <PlacedModel file="furniture/shower.glb" tall={1.45} />
     </group>
   );
 }
@@ -838,16 +635,9 @@ function Shower({ onGo }: { onGo: (id: string) => void }) {
 function Radio({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[0.35, 0, 1.35]} onClick={(event) => { event.stopPropagation(); onGo("radio"); }}>
-      <Cushion color="#c4894f" position={[0, 0.24, 0]} size={[0.46, 0.36, 0.32]} />
-      <mesh position={[-0.08, 0.26, 0.16]}>
-        <circleGeometry args={[0.07, 12]} />
-        <meshLambertMaterial color="#1c2430" />
-      </mesh>
-      <mesh position={[0.1, 0.26, 0.16]}>
-        <circleGeometry args={[0.07, 12]} />
-        <meshLambertMaterial color="#1c2430" />
-      </mesh>
-      <Box color="#2c3338" position={[0, 0.5, 0]} size={[0.3, 0.16, 0.18]} />
+      <group scale={1.35}>
+        <TransistorRadio />
+      </group>
     </group>
   );
 }

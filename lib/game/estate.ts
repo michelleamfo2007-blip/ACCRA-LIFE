@@ -1,13 +1,35 @@
 import { BAG_LIMIT, GOODS, bagCount } from "@/lib/game/trade";
-import { cedis, cloneLife, logLine, passTime, seasonFlags, type FarmBed, type Life, type Plot, type StepResult } from "@/lib/game/world";
+import { cedis, cloneLife, logLine, passTime, seasonFlags, type FarmBed, type Life, type Plot, type StepResult, type Tenant } from "@/lib/game/world";
 
 export const LAND = [
+  { id: "nima", label: "Nima", price: 4500, rooms: 3, rent: 22, blurb: "Tight streets, cheap land, everybody knows everybody." },
   { id: "kasoa", label: "Kasoa", price: 8000, rooms: 4, rent: 40, blurb: "Far, dusty, and growing fast." },
   { id: "ashaiman", label: "Ashaiman", price: 12000, rooms: 4, rent: 55, blurb: "Close to Tema. Workers need rooms." },
   { id: "madina", label: "Madina", price: 20000, rooms: 5, rent: 80, blurb: "Market town energy. Students and traders." },
   { id: "spintex", label: "Spintex", price: 35000, rooms: 6, rent: 130, blurb: "Gated estates and young families." },
   { id: "east-legon", label: "East Legon", price: 90000, rooms: 6, rent: 300, blurb: "Embassy row. Rent paid in advance." },
+  { id: "airport", label: "Airport Residential", price: 160000, rooms: 8, rent: 480, blurb: "The expensive side. Quiet roads, heavy gates." },
 ] as const;
+
+export const HOUSES = [
+  { id: "single", label: "Single room", rooms: 1, cost: 0.7, rent: 0.6, line: "One room. Yours." },
+  { id: "chamber", label: "Chamber and hall", rooms: 2, cost: 0.85, rent: 0.8, line: "A hall to sit, a room to sleep." },
+  { id: "two", label: "2-bedroom", rooms: 3, cost: 1, rent: 1, line: "Two rooms and a hall." },
+  { id: "three", label: "3-bedroom", rooms: 4, cost: 1.25, rent: 1.2, line: "Space for a family." },
+  { id: "duplex", label: "Duplex", rooms: 6, cost: 1.6, rent: 1.5, line: "Upstairs and downstairs." },
+  { id: "mansion", label: "Mansion", rooms: 8, cost: 2.2, rent: 2, line: "The compound talks about you." },
+] as const;
+
+const TENANT_BOOK: { name: string; note: string; pays: Tenant["pays"] }[] = [
+  { name: "Auntie Adwoa", note: "Pays on the first. Cooks for the compound.", pays: "steady" },
+  { name: "Kwesi the driver", note: "Out before dawn. Quiet.", pays: "steady" },
+  { name: "Ama from Legon", note: "Student. Sometimes late, always sorry.", pays: "late" },
+  { name: "Uncle Yaw", note: "Knows everybody on the street.", pays: "steady" },
+  { name: "Efua and her baby", note: "Needs the room more than she needs a lecture.", pays: "late" },
+  { name: "Kojo the DJ", note: "Speakers after midnight. The neighbours have opinions.", pays: "trouble" },
+  { name: "Sister Akos", note: "Church on Sunday. Rent before church.", pays: "steady" },
+  { name: "Mr Mensah", note: "Says he works in imports. The visitors are odd.", pays: "trouble" },
+];
 
 export const STAGES = ["Bare plot", "Foundation", "Blocks and walls", "Roofing", "Plaster and paint", "Finished house"];
 const STAGE_COST = [0.3, 0.45, 0.3, 0.25, 0.2];
@@ -21,9 +43,23 @@ export function landOf(area: string) {
   return LAND.find((item) => item.id === area) ?? LAND[0];
 }
 
+export function houseOf(plot: Plot) {
+  return HOUSES.find((item) => item.id === plot.house) ?? null;
+}
+
+export function roomsOf(plot: Plot) {
+  return houseOf(plot)?.rooms ?? landOf(plot.area).rooms;
+}
+
+export function rentRate(plot: Plot) {
+  const house = houseOf(plot);
+  const base = landOf(plot.area).rent * (house?.rent ?? 1) * (plot.rentAsk ?? 1);
+  return Math.max(1, Math.round(base));
+}
+
 export function stageCost(plot: Plot) {
   if (plot.stage >= STAGES.length - 1) return 0;
-  return Math.round(landOf(plot.area).price * STAGE_COST[plot.stage]);
+  return Math.round(landOf(plot.area).price * STAGE_COST[plot.stage] * (houseOf(plot)?.cost ?? 1));
 }
 
 /** Seconds left before the next stage can start. Wall clock, so a stage is a few seconds. */
@@ -42,11 +78,29 @@ export function plotsOf(life: Life) {
   return (life.plots ?? []).map((plot) => settleGuard(life, plot));
 }
 
+function roster(plot: Plot): Tenant[] {
+  if (plot.people?.length) return plot.people;
+  return Array.from({ length: plot.tenants }, (_, index) => ({
+    id: `old-${plot.id}-${index}`,
+    name: `Tenant ${index + 1}`,
+    note: "Been in the room a while.",
+    pays: "steady" as const,
+    since: plot.lastRent,
+  }));
+}
+
+function payShare(person: Tenant) {
+  if (person.pays === "late") return 0.55;
+  if (person.pays === "trouble") return 0;
+  return 1;
+}
+
 export function rentDue(life: Life, plot: Plot) {
   if (plot.stage < STAGES.length - 1 || plot.tenants < 1) return 0;
   const days = Math.min(RENT_DAYS_CAP, (life.minutes - plot.lastRent) / 1440);
   const returnees = seasonFlags(life.minutes).detty ? 1.5 : 1;
-  return Math.max(0, Math.floor(days * plot.tenants * landOf(plot.area).rent * returnees));
+  const share = roster(plot).reduce((sum, person) => sum + payShare(person), 0);
+  return Math.max(0, Math.floor(days * share * rentRate(plot) * returnees));
 }
 
 function withPlot(life: Life, plotId: string, change: (plot: Plot) => Plot) {
@@ -87,11 +141,58 @@ export function goToCourt(life: Life, plotId: string): StepResult {
   return { life: next, notes: ["You filed at the Lands Commission. The police will clear the plot within a day."] };
 }
 
+export function chooseHouse(life: Life, plotId: string, houseId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  const house = HOUSES.find((item) => item.id === houseId);
+  if (!plot || !house) return { life, notes: [], error: "That house is not on the plan." };
+  if (plot.stage > 0) return { life, notes: [], error: "The foundation is already down. This is the house you are building." };
+  const next = withPlot(life, plotId, (item) => ({ ...item, house: house.id }));
+  return { life: next, notes: [`You are building a ${house.label.toLowerCase()} in ${landOf(plot.area).label}. ${house.line}`] };
+}
+
+export function setRentAsk(life: Life, plotId: string, ask: number): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot || plot.stage < STAGES.length - 1) return { life, notes: [], error: "Finish the house before you set rent." };
+  if (ask < 0.8 || ask > 1.4) return { life, notes: [], error: "That rent will empty the street or the rooms." };
+  const people = roster(plot);
+  let staying = people;
+  const notes: string[] = [];
+  if (ask > (plot.rentAsk ?? 1) && people.length) {
+    const walker = people.find((person) => person.pays !== "steady");
+    if (walker) {
+      staying = people.filter((person) => person.id !== walker.id);
+      notes.push(`${walker.name} heard the new rent and left.`);
+    }
+  }
+  const next = withPlot(life, plotId, (item) => ({ ...item, rentAsk: ask, people: staying, tenants: staying.length }));
+  const line = `Rent in ${landOf(plot.area).label} is now ${cedis(rentRate({ ...plot, rentAsk: ask }))} a room a day.`;
+  notes.unshift(line);
+  return { life: next, notes };
+}
+
+export function evictTenant(life: Life, plotId: string, tenantId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot) return { life, notes: [], error: "That plot is gone." };
+  const people = roster(plot);
+  const person = people.find((item) => item.id === tenantId);
+  if (!person) return { life, notes: [], error: "That tenant already left." };
+  const staying = people.filter((item) => item.id !== tenantId);
+  const next = withPlot(life, plotId, (item) => ({ ...item, people: staying, tenants: staying.length }));
+  const trashed = person.pays === "trouble";
+  if (trashed) next.cash = Math.max(0, next.cash - 80);
+  const line = trashed
+    ? `${person.name} refused to leave quietly. The room needs ${cedis(80)} of repairs.`
+    : `${person.name} packed and left ${landOf(plot.area).label}.`;
+  logLine(next, line);
+  return { life: next, notes: [line] };
+}
+
 export function buildNext(life: Life, plotId: string): StepResult {
   const plot = plotsOf(life).find((item) => item.id === plotId);
   if (!plot) return { life, notes: [], error: "That plot is gone." };
   if (plot.guard) return { life, notes: [], error: plot.guard === "court" ? "Wait for the court to clear the land guards." : "Deal with the land guards first." };
   if (plot.stage >= STAGES.length - 1) return { life, notes: [], error: "The house is finished." };
+  if (plot.stage === 0 && !plot.house) return { life, notes: [], error: "Choose the house first. Single room, chamber and hall, or something bigger." };
   const wait = buildWait(plot);
   if (wait > 0) return { life, notes: [], error: `The builders are still on ${STAGES[plot.stage].toLowerCase()}. ${wait}s left.` };
   const cost = stageCost(plot);
@@ -115,15 +216,20 @@ export function advertRooms(life: Life, plotId: string): StepResult {
   const plot = plotsOf(life).find((item) => item.id === plotId);
   if (!plot || plot.stage < STAGES.length - 1) return { life, notes: [], error: "Finish the house first." };
   const land = landOf(plot.area);
-  if (plot.tenants >= land.rooms) return { life, notes: [], error: "Every room is taken." };
+  const cap = roomsOf(plot);
+  if (plot.tenants >= cap) return { life, notes: [], error: "Every room is taken." };
   const wait = (plot.lastAdvert ?? -1e9) + 360 - life.minutes;
   if (wait > 0) return { life, notes: [], error: `The agent is still showing rooms. Back in ${Math.ceil(wait / 60)}h.` };
   if (life.cash < 50) return { life, notes: [], error: "The agent wants ₵50." };
   const due = rentDue(life, plot);
-  const moved = Math.min(land.rooms - plot.tenants, 1 + Math.floor(Math.random() * 2));
-  const next = withPlot(life, plotId, (item) => ({ ...item, tenants: item.tenants + moved, lastAdvert: life.minutes, lastRent: due > 0 ? item.lastRent : life.minutes }));
+  const have = new Set(roster(plot).map((person) => person.name));
+  const fresh = TENANT_BOOK.filter((person) => !have.has(person.name));
+  const pick = fresh[Math.floor(Math.random() * Math.max(1, fresh.length))] ?? TENANT_BOOK[0];
+  const person: Tenant = { id: id(), name: pick.name, note: pick.note, pays: pick.pays, since: life.minutes };
+  const people = [...roster(plot), person];
+  const next = withPlot(life, plotId, (item) => ({ ...item, people, tenants: people.length, lastAdvert: life.minutes, lastRent: due > 0 ? item.lastRent : life.minutes }));
   next.cash -= 50;
-  return { life: next, notes: [`${moved} new tenant${moved > 1 ? "s" : ""} moved into ${land.label}.`] };
+  return { life: next, notes: [`${person.name} took a room in ${land.label}. ${person.note}`] };
 }
 
 export function collectRent(life: Life, plotId: string): StepResult {
@@ -131,11 +237,16 @@ export function collectRent(life: Life, plotId: string): StepResult {
   if (!plot) return { life, notes: [], error: "That plot is gone." };
   const due = rentDue(life, plot);
   if (due < 1) return { life, notes: [], error: "No rent due yet." };
-  const next = withPlot(life, plotId, (item) => ({ ...item, lastRent: life.minutes }));
+  const next = withPlot(life, plotId, (item) => ({ ...item, people: roster(plot), lastRent: life.minutes }));
   next.cash += due;
+  const skipped = roster(plot).filter((person) => person.pays === "trouble");
+  const late = roster(plot).filter((person) => person.pays === "late");
   const line = `Tenants in ${landOf(plot.area).label} paid ${cedis(due)} rent.`;
+  const notes = [line];
+  if (late.length) notes.push(`${late.map((person) => person.name).join(" and ")} paid short.`);
+  if (skipped.length) notes.push(`${skipped.map((person) => person.name).join(" and ")} did not pay. You can warn them, or evict.`);
   logLine(next, line);
-  return { life: next, notes: [line] };
+  return { life: next, notes };
 }
 
 export function sellPlot(life: Life, plotId: string): StepResult {

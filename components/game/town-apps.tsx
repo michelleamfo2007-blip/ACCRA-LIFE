@@ -685,6 +685,9 @@ export function GuideApp({ life, onBack, onApply, onOpen }: { life: Life; onBack
       <Card tone="good">
         <p className="font-display text-2xl">Welcome to Accra</p>
         <p className="mt-1 text-sm text-[#5c6b82]">{left ? `${left} steps left. Each one pays ${cedis(GUIDE_REWARD)}.` : "You know your way around now. Enjoy the city."}</p>
+        <button type="button" onClick={() => onOpen("work")} className="mt-3 rounded-full bg-[#121212] px-3 py-1.5 text-xs font-bold text-white">
+          How to make money
+        </button>
         <Bar value={(GUIDE.length - left) / GUIDE.length} />
       </Card>
       {GUIDE.map((step) => {

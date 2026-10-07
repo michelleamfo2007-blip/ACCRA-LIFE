@@ -144,12 +144,13 @@ export type Team = { name: string; color: string; players: Footballer[]; morale:
 export type Pet = { id: string; kind: string; name: string; fedAt: number; boughtAt: number; lastYield: number; lastPlay?: number };
 export type Community = { faith?: "church" | "mosque" | null; standing: number; lastService?: number; givenDay?: { day: number; amount: number }; projects: string[]; chief?: { stool: string; since: number } | null; lastCourt?: number };
 
-export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number };
+export type Tenant = { id: string; name: string; note: string; pays: "steady" | "late" | "trouble"; since: number };
+export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number; house?: string; rentAsk?: number; people?: Tenant[] };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
 export type Song = { id: string; title: string; at: number; quality: number; paid: number; video?: boolean };
 export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number; lastShow?: number; shows?: number };
 export type Schooling = { certs: string[]; course?: string | null; done?: number; lastClass?: number };
-export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number; color?: string; condition?: number; broken?: boolean };
+export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number; color?: string; condition?: number; broken?: boolean; name?: string; plate?: string };
 export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
 export type SickKind = "malaria" | "flu" | "tummy" | "burnout";
 export type Health = { sick?: { kind: SickKind; since: number } | null; nhisUntil?: number; day?: number };
@@ -222,6 +223,21 @@ export function roomReach(span = 0) {
     halfW: 6 + step * 1.2,
     halfD: 4.5 + step * 0.9,
   };
+}
+
+/** Air conditioner, curtains, and the kente cloth stay on a wall. */
+export function hangSpot(id: string, x: number, z: number, span = 0) {
+  const room = roomReach(span);
+  if (id === "curtains") return { x: -1.1, z: -room.halfD + 0.28, rot: 0, y: 0 };
+  if (id === "ac") {
+    const along = Math.min(1.5, Math.max(0.35, x > 0.2 && x < 1.8 ? x : 0.9));
+    return { x: along, z: -room.halfD + 0.24, rot: 0, y: 1.38 };
+  }
+  if (id === "kente") {
+    const along = Math.min(room.placeMaxX - 0.8, Math.max(0.2, x || 1.8));
+    return { x: along, z: -room.halfD + 0.24, rot: 0, y: 0.95 };
+  }
+  return null;
 }
 
 export type Verb = {
@@ -1000,12 +1016,12 @@ export const SHOP: ShopItem[] = [
   { id: "kente-floor", name: "Kente tiles", price: 360, detail: "Red and gold under the whole room.", category: "design", size: "floor", stars: 3, color: "#CE1126", accent: "#FCD116", kind: "floor" },
   { id: "parquet", name: "Wood floor", price: 520, detail: "Boards instead of tile. The room sounds different.", category: "design", size: "floor", stars: 3, color: "#c4894f", accent: "#8d5a32", kind: "floor" },
   { id: "marble", name: "Marble floor", price: 1600, detail: "Pale stone. The mini-flat look, bought by the metre.", category: "design", size: "floor", stars: 4, color: "#f6f3ec", accent: "#ddd6c8", kind: "floor" },
-  { id: "kente", name: "Kente throw", price: 80, detail: "A cloth for the wall. The room looks like somebody lives here.", category: "design", size: "wall", stars: 2, color: "#c4563a", kind: "box" },
+  { id: "kente", name: "Kente cloth", price: 80, detail: "Red and gold cloth, hung on the wall.", category: "design", size: "wall", stars: 2, color: "#c4563a", kind: "box" },
   { id: "partition", name: "Bedroom wall", price: 420, detail: "Drag it across the room to split off another bedroom. Rotate it to run the other way.", category: "design", size: "3×1", stars: 2, color: "#f4efe6", kind: "wall" },
   { id: "partition-b", name: "Second bedroom wall", price: 420, detail: "One more wall, for a third room.", category: "design", size: "3×1", stars: 2, color: "#efe4d4", kind: "wall" },
   { id: "mattress", name: "Thicker mattress", price: 480, detail: "A second bed you can drag into another room. Sleep gives more of you back.", category: "sleep", size: "2×1", stars: 3, color: "#6d4aff", kind: "bed" },
   { id: "pillow", name: "Extra pillow", price: 40, detail: "One more place to put your head.", category: "sleep", size: "1×1", stars: 1, color: "#f4efe6", kind: "box" },
-  { id: "net", name: "Mosquito net", price: 35, detail: "Treated net. Malaria season hits you far less.", category: "sleep", size: "1×1", stars: 1, color: "#e8f1ea", kind: "box" },
+  { id: "net", name: "Mosquito net", price: 35, detail: "Hangs over the bed. Tuck it in before you sleep. Malaria season hits you far less.", category: "sleep", size: "1×1", stars: 1, color: "#e8f1ea", kind: "box" },
   { id: "pan", name: "Good cooking pot", price: 150, detail: "Home jollof fills the plate properly.", category: "kitchen", size: "1×1", stars: 2, color: "#8d5a32", kind: "box" },
   { id: "kenkey", name: "Kenkey and fish", price: 20, detail: "Eat it now. Pepper included.", consume: true, category: "kitchen", size: "1×1", stars: 2, color: "#e7c85a", kind: "food" },
   { id: "bucket", name: "Bath bucket", price: 35, detail: "For the mornings the shower is a rumour.", category: "bath", size: "1×1", stars: 1, color: "#3d7ea6", kind: "box" },
@@ -1017,7 +1033,7 @@ export const SHOP: ShopItem[] = [
   { id: "armchair", name: "Lounge armchair", price: 240, detail: "The corner where the day ends.", category: "comfort", size: "1×1", stars: 2, color: "#f3e2b0", kind: "chair" },
   { id: "fan", name: "Standing fan", price: 180, detail: "The heat leaves the room before you do.", category: "comfort", size: "1×1", stars: 2, color: "#d7e7f4", kind: "fan" },
   { id: "dining", name: "Dining table", price: 320, detail: "A place for jollof that is not the bed.", category: "comfort", size: "2×2", stars: 2, color: "#e7c9a0", kind: "table" },
-  { id: "ac", name: "Split air conditioner", price: 1200, detail: "East Legon weather, rented by the hour of current.", category: "comfort", size: "wall", stars: 4, color: "#f7f7f7", kind: "ac" },
+  { id: "ac", name: "Split air conditioner", price: 1200, detail: "Fixed high on the wall. Cold air, if the current stays.", category: "comfort", size: "wall", stars: 4, color: "#f7f7f7", kind: "ac" },
   { id: "speaker", name: "Bluetooth speaker", price: 220, detail: "The radio gets sweeter, and the corridor will know.", category: "fun", size: "1×1", stars: 2, color: "#1d2433", kind: "box" },
   { id: "book", name: "Exam past questions", price: 60, detail: "A stack that makes the coding and the hustle less guesswork.", category: "skills", size: "1×1", stars: 2, color: "#2f6fed", kind: "box" },
   { id: "bulb", name: "Rechargeable bulb", price: 25, detail: "A small sun for when ECG takes the evening.", category: "light", size: "wall", stars: 1, color: "#fff4c2", kind: "lamp" },
@@ -1036,7 +1052,7 @@ export const SHOP: ShopItem[] = [
   { id: "rain", name: "Rain shower", price: 760, detail: "A real stall. The bucket stays for washing clothes.", category: "bath", size: "1×1", stars: 3, color: "#e7eef3", kind: "shower" },
   { id: "transistor", name: "Transistor radio", price: 65, detail: "Joy FM, even when the phone is flat.", category: "fun", size: "1×1", stars: 1, color: "#c4894f", kind: "box" },
   { id: "tv32", name: "32\" flat TV", price: 720, detail: "Match day without going to the viewing centre.", category: "fun", size: "1×1", stars: 2, color: "#2c3338", kind: "tv" },
-  { id: "tv65", name: "65\" smart TV", price: 2560, detail: "The wall becomes a screen.", category: "fun", size: "2×1", stars: 3, color: "#1c1c1c", kind: "tv" },
+  { id: "tv65", name: "65\" smart TV", price: 2560, detail: "Wider, on a gold stand. The room's luxury.", category: "fun", size: "2×1", stars: 3, color: "#1c1c1c", kind: "tv" },
   { id: "desk", name: "Laptop desk", price: 1200, detail: "A chair, a top, and somewhere for the laptop that is not your lap.", category: "skills", size: "2×2", stars: 3, color: "#e7c9a0", kind: "desk" },
   { id: "guitar", name: "Acoustic guitar", price: 280, detail: "Highlife practice when the corridor is quiet.", category: "skills", size: "1×1", stars: 2, color: "#e7c85a", kind: "guitar" },
   { id: "weights", name: "Dumbbell rack", price: 220, detail: "A short bar and two ends. The gym can wait.", category: "skills", size: "1×1", stars: 2, color: "#1c1c1c", kind: "weights" },
@@ -1047,7 +1063,7 @@ export const SHOP: ShopItem[] = [
   { id: "plant", name: "Potted plant", price: 45, detail: "One green thing that does not ask for rent.", category: "decor", size: "1×1", stars: 1, color: "#3c8f4e", kind: "plant" },
   { id: "rug", name: "Kente rug", price: 170, detail: "A round cloth for the middle of the floor.", category: "decor", size: "2×2", stars: 2, color: "#c4563a", accent: "#1f8a70", kind: "rug" },
   { id: "mirror", name: "Standing mirror", price: 180, detail: "Check the outfit before you hit Osu.", category: "decor", size: "1×1", stars: 2, color: "#d5e7f2", kind: "curtain" },
-  { id: "curtains", name: "Silk curtains", price: 6400, detail: "The window stops being a rumour.", category: "decor", size: "wall", stars: 3, color: "#e7c85a", kind: "curtain" },
+  { id: "curtains", name: "Silk curtains", price: 6400, detail: "Fixed across the window, rod and all.", category: "decor", size: "wall", stars: 3, color: "#e7c85a", kind: "curtain" },
   { id: "aquarium", name: "Aquarium", price: 48000, detail: "Fish, a light, and a story for every guest.", category: "decor", size: "1×1", stars: 4, color: "#7eb6e8", kind: "tank" },
   { id: "lion", name: "Gold lion", price: 2800000, detail: "A statue with nothing to prove except the price.", category: "decor", size: "1×1", stars: 5, color: "#c4a46a", kind: "statue" },
   { id: "bingo", name: "Bingo the dog", price: 1600, detail: "A compound dog who has decided this room is home.", category: "pets", size: "1×1", stars: 1, color: "#c4894f", kind: "dog" },
@@ -1239,7 +1255,7 @@ function clone(life: Life): Life {
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
-    plots: (life.plots ?? []).map((plot) => ({ ...plot })),
+    plots: (life.plots ?? []).map((plot) => ({ ...plot, people: plot.people?.map((person) => ({ ...person })) })),
     kids: (life.kids ?? []).map((kid) => ({ ...kid })),
     music: life.music ? { ...life.music, songs: life.music.songs.map((song) => ({ ...song })) } : undefined,
     school: life.school ? { ...life.school, certs: [...life.school.certs] } : undefined,
@@ -1644,6 +1660,7 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "kenkey") after.needs.hunger = clampNeed(after.needs.hunger + 34);
   if (verb.skill) gainSkill(after, verb.skill, verb);
   if (verb.job) bump(after, "shifts");
+  if (verb.id.startsWith("hustle-")) bump(after, "hustles");
   turfPoint(after, verb.job ? 3 : verb.tag === "party" ? 2 : verb.social ? 1 : 0);
   if (verb.tag === "food") bump(after, "meals");
   if (verb.tag === "food" && placeId === "home" && verb.skill === "cooking") bump(after, "cooked");
@@ -1802,8 +1819,9 @@ export function buyItem(life: Life, itemId: string): StepResult {
     }
     if ((life.stored ?? []).includes(item.id)) {
       const next = clone(life);
-      const spot = openSpot(next);
-      next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: 0 }];
+      const hung = hangSpot(item.id, 1.8, 1.2, next.span ?? 0);
+      const spot = hung ?? openSpot(next);
+      next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: hung?.rot ?? 0 }];
       next.stored = (next.stored ?? []).filter((id) => id !== item.id);
       pushLog(next, `Put ${item.name} back out.`);
       return { life: next, notes: [`${item.name} is back in the room.`] };
@@ -1819,8 +1837,9 @@ export function buyItem(life: Life, itemId: string): StepResult {
   next.inventory = [...next.inventory, item.id];
   if (item.kind === "floor") next.floor = item.id;
   else {
-    const spot = openSpot(next);
-    next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: 0 }];
+    const hung = hangSpot(item.id, 1.8, 1.2, next.span ?? 0);
+    const spot = hung ?? openSpot(next);
+    next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: hung?.rot ?? 0 }];
   }
   if (hasCurrent(next.inventory)) next.dumsor = false;
   pushLog(next, `Bought ${item.name}.`);
@@ -1840,7 +1859,13 @@ export function widenRoom(life: Life): StepResult {
 }
 
 export function layPiece(life: Life, id: string, x: number, z: number, rot: number): StepResult {
-  const piece = { id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, rot: ((rot % 4) + 4) % 4 };
+  const hung = id.startsWith("fix-") ? null : hangSpot(id, x, z, life.span ?? 0);
+  const piece = {
+    id,
+    x: Math.round((hung?.x ?? x) * 10) / 10,
+    z: Math.round((hung?.z ?? z) * 10) / 10,
+    rot: hung ? hung.rot : ((rot % 4) + 4) % 4,
+  };
   if (id.startsWith("fix-")) {
     if (!FIXTURES.some((item) => item.id === id)) return { life, notes: [], error: "That is not in this room." };
     const next = clone(life);

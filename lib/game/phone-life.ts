@@ -12,9 +12,11 @@ export function cloutOf(life: Life) {
   const credit = life.bank?.score ?? 50;
   const badges = life.badges?.length ?? 0;
   const cash = Math.min(40, Math.floor(life.cash / 500));
+  const houses = (life.plots ?? []).filter((plot) => plot.stage >= 5).length;
+  const cars = life.car ? 6 : 0;
   return Math.min(
     99,
-    Math.round(friends * 2 + close * 4 + Math.min(25, fans / 40) + standing / 4 + credit / 5 + badges * 3 + cash + (life.stats?.cooked ?? 0) / 5 + (life.stats?.sleepovers ?? 0) * 2),
+    Math.round(friends * 2 + close * 4 + Math.min(25, fans / 40) + standing / 4 + credit / 5 + badges * 3 + cash + houses * 8 + cars + (life.stats?.cooked ?? 0) / 5 + (life.stats?.sleepovers ?? 0) * 2),
   );
 }
 

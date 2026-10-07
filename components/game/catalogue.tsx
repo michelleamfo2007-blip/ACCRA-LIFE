@@ -1,22 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Canvas } from "@react-three/fiber";
 import { SHOP, SHOP_CATEGORIES, cedis, type ShopCategory, type ShopItem } from "@/lib/game/world";
-
-const MARKS: Record<ShopCategory, string> = {
-  design: "🎨",
-  sleep: "🛏️",
-  kitchen: "🍲",
-  bath: "🚿",
-  comfort: "🛋️",
-  fun: "📺",
-  skills: "🎸",
-  light: "💡",
-  decor: "🪴",
-  pets: "🐕",
-  luxury: "💎",
-};
 
 export function Catalogue({
   cash,
@@ -33,31 +19,108 @@ export function Catalogue({
   onBuy: (id: string) => void;
   onClose: () => void;
 }) {
-  const [category, setCategory] = useState<(typeof SHOP_CATEGORIES)[number]["id"]>("design");
+  const [category, setCategory] = useState<ShopCategory>("design");
+  const [edge, setEdge] = useState({ left: false, right: true });
+  const listRef = useRef<HTMLDivElement>(null);
   const items = SHOP.filter((item) => item.category === category);
+
+  function reveal(id: ShopCategory) {
+    const list = listRef.current;
+    const node = list?.querySelector<HTMLButtonElement>(`[data-tab="${id}"]`);
+    if (!list || !node) return;
+    const left = node.offsetLeft - list.clientWidth / 2 + node.offsetWidth / 2;
+    list.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }
+
+  function choose(id: ShopCategory, focus = false) {
+    setCategory(id);
+    const node = listRef.current?.querySelector<HTMLButtonElement>(`[data-tab="${id}"]`);
+    if (focus) node?.focus();
+    reveal(id);
+  }
+
+  function onTabsKey(event: KeyboardEvent<HTMLDivElement>) {
+    const ids = SHOP_CATEGORIES.map((chip) => chip.id);
+    const index = ids.indexOf(category);
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      choose(ids[(index + step + ids.length) % ids.length], true);
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      choose(ids[0], true);
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      choose(ids[ids.length - 1], true);
+    }
+  }
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const measure = () => {
+      setEdge({
+        left: list.scrollLeft > 8,
+        right: list.scrollLeft + list.clientWidth < list.scrollWidth - 8,
+      });
+    };
+    measure();
+    list.addEventListener("scroll", measure, { passive: true });
+    const watch = new ResizeObserver(measure);
+    watch.observe(list);
+    return () => {
+      list.removeEventListener("scroll", measure);
+      watch.disconnect();
+    };
+  }, []);
 
   return (
     <div className="absolute inset-x-0 bottom-0 z-40 flex max-h-[min(78vh,100dvh-4.5rem)] flex-col rounded-t-[28px] bg-[#f7f8fb] pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)]">
-      <div className="flex items-center justify-between px-5 pt-4">
-        <h2 className="font-display text-2xl tracking-tight text-[#121212]">Catalogue</h2>
-        <button type="button" onClick={onClose} className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-[#5c6b82] shadow-sm">
-          Hide
-        </button>
-      </div>
-      <div className="no-scrollbar relative z-10 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:px-5">
-        {SHOP_CATEGORIES.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            onClick={() => setCategory(chip.id)}
-            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold sm:px-3.5 ${category === chip.id ? "bg-[#121212] text-white" : "bg-[#fff1c9] text-[#121212]"}`}
-          >
-            {MARKS[chip.id]} {chip.label}
+      <div className="sticky top-0 z-20 shrink-0 bg-[#f7f8fb]">
+        <div className="flex items-center justify-between px-5 pt-4">
+          <h2 className="font-display text-2xl tracking-tight text-[#121212]">Catalogue</h2>
+          <button type="button" onClick={onClose} className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-[#5c6b82] shadow-sm">
+            Hide
           </button>
-        ))}
+        </div>
+        <div className="relative mt-2.5">
+          <div className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-7 bg-gradient-to-r from-[#f7f8fb] to-transparent transition-opacity ${edge.left ? "opacity-100" : "opacity-0"}`} />
+          <div className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-7 bg-gradient-to-l from-[#f7f8fb] to-transparent transition-opacity ${edge.right ? "opacity-100" : "opacity-0"}`} />
+          <div
+            ref={listRef}
+            role="tablist"
+            aria-label="Shop categories"
+            aria-orientation="horizontal"
+            onKeyDown={onTabsKey}
+            className="no-scrollbar flex snap-x snap-mandatory gap-1 overflow-x-auto scroll-smooth px-4 py-0.5 sm:gap-1.5 sm:px-5"
+          >
+            {SHOP_CATEGORIES.map((chip) => {
+              const on = category === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  role="tab"
+                  data-tab={chip.id}
+                  id={`shop-tab-${chip.id}`}
+                  aria-selected={on}
+                  aria-controls="shop-grid"
+                  tabIndex={on ? 0 : -1}
+                  onClick={() => choose(chip.id)}
+                  className={`inline-flex shrink-0 snap-start items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[13px] font-semibold transition active:scale-[0.97] sm:px-3 sm:text-sm ${on ? "bg-[#121212] text-[#fff1c9]" : "bg-[#fff1c9] text-[#121212] hover:bg-[#ffe7a3]"}`}
+                >
+                  <CategoryIcon id={chip.id} active={on} />
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <p className="px-4 pb-3 pt-3 text-xs text-[#8b97ab] sm:px-5">Wallet {cedis(cash)}</p>
       </div>
-      <p className="relative z-10 px-4 pb-2 pt-1 text-xs text-[#8b97ab] sm:px-5">Wallet {cedis(cash)}</p>
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
+      <div id="shop-grid" role="tabpanel" aria-labelledby={`shop-tab-${category}`} className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
         {items.map((item) => {
           const have = !item.consume && owned.includes(item.id);
           const parked = stored.includes(item.id);
@@ -91,6 +154,87 @@ export function Catalogue({
         })}
       </div>
     </div>
+  );
+}
+
+function CategoryIcon({ id, active }: { id: ShopCategory; active: boolean }) {
+  const stroke = active ? "#FCD116" : "#121212";
+  const common = { fill: "none", stroke, strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" aria-hidden>
+      {id === "design" ? (
+        <>
+          <rect {...common} x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+          <rect {...common} x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+          <rect {...common} x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+          <rect {...common} x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+        </>
+      ) : null}
+      {id === "sleep" ? (
+        <>
+          <path {...common} d="M3 18V8M3 14h18v4H3zM21 18v-7" />
+          <path {...common} d="M7 11.5a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" />
+        </>
+      ) : null}
+      {id === "kitchen" ? (
+        <>
+          <path {...common} d="M7 10h10v5a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-5z" />
+          <path {...common} d="M5 12H3M21 12h-2M9 7c.4-2 5.6-2 6 0" />
+        </>
+      ) : null}
+      {id === "bath" ? (
+        <>
+          <path {...common} d="M5 12h14v2.5A4.5 4.5 0 0 1 14.5 19h-5A4.5 4.5 0 0 1 5 14.5V12z" />
+          <path {...common} d="M7 12V8a2 2 0 0 1 2-2h1" />
+        </>
+      ) : null}
+      {id === "comfort" ? (
+        <>
+          <path {...common} d="M5 11V8.5A2.5 2.5 0 0 1 7.5 6h9A2.5 2.5 0 0 1 19 8.5V11" />
+          <path {...common} d="M3.5 12h17v4.5A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5V12z" />
+        </>
+      ) : null}
+      {id === "fun" ? (
+        <>
+          <rect {...common} x="3" y="6" width="18" height="11" rx="2" />
+          <path {...common} d="M8 20.5h8" />
+        </>
+      ) : null}
+      {id === "skills" ? (
+        <>
+          <path {...common} d="M12 6v13" />
+          <path {...common} d="M12 7H6.5A2.5 2.5 0 0 0 4 9.5V19h8" />
+          <path {...common} d="M12 7h5.5A2.5 2.5 0 0 1 20 9.5V19h-8" />
+        </>
+      ) : null}
+      {id === "light" ? (
+        <>
+          <path {...common} d="M9 18h6M10 21h4" />
+          <path {...common} d="M12 3a5.5 5.5 0 0 0-3 10c.6.6 1 1.4 1 2h4c0-.6.4-1.4 1-2A5.5 5.5 0 0 0 12 3z" />
+        </>
+      ) : null}
+      {id === "decor" ? (
+        <>
+          <path {...common} d="M12 21v-7M8 21h8" />
+          <path {...common} d="M12 14c-4-.8-6.5-4.5-5-8 3.2.2 5 3 5 8z" />
+          <path {...common} d="M12 14c4-.8 6.5-4.5 5-8-3.2.2-5 3-5 8z" />
+        </>
+      ) : null}
+      {id === "pets" ? (
+        <>
+          <circle {...common} cx="7" cy="8" r="1.7" />
+          <circle {...common} cx="12" cy="6" r="1.7" />
+          <circle {...common} cx="17" cy="8" r="1.7" />
+          <ellipse {...common} cx="12" cy="15.5" rx="4" ry="3" />
+        </>
+      ) : null}
+      {id === "luxury" ? (
+        <>
+          <path {...common} d="M12 21 5.5 9 12 3.5 18.5 9 12 21z" />
+          <path {...common} d="M5.5 9h13" />
+        </>
+      ) : null}
+    </svg>
   );
 }
 
@@ -181,35 +325,43 @@ function Piece({ item }: { item: ShopItem }) {
   const { id, kind, color, size } = item;
   if (kind === "floor") return <FloorCard a={color} b={item.accent ?? "#fff"} />;
   if (id === "armchair") return <Armchair color={color} />;
-  if (kind === "chair" || kind === "throne") return <PlasticChair color={color} />;
+  if (kind === "throne") return <ThroneArt />;
+  if (kind === "chair") return <PlasticChair color={color} />;
   if (kind === "sofa") return <Sofa color={color} seats={size.startsWith("3") ? 3 : 2} />;
   if (kind === "bed") return <Bed color={color} />;
   if (kind === "wall") return <Crate color={color} />;
   if (kind === "table" || kind === "desk") return <Table color={color} />;
   if (kind === "fan") return <Fan />;
   if (kind === "ac") return <AirCon />;
-  if (kind === "food") return <Bowl color={color} />;
+  if (kind === "food") return <KenkeyPlate />;
   if (kind === "lamp") return <Bulb color={color} />;
-  if (kind === "fridge") return <Crate color={color} />;
-  if (kind === "stove") return <Pot color={item.accent ?? color} />;
-  if (kind === "sink") return <Crate color={color} />;
-  if (kind === "toilet") return <Crate color={color} />;
-  if (kind === "shower") return <Crate color="#d5e7f2" />;
-  if (kind === "tv") return <Screen color={color} wide={size.startsWith("2")} />;
+  if (kind === "fridge") return <FridgeArt />;
+  if (kind === "stove") return <StoveArt simple={id === "kerosene"} />;
+  if (id === "counter") return <CounterArt />;
+  if (kind === "sink") return <SinkArt />;
+  if (kind === "toilet") return <ToiletArt />;
+  if (kind === "shower") return <ShowerArt />;
+  if (kind === "tv") return <Screen wide={size.startsWith("2")} />;
   if (kind === "guitar") return <Guitar color={color} />;
-  if (kind === "weights") return <Crate color={color} />;
+  if (kind === "weights") return <WeightsArt />;
   if (kind === "plant") return <Plant color={color} />;
   if (kind === "rug") return <FloorCard a={color} b={item.accent ?? "#1f8a70"} />;
-  if (kind === "curtain" || kind === "painting") return <Cloth />;
-  if (kind === "tank") return <Crate color={color} />;
-  if (kind === "statue" || kind === "vault") return <Crate color={color} />;
-  if (kind === "dog" || kind === "cat") return <Pet color={color} />;
-  if (kind === "bird") return <Bird color={color} />;
-  if (id === "pan" || id === "kerosene") return <Pot color={color} />;
+  if (id === "mirror") return <MirrorArt />;
+  if (kind === "curtain") return <CurtainArt color={color} />;
+  if (kind === "painting") return <PaintingArt />;
+  if (kind === "tank") return <TankArt />;
+  if (kind === "statue") return <LionArt />;
+  if (kind === "vault") return <VaultArt />;
+  if (kind === "dog") return <DogArt />;
+  if (kind === "cat") return <CatArt />;
+  if (kind === "bird") return <ParrotArt />;
+  if (id === "pan") return <Pot color={color} />;
   if (id === "pillow") return <Pillow color={color} />;
-  if (id === "kente") return <Cloth />;
+  if (id === "kente") return <KenteArt />;
+  if (id === "net") return <NetArt />;
   if (id === "bucket" || id === "bowl-set") return <Bucket color={color} />;
-  if (id === "speaker" || id === "transistor") return <Speaker color={color} />;
+  if (id === "transistor") return <RadioArt />;
+  if (id === "speaker") return <Speaker color={color} />;
   if (id === "book") return <Books color={color} />;
   if (id === "generator" || id === "yellow-gen" || id === "solar") return <Generator color={color} />;
   return <Crate color={color} />;
@@ -225,12 +377,16 @@ function FloorCard({ a, b }: { a: string; b: string }) {
   return <Blocks items={tiles} />;
 }
 
-function Screen({ color, wide }: { color: string; wide: boolean }) {
+function Screen({ wide }: { wide: boolean }) {
+  const w = wide ? 72 : 52;
+  const frame = wide ? "#c4a46a" : "#1c1c1c";
   return (
     <Blocks
       items={[
-        { x: wide ? -24 : -16, y: 0, z: -4, w: wide ? 48 : 32, h: 8, d: 10, color: "#cbbba6" },
-        { x: wide ? -22 : -14, y: 8, z: -2, w: wide ? 44 : 28, h: 22, d: 3, color },
+        { x: -w * 0.22, y: 0, z: -8, w: w * 0.44, h: 3, d: 16, color: frame },
+        { x: -3, y: 3, z: -4, w: 6, h: 8, d: 6, color: frame },
+        { x: -w / 2, y: 11, z: -2, w, h: wide ? 34 : 26, d: 4, color: frame },
+        { x: -w / 2 + 3, y: 14, z: 1, w: w - 6, h: wide ? 28 : 20, d: 2, color: "#16324f" },
       ]}
     />
   );
@@ -468,20 +624,87 @@ function Pot({ color }: { color: string }) {
 function Pillow({ color }: { color: string }) {
   return (
     <g>
-      <path d="M28 58 C28 40 42 32 60 32 C78 32 92 40 92 58 C92 70 78 76 60 76 C42 76 28 70 28 58 Z" fill={color} />
-      <path d="M40 48 C48 42 72 42 80 50" fill="none" stroke="#fff" strokeWidth="2" opacity="0.55" strokeLinecap="round" />
+      <rect x="22" y="36" width="76" height="30" rx="14" fill={shade(color, 0.82)} stroke={shade(color, 0.55)} strokeWidth="3" />
+      <path d="M36 51 h48" stroke="#fff" strokeWidth="2.5" opacity="0.8" strokeLinecap="round" />
     </g>
   );
 }
 
-function Cloth() {
+function KenteArt() {
+  const stripes = ["#CE1126", "#FCD116", "#006B3F", "#FCD116", "#CE1126", "#006B3F"];
   return (
     <g>
-      <path d="M26 36 L78 22 L98 36 L46 50 Z" fill="#c4563a" />
-      <path d="M46 50 L98 36 L98 58 L46 72 Z" fill="#9a391d" />
-      <path d="M34 40 L70 30" stroke="#e7c85a" strokeWidth="3" />
-      <path d="M40 52 L86 40" stroke="#1f8a70" strokeWidth="3" />
-      <path d="M48 62 L92 50" stroke="#e7c85a" strokeWidth="3" />
+      <rect x="28" y="16" width="64" height="5" rx="2" fill="#5c4030" />
+      {stripes.map((fill, index) => (
+        <rect key={fill + index} x={30 + index * 10} y="21" width="10" height="52" fill={fill} />
+      ))}
+    </g>
+  );
+}
+
+function NetArt() {
+  return (
+    <g>
+      <rect x="34" y="58" width="52" height="12" rx="2" fill="#6b4428" />
+      <rect x="38" y="50" width="44" height="10" rx="2" fill="#5b7fd6" />
+      <rect x="32" y="22" width="3" height="40" fill="#f7f4ef" />
+      <rect x="85" y="22" width="3" height="40" fill="#f7f4ef" />
+      <rect x="32" y="20" width="56" height="4" fill="#f7f4ef" />
+      <rect x="34" y="24" width="52" height="36" fill="#e7f2ea" opacity="0.72" />
+      <path d="M34 32 h52 M34 42 h52 M34 52 h52 M46 24 v36 M60 24 v36 M74 24 v36" stroke="#9bb5a4" strokeWidth="1" />
+    </g>
+  );
+}
+
+function KenkeyPlate() {
+  return (
+    <g>
+      <ellipse cx="60" cy="62" rx="28" ry="10" fill="#f4efe6" />
+      <ellipse cx="48" cy="48" rx="14" ry="10" fill="#e7c85a" />
+      <path d="M62 42 c8 2 16 8 16 14 c-6 2 -14 0 -18 -6 Z" fill="#c4563a" />
+      <circle cx="74" cy="50" r="2" fill="#1c1c1c" />
+    </g>
+  );
+}
+
+function StoveArt({ simple }: { simple?: boolean }) {
+  return (
+    <g>
+      <rect x={simple ? 38 : 28} y="36" width={simple ? 44 : 64} height="36" rx="3" fill={simple ? "#3d4a3a" : "#f4f7fa"} />
+      <rect x={simple ? 42 : 32} y="30" width={simple ? 36 : 56} height="8" fill="#1c1c1c" />
+      {simple ? (
+        <circle cx="60" cy="34" r="8" fill="none" stroke="#9aa7b5" strokeWidth="3" />
+      ) : (
+        <>
+          <circle cx="46" cy="34" r="6" fill="none" stroke="#9aa7b5" strokeWidth="2.5" />
+          <circle cx="74" cy="34" r="6" fill="none" stroke="#9aa7b5" strokeWidth="2.5" />
+          <circle cx="46" cy="48" r="5" fill="none" stroke="#9aa7b5" strokeWidth="2" />
+          <circle cx="74" cy="48" r="5" fill="none" stroke="#9aa7b5" strokeWidth="2" />
+        </>
+      )}
+    </g>
+  );
+}
+
+function CounterArt() {
+  return (
+    <g>
+      <rect x="24" y="40" width="72" height="28" fill="#c4894f" />
+      <rect x="22" y="34" width="76" height="8" fill="#e7c9a0" />
+      <rect x="30" y="48" width="26" height="16" fill="#f4efe6" />
+      <rect x="64" y="48" width="26" height="16" fill="#f4efe6" />
+    </g>
+  );
+}
+
+function RadioArt() {
+  return (
+    <g>
+      <rect x="28" y="40" width="64" height="28" rx="3" fill="#c4894f" />
+      <circle cx="46" cy="54" r="9" fill="#1c2430" />
+      <circle cx="46" cy="54" r="3" fill="#4d5b70" />
+      <circle cx="72" cy="52" r="4" fill="#e7c85a" />
+      <path d="M78 40 L90 18" stroke="#d7dde4" strokeWidth="2" />
     </g>
   );
 }
@@ -526,6 +749,181 @@ function Generator({ color }: { color: string }) {
       <path d="M56 46 L84 38" stroke="#d7e7f4" strokeWidth="2" />
       <path d="M58 52 L80 46" stroke="#d7e7f4" strokeWidth="2" />
       <circle cx="70" cy="58" r="3" fill="#e7c85a" />
+    </g>
+  );
+}
+
+function FridgeArt() {
+  return (
+    <g>
+      <rect x="38" y="16" width="40" height="60" rx="3" fill="#f7f7f7" />
+      <path d="M58 16 v60" stroke="#d5dde3" strokeWidth="2" />
+      <rect x="48" y="28" width="3" height="14" rx="1" fill="#9aa7b5" />
+      <rect x="66" y="28" width="3" height="14" rx="1" fill="#9aa7b5" />
+    </g>
+  );
+}
+
+function WeightsArt() {
+  return (
+    <g>
+      <rect x="24" y="48" width="72" height="6" rx="2" fill="#9aa3ad" />
+      <circle cx="30" cy="51" r="10" fill="#c4563a" />
+      <circle cx="90" cy="51" r="10" fill="#c4563a" />
+      <rect x="40" y="62" width="40" height="6" rx="1" fill="#1c1c1c" />
+    </g>
+  );
+}
+
+function ToiletArt() {
+  return (
+    <g>
+      <ellipse cx="58" cy="62" rx="18" ry="8" fill="#f7f7f7" />
+      <path d="M42 62 v-8 a16 10 0 0 1 32 0 v8" fill="#e7eef2" />
+      <rect x="46" y="28" width="22" height="26" rx="3" fill="#f4f7f8" />
+      <rect x="52" y="34" width="10" height="4" rx="1" fill="#c5d0da" />
+    </g>
+  );
+}
+
+function ShowerArt() {
+  return (
+    <g>
+      <rect x="34" y="24" width="48" height="50" rx="4" fill="#d5e7f2" />
+      <rect x="40" y="30" width="36" height="38" rx="2" fill="#f7fbfe" opacity="0.7" />
+      <circle cx="58" cy="28" r="4" fill="#9aa7b5" />
+      <path d="M50 34 v8 M58 34 v10 M66 34 v8" stroke="#7eb6e8" strokeWidth="2" />
+      <ellipse cx="58" cy="74" rx="16" ry="4" fill="#c5d0da" />
+    </g>
+  );
+}
+
+function SinkArt() {
+  return (
+    <g>
+      <path d="M28 58 h64 v8 H28 Z" fill="#e7c9a0" />
+      <ellipse cx="60" cy="50" rx="22" ry="10" fill="#d5dde3" />
+      <ellipse cx="60" cy="50" rx="14" ry="6" fill="#f7f7f7" />
+      <path d="M60 40 v-10" stroke="#9aa7b5" strokeWidth="3" />
+      <path d="M60 30 h8" stroke="#9aa7b5" strokeWidth="3" />
+    </g>
+  );
+}
+
+function MirrorArt() {
+  return (
+    <g>
+      <rect x="40" y="18" width="36" height="52" rx="4" fill="#8a623c" />
+      <rect x="44" y="22" width="28" height="40" rx="2" fill="#d5e7f2" />
+      <path d="M48 28 l8 16" stroke="#fff" strokeWidth="2" opacity="0.7" />
+      <rect x="54" y="70" width="8" height="8" fill="#6b4428" />
+    </g>
+  );
+}
+
+function CurtainArt({ color }: { color: string }) {
+  return (
+    <g>
+      <rect x="26" y="20" width="68" height="4" rx="2" fill="#8a623c" />
+      <path d="M30 24 C34 40 28 60 36 74 L48 74 C40 58 46 40 40 24 Z" fill={color} />
+      <path d="M48 24 C54 42 50 60 58 74 L72 74 C62 56 68 40 60 24 Z" fill="#f3e2b0" />
+    </g>
+  );
+}
+
+function PaintingArt() {
+  return (
+    <g>
+      <rect x="28" y="22" width="64" height="48" rx="2" fill="#f4efe6" />
+      <rect x="34" y="28" width="52" height="36" fill="#8a623c" />
+      <circle cx="48" cy="42" r="6" fill="#FCD116" />
+      <path d="M40 58 L52 44 L64 58 Z" fill="#1f8a70" />
+    </g>
+  );
+}
+
+function TankArt() {
+  return (
+    <g>
+      <rect x="30" y="58" width="60" height="8" rx="2" fill="#1c1c1c" />
+      <rect x="34" y="28" width="52" height="32" rx="2" fill="#d7eef8" stroke="#7eb6e8" />
+      <rect x="38" y="40" width="44" height="16" fill="#2f6f9a" opacity="0.55" />
+      <ellipse cx="48" cy="48" rx="6" ry="3" fill="#e07a3d" />
+      <ellipse cx="68" cy="44" rx="5" ry="2.5" fill="#FCD116" />
+    </g>
+  );
+}
+
+function LionArt() {
+  return (
+    <g>
+      <rect x="40" y="64" width="36" height="8" fill="#8a623c" />
+      <ellipse cx="58" cy="56" rx="16" ry="8" fill="#e0b04a" />
+      <circle cx="76" cy="48" r="10" fill="#c4a46a" />
+      <circle cx="76" cy="48" r="14" fill="#f0c14b" opacity="0.45" />
+      <path d="M86 48 h8" stroke="#8a623c" strokeWidth="2" />
+      <path d="M46 52 q-10 8 4 10" fill="none" stroke="#e0b04a" strokeWidth="3" />
+    </g>
+  );
+}
+
+function VaultArt() {
+  return (
+    <g>
+      <rect x="32" y="22" width="52" height="52" rx="4" fill="#4a4e55" />
+      <circle cx="58" cy="48" r="16" fill="#2c3138" />
+      <circle cx="58" cy="48" r="6" fill="none" stroke="#e0b04a" strokeWidth="3" />
+    </g>
+  );
+}
+
+function DogArt() {
+  return (
+    <g>
+      <ellipse cx="52" cy="58" rx="20" ry="10" fill="#c4894f" />
+      <circle cx="74" cy="50" r="9" fill="#c4894f" />
+      <ellipse cx="84" cy="52" rx="6" ry="4" fill="#e7c9a0" />
+      <ellipse cx="70" cy="42" rx="4" ry="6" fill="#8a623c" />
+      <path d="M34 58 q-8 -2 -4 8" fill="none" stroke="#a86b32" strokeWidth="3" />
+      <circle cx="78" cy="48" r="1.5" fill="#121212" />
+    </g>
+  );
+}
+
+function CatArt() {
+  return (
+    <g>
+      <ellipse cx="54" cy="60" rx="16" ry="8" fill="#5c6570" />
+      <circle cx="72" cy="52" r="8" fill="#5c6570" />
+      <path d="M66 46 L70 36 L74 46 Z" fill="#3d4450" />
+      <path d="M74 46 L78 36 L82 46 Z" fill="#3d4450" />
+      <path d="M40 56 q-6 -14 2 -4" fill="none" stroke="#5c6570" strokeWidth="3" />
+      <circle cx="80" cy="54" r="1.5" fill="#e7a0b0" />
+    </g>
+  );
+}
+
+function ParrotArt() {
+  return (
+    <g>
+      <path d="M48 74 v-24" stroke="#6b4428" strokeWidth="4" />
+      <ellipse cx="52" cy="46" rx="12" ry="10" fill="#c5ced6" />
+      <circle cx="64" cy="38" r="7" fill="#f4f7fa" />
+      <path d="M70 38 h8 l-2 3 h-6 Z" fill="#1c1c1c" />
+      <path d="M44 50 L36 62 L48 54 Z" fill="#c4563a" />
+    </g>
+  );
+}
+
+function ThroneArt() {
+  return (
+    <g>
+      <path d="M36 70 h44 v-8 H36 Z" fill="#8b1e3f" />
+      <path d="M32 62 h52 v-28 H32 Z" fill="#8b1e3f" />
+      <path d="M40 34 h8 v-8 h-8 Z" fill="#e0b04a" />
+      <circle cx="44" cy="50" r="2" fill="#e0b04a" />
+      <circle cx="58" cy="50" r="2" fill="#e0b04a" />
+      <circle cx="72" cy="50" r="2" fill="#e0b04a" />
     </g>
   );
 }
