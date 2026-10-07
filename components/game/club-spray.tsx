@@ -123,10 +123,12 @@ export function ClubSpray({
   life,
   name,
   onPurse,
+  lifted = false,
 }: {
   life: Life;
   name: string;
   onPurse: (action: { kind: "spray"; id: SprayId } | { kind: "catch"; value: number }) => StepResult;
+  lifted?: boolean;
 }) {
   const [hype, setHype] = useState(18);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -281,19 +283,15 @@ export function ClubSpray({
           .club-shake { animation: none !important; }
         }
       `}</style>
-      <div className="absolute right-2 top-[max(7.2rem,calc(env(safe-area-inset-top)+6.4rem))] w-[min(15rem,52vw)] text-right">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-[#FCD116]">Hype man · Yoofi</p>
-        <p className="mt-1 rounded-2xl bg-[#121212]/90 px-3 py-2 text-xs font-semibold leading-5 text-white shadow-lg">{line}</p>
-        <div className="mt-1.5 ml-auto h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+      <div className="absolute left-2 right-16 top-[max(4.35rem,calc(env(safe-area-inset-top)+3.7rem))]">
+        <p className="truncate rounded-full bg-[#121212]/88 px-3 py-1.5 text-[11px] font-semibold text-white shadow">
+          <span className="text-[#FCD116]">{moment ? "Hype moment · " : "Yoofi · "}</span>
+          {banner || line}
+        </p>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/20">
           <div className="h-full rounded-full bg-[#FCD116]" style={{ width: `${hype}%` }} />
         </div>
-        <p className="mt-0.5 text-[10px] font-bold text-white/80">{moment ? "HYPE MOMENT" : `Hype ${Math.round(hype)}`}</p>
       </div>
-      {banner ? (
-        <p className="absolute left-1/2 top-[max(8.5rem,calc(env(safe-area-inset-top)+7.5rem))] -translate-x-1/2 rounded-full bg-[#CE1126] px-4 py-2 text-sm font-bold text-white shadow-lg">
-          {banner}
-        </p>
-      ) : null}
       {notes.map((note) => (
         <button
           key={note.id}
@@ -323,7 +321,7 @@ export function ClubSpray({
           {pop.text}
         </span>
       ))}
-      <div className="pointer-events-auto absolute bottom-[max(5.6rem,calc(env(safe-area-inset-bottom)+5rem))] left-2 flex max-w-[70vw] flex-wrap gap-1">
+      <div className={`pointer-events-auto absolute right-2 z-[70] flex flex-col items-end gap-1 ${lifted ? "bottom-[min(54vh,30rem)]" : "bottom-[max(11.5rem,calc(env(safe-area-inset-bottom)+10.6rem))]"}`}>
         {SPRAYS.map((pack) => (
           <button
             key={pack.id}

@@ -103,6 +103,7 @@ export function VenueFloor({
   const [seatedAt, setSeatedAt] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [bottleShow, setBottleShow] = useState<null | { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number }>(null);
+  const [guest, setGuest] = useState<ClubNpc | null>(null);
   const [empties, setEmpties] = useState<{ id: string; left: number; top: number; emoji: string }[]>([]);
   const [drift, setDrift] = useState<[number, number][]>([
     [0, 0],
@@ -354,7 +355,7 @@ export function VenueFloor({
             : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)",
       }}
     >
-      {nightLife && onPurse ? <ClubSpray life={life} name={sprayName || me || "You"} onPurse={onPurse} /> : null}
+      {nightLife && onPurse ? <ClubSpray life={life} name={sprayName || me || "You"} onPurse={onPurse} lifted={panel} /> : null}
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div
           ref={stage}
@@ -375,14 +376,13 @@ export function VenueFloor({
                   if (seatedAt === seat.id) return;
                   sitAt(seat);
                 }}
-                className={`absolute z-20 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5 rounded-2xl px-2 py-1.5 text-[10px] font-bold shadow-md transition ${
-                  seatedAt === seat.id ? "bg-[#006B3F] text-white ring-2 ring-white/80" : "bg-white/95 text-[#243044] hover:bg-[#fff4c2]"
+                className={`absolute z-20 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full text-sm shadow transition ${
+                  seatedAt === seat.id ? "bg-[#006B3F] text-white" : "bg-white/80 text-[#243044] hover:bg-[#fff4c2]"
                 }`}
                 style={{ left: `${seat.left}%`, top: `${seat.top}%` }}
               >
-                <span className="text-base leading-none">🪑</span>
-                <span className="max-w-[4.5rem] truncate">{seatedAt === seat.id ? "Seated" : seat.label}</span>
-                {guest ? <span className="max-w-[4.5rem] truncate text-[9px] text-[#006B3F]">{guest.username ? `@${guest.username}` : guest.name}</span> : null}
+                <span className="leading-none">🪑</span>
+                {guest ? <span className="sr-only">{guest.username ? `@${guest.username}` : guest.name}</span> : null}
               </button>
             );
           })}
@@ -396,15 +396,26 @@ export function VenueFloor({
               shirt={person.shirt}
               hair={person.hair}
               pants="#1c1917"
+              quiet={nightLife}
               onClick={() =>
                 approach(person.style, () => {
+                  setGuest(null);
                   setWho(`staff:${person.role}`);
                   setLines([{ from: "them", text: person.line }]);
                 })
               }
             />
           ))}
-          {nightLife ? <ClubCrowd spotId={spot.id} cheer={bottleShow?.step === "cheer" || bottleShow?.step === "pop"} /> : null}
+          {nightLife ? (
+            <ClubCrowd
+              spotId={spot.id}
+              cheer={bottleShow?.step === "cheer" || bottleShow?.step === "pop"}
+              onPick={(npc) => {
+                setWho(null);
+                setGuest(npc);
+              }}
+            />
+          ) : null}
           {empties.map((item) => (
             <span
               key={item.id}
@@ -446,6 +457,7 @@ export function VenueFloor({
               <LivePeer
                 key={person.username}
                 name={`@${person.username}`}
+                quiet={nightLife}
                 style={style}
                 live={Boolean(person.spot)}
                 skin={person.look?.skin ?? SKINS[index % SKINS.length]}
@@ -473,7 +485,9 @@ export function VenueFloor({
             shirt={life.look.cloth}
             hair={life.look.hair}
             pants={life.look.body === "woman" ? "#1c1917" : life.look.accent}
-            bubble={doing && !stride.moving ? doing.label : null}
+            quiet={nightLife}
+            mark={nightLife}
+            bubble={nightLife || stride.moving || !doing ? null : doing.label}
           />
         </div>
       </div>
@@ -518,6 +532,16 @@ export function VenueFloor({
           {dining ? "Tap a chair · sit · then order" : nightLife ? "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
         </p>
       )}
+      {guest && nightLife && !who ? (
+        <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-50 rounded-[28px] bg-[#161018] p-4 text-white shadow-[0_-12px_40px_rgba(0,0,0,.45)]">
+          <p className="font-semibold">{guest.name}</p>
+          <p className="text-sm text-[#e7d7a1]">{clubStateLabel(guest.state)}</p>
+          <p className="mt-2 text-sm text-white/70">Tap the floor to walk past. Tap them again if they move.</p>
+          <button type="button" onClick={() => setGuest(null)} className="mt-3 w-full rounded-full bg-[#FCD116] py-2.5 text-sm font-bold text-[#121212]">
+            Close
+          </button>
+        </div>
+      ) : null}
       {who?.startsWith("staff:") || who?.startsWith("party:") ? (
         <div className="absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-50 rounded-[28px] bg-white p-4 shadow-[0_-12px_40px_rgba(15,20,40,.28)]">
           <p className="font-semibold">{who.startsWith("party:") ? "Party" : who.slice(6)}</p>
@@ -738,18 +762,19 @@ export function VenueFloor({
   );
 }
 
-function ClubCrowd({ spotId, cheer }: { spotId: string; cheer: boolean }) {
-  const [crowd, setCrowd] = useState<ClubNpc[]>(() => clubCrowdAt(spotId));
+function ClubCrowd({ spotId, cheer, onPick }: { spotId: string; cheer: boolean; onPick: (npc: ClubNpc) => void }) {
+  const [crowd, setCrowd] = useState<ClubNpc[]>([]);
   useEffect(() => {
     const pulse = () => setCrowd(clubCrowdAt(spotId));
     pulse();
     const id = window.setInterval(pulse, 4000);
     return () => window.clearInterval(id);
   }, [spotId]);
+  const pants = ["#1c1917", "#243056", "#3a2418", "#141820"];
   return (
     <>
       {crowd.map((npc) => {
-        const dancing = npc.state === "dance" || cheer;
+        const dancing = npc.state === "dance" || (cheer && npc.state !== "bar");
         return (
           <PersonTag
             key={npc.id}
@@ -759,12 +784,13 @@ function ClubCrowd({ spotId, cheer }: { spotId: string; cheer: boolean }) {
             skin={npc.skin}
             shirt={npc.shirt}
             hair={npc.hair}
-            pants="#1c1917"
-            pose={dancing ? "act" : npc.state === "enter" || npc.state === "leave" ? "walk" : "idle"}
+            pants={pants[npc.name.length % pants.length]}
+            pose={dancing ? "act" : npc.state === "table" ? "sit" : npc.state === "enter" || npc.state === "leave" ? "walk" : "idle"}
             dance={dancing}
             face={npc.face}
             glide
-            bubble={cheer ? "🍾!!" : clubStateLabel(npc.state)}
+            quiet
+            onClick={() => onPick(npc)}
           />
         );
       })}
@@ -781,7 +807,6 @@ function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | 
         className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center transition-[left,top] duration-700 ease-out"
         style={{ left: `${waiterLeft}%`, top: `${waiterTop}%` }}
       >
-        <span className="mb-1 rounded-full bg-[#121212] px-2 py-0.5 text-[10px] font-bold text-white">Waiter</span>
         <IsoHuman skin="#8d5a3b" shirt="#1c1917" pants="#0f0f0f" hair="Low cut" pose="act" className="h-16 w-fit" />
         <span className="mt-[-0.4rem] text-xl">{show.bottle.emoji}</span>
       </div>
@@ -795,12 +820,23 @@ function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | 
           {(show.step === "pop" || show.step === "cheer") && <div className="club-pop-flash" />}
         </div>
       ) : null}
-      {show.step === "cheer" ? <div className="club-cheer-burst absolute inset-0" /> : null}
+      {show.step === "cheer" ? (
+        <>
+          <div className="club-cheer-burst absolute inset-0" />
+          {Array.from({ length: 8 }, (_, i) => (
+            <span
+              key={i}
+              className="absolute h-2 w-4 rounded-sm bg-[#c9a227] shadow-[0_0_6px_rgba(252,209,22,.7)]"
+              style={{ left: `${show.left - 8 + (i % 4) * 5}%`, top: `${show.top - 18 - (i % 3) * 4}%`, transform: `rotate(${i * 18 - 40}deg)` }}
+            />
+          ))}
+        </>
+      ) : null}
     </div>
   );
 }
 
-function LivePeer({ style, live, onClick, ...look }: { name: string; style: { left: string; top: string }; live: boolean; skin: string; shirt: string; hair: string; pants: string; onClick: () => void }) {
+function LivePeer({ style, live, onClick, quiet = false, ...look }: { name: string; style: { left: string; top: string }; live: boolean; skin: string; shirt: string; hair: string; pants: string; quiet?: boolean; onClick: () => void }) {
   const [walking, setWalking] = useState(false);
   const [face, setFace] = useState<1 | -1>(1);
   const { left, top } = style;
@@ -820,7 +856,7 @@ function LivePeer({ style, live, onClick, ...look }: { name: string; style: { le
       window.clearTimeout(stop);
     };
   }, [left, top, live]);
-  return <PersonTag {...look} tone="blue" online style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
+  return <PersonTag {...look} tone="blue" online quiet={quiet} style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
 }
 
 function PersonTag({
@@ -838,6 +874,8 @@ function PersonTag({
   glide = false,
   online = false,
   bubble = null,
+  quiet = false,
+  mark = false,
   onClick,
 }: {
   name: string;
@@ -854,16 +892,23 @@ function PersonTag({
   glide?: boolean | "live";
   online?: boolean;
   bubble?: string | null;
+  quiet?: boolean;
+  mark?: boolean;
   onClick?: () => void;
 }) {
   const body = (
     <>
-      <span className="relative mb-1 flex flex-col items-center">
-        {bubble ? <span className="mb-1 max-w-[9rem] truncate rounded-full bg-[#121212] px-2.5 py-0.5 text-[10px] font-semibold text-white shadow">{bubble}</span> : null}
-        {online || tone === "blue" ? <span className="mb-0.5 h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
-        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
+      {quiet ? null : (
+        <span className="relative mb-1 flex flex-col items-center">
+          {bubble ? <span className="mb-1 max-w-[9rem] truncate rounded-full bg-[#121212] px-2.5 py-0.5 text-[10px] font-semibold text-white shadow">{bubble}</span> : null}
+          {online || tone === "blue" ? <span className="mb-0.5 h-2 w-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
+        </span>
+      )}
+      <span className="relative">
+        {mark ? <span className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full border-2 border-[#FCD116] shadow-[0_0_10px_rgba(252,209,22,.8)]" aria-hidden /> : null}
+        <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
       </span>
-      <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
     </>
   );
   const layer = { ...style, zIndex: 10 + Math.round(Number.parseFloat(style.top)) };
@@ -881,7 +926,10 @@ function PersonTag({
     <button
       type="button"
       aria-label={`Talk to ${name}`}
-      onClick={onClick}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
       className={`absolute flex -translate-x-1/2 -translate-y-full flex-col items-center ${glide === "live" ? "transition-[left,top] duration-[1500ms] ease-linear" : glide ? "transition-[left,top] duration-[3000ms] ease-in-out" : ""}`}
       style={layer}
     >
@@ -1015,6 +1063,18 @@ function staffFor(spot: Spot) {
       shirt: air ? "#FCD116" : club ? "#CE1126" : "#FCD116",
       hair: "Afro",
     },
+    ...(club
+      ? [
+          {
+            role: "DJ",
+            line: "The next drop is coming. Stay on the floor.",
+            style: { left: "48%", top: "34%" },
+            skin: "#5c3420",
+            shirt: "#121212",
+            hair: "Fade",
+          },
+        ]
+      : []),
   ];
 }
 
@@ -1237,7 +1297,15 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
                   { x: -118, y: 0, z: -62, w: 10, h: 86, d: 168, color: wallSide },
                   { x: -118, y: 0, z: -62, w: 236, h: 86, d: 10, color: wall },
                 ]
-              : []),
+              : kind === "club"
+                ? [
+                    { x: -118, y: 0, z: -62, w: 8, h: 62, d: 158, color: wallSide },
+                    { x: 110, y: 0, z: -62, w: 8, h: 62, d: 108, color: wallSide },
+                    { x: -118, y: 0, z: -62, w: 236, h: 62, d: 8, color: wall },
+                    { x: -110, y: 0, z: 92, w: 150, h: 22, d: 6, color: wall },
+                    { x: -80, y: 56, z: -54, w: 170, h: 4, d: 48, color: "#100c14" },
+                  ]
+                : []),
             ...items,
           ]}
         />
@@ -1264,7 +1332,13 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
             <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill="#1f4d3a" ink="white" />
           </>
         ) : kind === "club" ? (
-          <StandingBoard x={-70} z={-36} text={spot.name.toUpperCase().slice(0, 14)} />
+          <>
+            <FaceSign axis="x" x={-72} y={40} z={-53} length={96} tall={12} text={spot.name.toUpperCase().slice(0, 16)} fill="#1a0610" ink="#FCD116" />
+            <FaceSign axis="z" x={-109} y={34} z={36} length={22} tall={9} text="BAR" fill="#12080c" ink="#ff4d9a" />
+            <FaceSign axis="x" x={62} y={26} z={4} length={26} tall={8} text="VIP" fill="#1a1020" ink="#FCD116" />
+            <FaceSign axis="z" x={-109} y={28} z={86} length={16} tall={8} text="WC" fill="#2a2420" ink="#f4efe6" />
+            <FaceSign axis="x" x={78} y={16} z={90} length={22} tall={8} text="EXIT" fill="#3a1218" ink="#f4efe6" />
+          </>
         ) : (
           <StandingBoard x={-72} z={6} text={title} />
         )}
@@ -1354,6 +1428,7 @@ function FloorWear({ kind, night }: { kind: Kind; night: boolean }) {
           { x: 10, z: 44, rx: 18, ry: 7, fill: "#1a0a12", o: 0.28 },
           { x: 40, z: 20, rx: 14, ry: 6, fill: "#12080e", o: 0.3 },
           { x: -70, z: 50, rx: 10, ry: 4, fill: "#2a1810", o: 0.25 },
+          { x: -4, z: 56, rx: 36, ry: 12, fill: "#ff4d9a", o: 0.08 },
         ]
       : kind === "shore"
         ? [
@@ -1382,7 +1457,7 @@ function FloorWear({ kind, night }: { kind: Kind; night: boolean }) {
 }
 
 function ClubGlow({ party }: { party?: boolean }) {
-  const neon = pt(-62, 28, 18);
+  const neon = pt(-20, 44, -48);
   const strip = pt(-20, 34, -30);
   const strip2 = pt(50, 32, 8);
   return (
@@ -1408,28 +1483,23 @@ function setDress(kind: Kind, night: boolean, spotId: string): Block[] {
   }
   if (kind === "club") {
     return [
-      // Bottle clutter on floor + bar ledge extras
-      { x: -80, y: 19, z: 22, w: 3, h: 7, d: 3, color: "#a3e635" },
-      { x: -62, y: 19, z: 24, w: 3, h: 6, d: 3, color: "#f97316" },
-      { x: -40, y: 0, z: 40, w: 4, h: 5, d: 4, color: "#22d3ee" },
-      { x: -20, y: 0, z: 56, w: 3, h: 6, d: 3, color: "#FCD116" },
-      { x: 8, y: 0, z: 50, w: 3, h: 5, d: 3, color: "#ec4899" },
-      { x: 24, y: 0, z: 44, w: 5, h: 2, d: 5, color: "#1c1917" },
-      // Cable runs
-      { x: -10, y: 0.2, z: -10, w: 40, h: 1, d: 2, color: "#0f0a10" },
-      { x: 40, y: 0.2, z: 8, w: 2, h: 1, d: 28, color: "#0f0a10" },
-      // Extra speaker stacks
-      { x: -30, y: 0, z: -40, w: 12, h: 20, d: 10, color: "#0c0a0e" },
-      { x: 48, y: 0, z: -36, w: 12, h: 22, d: 10, color: "#0c0a0e" },
-      { x: 50, y: 22, z: -34, w: 8, h: 4, d: 6, color: "#3b82f6" },
-      // Crate of empties
-      { x: 80, y: 0, z: 44, w: 14, h: 8, d: 12, color: "#3f2a1c" },
-      { x: 82, y: 8, z: 46, w: 4, h: 5, d: 4, color: "#22d3ee" },
-      { x: 88, y: 8, z: 48, w: 4, h: 6, d: 4, color: "#CE1126" },
-      // LED floor strip
-      { x: -96, y: 0.5, z: 42, w: 120, h: 1.2, d: 2, color: night ? "#ff2d95" : "#7c5cff" },
-      // Sticky mat near door
-      { x: 70, y: 0, z: 52, w: 18, h: 1.5, d: 14, color: "#1a1014" },
+      { x: -104, y: 18, z: 18, w: 2, h: 7, d: 2, color: "#143028" },
+      { x: -100, y: 18, z: 22, w: 2, h: 6, d: 2, color: "#6b2030" },
+      { x: -96, y: 18, z: 20, w: 2, h: 8, d: 2, color: "#c9a227" },
+      { x: -42, y: 10, z: 34, w: 2, h: 4, d: 2, color: "#e8e0d4" },
+      { x: 12, y: 10, z: 36, w: 2, h: 3, d: 2, color: "#c9a227" },
+      { x: 18, y: 0.4, z: 58, w: 3, h: 1, d: 2, color: "#c9a227" },
+      { x: -6, y: 0.4, z: 62, w: 2, h: 1, d: 3, color: "#6b2030" },
+      { x: 30, y: 0.4, z: 48, w: 4, h: 0.4, d: 2, color: "#f4efe6" },
+      { x: -8, y: 0.2, z: 6, w: 36, h: 0.6, d: 1.4, color: "#0a080c" },
+      { x: 36, y: 0.2, z: 10, w: 1.4, h: 0.6, d: 24, color: "#0a080c" },
+      { x: -48, y: 0, z: -44, w: 10, h: 18, d: 8, color: "#0c0a0e" },
+      { x: 28, y: 0, z: -44, w: 10, h: 20, d: 8, color: "#0c0a0e" },
+      { x: 72, y: 0, z: 70, w: 10, h: 8, d: 8, color: "#2a1c14" },
+      { x: 74, y: 8, z: 72, w: 2, h: 4, d: 2, color: "#e8e0d4" },
+      { x: -96, y: 0.6, z: 40, w: 90, h: 0.8, d: 1.2, color: night ? "#ff2d95" : "#7c5cff" },
+      { x: 86, y: 0, z: 78, w: 4, h: 14, d: 4, color: "#8a1c1c" },
+      { x: 78, y: 0, z: 86, w: 16, h: 1, d: 10, color: "#1a1014" },
     ];
   }
   if (kind === "tables" || kind === "hall") {
@@ -1543,43 +1613,36 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
   }
   if (kind === "club") {
     return [
-      // DJ / stage — scuffed riser
-      { x: -20, y: 0, z: -32, w: 64, h: 12, d: 34, color: "#120e14" },
-      { x: -16, y: 12, z: -28, w: 56, h: 2, d: 26, color: "#1a141c" },
-      { x: 4, y: 14, z: -24, w: 10, h: 22, d: 10, color: "#0c0a0e" },
-      { x: 6, y: 36, z: -22, w: 6, h: 4, d: 6, color: "#7c5cff" },
-      // Bar with sticky top + bottle row
-      { x: -92, y: 0, z: 16, w: 42, h: 16, d: 18, color: night ? "#14100e" : "#2e2218" },
-      { x: -88, y: 16, z: 20, w: 34, h: 3, d: 12, color: "#a88420" },
-      { x: -84, y: 19, z: 18, w: 5, h: 10, d: 5, color: "#22d3ee" },
-      { x: -76, y: 19, z: 20, w: 5, h: 12, d: 5, color: "#FCD116" },
-      { x: -68, y: 19, z: 18, w: 5, h: 9, d: 5, color: "#ec4899" },
-      { x: -90, y: 19, z: 22, w: 4, h: 8, d: 4, color: "#a3e635" },
-      // Speakers / VIP booth
-      { x: 62, y: 0, z: 0, w: 16, h: 28, d: 14, color: "#0e0c12" },
-      { x: 64, y: 20, z: 2, w: 12, h: 4, d: 10, color: "#3b82f6" },
-      { x: 70, y: 0, z: 28, w: 28, h: 10, d: 20, color: "#100e14" },
-      { x: 74, y: 10, z: 32, w: 20, h: 3, d: 12, color: "#a88420" },
-      // VIP couches
-      { x: 54, y: 0, z: 36, w: 22, h: 8, d: 14, color: "#4a1528" },
-      { x: 54, y: 8, z: 36, w: 22, h: 10, d: 4, color: "#6b1f3a" },
-      { x: 86, y: 0, z: 40, w: 18, h: 8, d: 14, color: "#3b2048" },
-      { x: 86, y: 8, z: 40, w: 18, h: 10, d: 4, color: "#5b2d6e" },
-      // Bottle service table + empties clutter
-      { x: 68, y: 0, z: 48, w: 16, h: 9, d: 12, color: "#2a1810" },
-      { x: 70, y: 9, z: 50, w: 4, h: 8, d: 4, color: "#c9a227" },
-      { x: 76, y: 9, z: 52, w: 3, h: 6, d: 3, color: "#e8e8e8" },
-      { x: 72, y: 9, z: 54, w: 3, h: 5, d: 3, color: "#CE1126" },
-      // Regular floor tables
-      { x: -40, y: 0, z: 28, w: 18, h: 8, d: 12, color: "#1c1410" },
-      { x: -38, y: 8, z: 30, w: 14, h: 2, d: 8, color: "#3a2a20" },
-      { x: 8, y: 0, z: 30, w: 18, h: 8, d: 12, color: "#1c1410" },
-      { x: 10, y: 8, z: 32, w: 14, h: 2, d: 8, color: "#3a2a20" },
-      // Worn dance pads
-      { x: -90, y: 0, z: 48, w: 22, h: 2, d: 22, color: "#b8326e" },
-      { x: -50, y: 0, z: 52, w: 22, h: 2, d: 22, color: "#c9a020" },
-      { x: -10, y: 0, z: 48, w: 22, h: 2, d: 22, color: "#0a5a38" },
-      { x: 30, y: 0, z: 52, w: 22, h: 2, d: 22, color: "#2a5a9a" },
+      { x: -28, y: 0, z: -46, w: 56, h: 8, d: 22, color: "#120e14" },
+      { x: -8, y: 8, z: -42, w: 22, h: 10, d: 12, color: "#0e0c12" },
+      { x: -4, y: 18, z: -40, w: 14, h: 2, d: 8, color: "#2a2430" },
+      { x: -108, y: 0, z: 8, w: 14, h: 16, d: 48, color: night ? "#14100e" : "#2e2218" },
+      { x: -106, y: 16, z: 12, w: 10, h: 2, d: 40, color: "#c9a227" },
+      { x: -104, y: 18, z: 16, w: 2, h: 8, d: 2, color: "#1a3a32" },
+      { x: -104, y: 18, z: 24, w: 2, h: 6, d: 2, color: "#6b2030" },
+      { x: -104, y: 18, z: 32, w: 2, h: 9, d: 2, color: "#c9a227" },
+      { x: -104, y: 18, z: 40, w: 2, h: 5, d: 2, color: "#e8e0d4" },
+      { x: 56, y: 0, z: 6, w: 40, h: 5, d: 34, color: "#1c1020" },
+      { x: 58, y: 5, z: 8, w: 18, h: 6, d: 12, color: "#4a1528" },
+      { x: 58, y: 11, z: 8, w: 18, h: 8, d: 3, color: "#6b1f3a" },
+      { x: 78, y: 5, z: 10, w: 16, h: 6, d: 12, color: "#3b2048" },
+      { x: 78, y: 11, z: 10, w: 16, h: 8, d: 3, color: "#5b2d6e" },
+      { x: 54, y: 0, z: 4, w: 3, h: 16, d: 3, color: "#c9a227" },
+      { x: 94, y: 0, z: 4, w: 3, h: 16, d: 3, color: "#c9a227" },
+      { x: 57, y: 10, z: 4, w: 37, h: 1, d: 1.2, color: "#CE1126" },
+      { x: 66, y: 5, z: 28, w: 14, h: 6, d: 10, color: "#2a1810" },
+      { x: 68, y: 11, z: 30, w: 3, h: 7, d: 3, color: "#c9a227" },
+      { x: 74, y: 11, z: 32, w: 2, h: 4, d: 2, color: "#e8e0d4" },
+      { x: -48, y: 0, z: 30, w: 16, h: 8, d: 12, color: "#1c1410" },
+      { x: -46, y: 8, z: 32, w: 12, h: 1.5, d: 8, color: "#3a2a20" },
+      { x: 4, y: 0, z: 34, w: 16, h: 8, d: 12, color: "#1c1410" },
+      { x: 6, y: 8, z: 36, w: 12, h: 1.5, d: 8, color: "#3a2a20" },
+      { x: -22, y: 0.4, z: 46, w: 44, h: 1, d: 28, color: "#10080e" },
+      { x: -20, y: 1.2, z: 46, w: 40, h: 0.4, d: 1, color: "#FCD116" },
+      { x: -20, y: 1.2, z: 72, w: 40, h: 0.4, d: 1, color: "#ff2d95" },
+      { x: -112, y: 0, z: 74, w: 4, h: 24, d: 14, color: "#3a322c" },
+      { x: 70, y: 0, z: 82, w: 3, h: 18, d: 3, color: "#c9a227" },
+      { x: 92, y: 0, z: 82, w: 3, h: 18, d: 3, color: "#c9a227" },
     ];
   }
   if (kind === "shore") {

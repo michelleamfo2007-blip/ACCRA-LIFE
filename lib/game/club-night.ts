@@ -79,7 +79,7 @@ export function isNightlife(spotId: string, clubIds: Set<string>) {
 }
 
 /** Lounges/bars that run the club system even if not in the hard club list. */
-export const NIGHT_LOUNGES = new Set(["bloom", "monsoon", "republic", "still", "plus233", "lizzys", "duncans"]);
+export const NIGHT_LOUNGES = new Set(["bloom", "monsoon", "republic", "still", "plus233", "lizzys", "duncans", "adum-night"]);
 
 export function clubVerbs(spotId: string, session?: ClubSession | null): Verb[] {
   const vip = spotId === "twist" || spotId === "duplex" || spotId === "one-percent" || spotId === "ace-tantra";
@@ -183,10 +183,10 @@ export type ClubNpc = {
   face: 1 | -1;
 };
 
-const NAMES = ["Kofi", "Ama", "Nana", "Efua", "Joe", "Abena", "Kwesi", "Serwa"];
-const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24"];
-const SHIRTS = ["#CE1126", "#FCD116", "#ec4899", "#3b82f6", "#22c55e", "#f4efe6", "#7c3aed"];
-const HAIR = ["Afro", "Bob", "Bun", "Locs", "Braids"];
+const NAMES = ["Akosua", "Yaw", "Adjoa", "Kojo", "Maame", "Fiifi", "Esi", "Kwame", "Ama", "Kofi", "Akua", "Paa", "Efua", "Nana", "Abena", "Serwa"];
+const SKINS = ["#e0b08a", "#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#5c3420", "#3d2416"];
+const SHIRTS = ["#1c1917", "#f4efe6", "#6b1f3a", "#c9a227", "#143028", "#2a241c", "#4a1942", "#101820"];
+const HAIR = ["Afro", "Braids", "Locs", "Low cut", "Bun", "Headwrap", "Fade"];
 
 const ZONES: Record<ClubState, { left: number; top: number }[]> = {
   enter: [
@@ -234,7 +234,7 @@ export function clubCrowdAt(spotId: string, at = Date.now(), count = 8): ClubNpc
     const jitter = ((seed + beat * 3) % 7) - 3;
     return {
       id: `${spotId}-club-${index}`,
-      name: NAMES[(seed + index) % NAMES.length],
+      name: NAMES[index % NAMES.length],
       state: phase,
       left: slot.left + jitter,
       top: slot.top + (((seed * 3) % 5) - 2),

@@ -58,10 +58,17 @@ export function IsoHuman({
               <rect x="67" y="86" width="8" height="26" rx="4" fill={skin} />
             </g>
           </g>
+          <Hair hair={hair} cloth={cloth} />
           <rect x="46" y="50" width="8" height="10" rx="3" fill={skin} />
           <circle cx="50" cy="40" r="14" fill={skin} />
           <path d="M62 36 H68 L66 52 H60 Z" fill={skinShade} />
-          <Hair hair={hair} cloth={cloth} />
+          <ellipse cx="44.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
+          <ellipse cx="55.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
+          <ellipse cx="45.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
+          <ellipse cx="56.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
+          <path d="M42.2 34.6 H47.6" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
+          <path d="M52.4 34.6 H57.8" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
+          <path d="M45.5 46.2 Q50 50 54.5 46.2" stroke="#6a3030" strokeWidth="1.4" fill="none" strokeLinecap="round" />
         </g>
       </svg>
     </div>
@@ -90,7 +97,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
     );
   }
   if (hair === "Long") return <path d="M34 40 C34 22 66 22 66 42 C64 78 58 96 50 98 C42 96 36 78 34 40 Z" fill="#1c140f" />;
-  if (hair === "Low cut") return <path d="M38 42 C40 30 60 30 62 42 C56 36 44 36 38 42 Z" fill="#1c140f" />;
+  if (hair === "Low cut" || hair === "Fade") return <path d="M38 42 C40 30 60 30 62 42 C56 36 44 36 38 42 Z" fill="#1c140f" />;
   if (hair === "Ponytail") {
     return (
       <g fill="#1c140f">

@@ -389,11 +389,11 @@ export function WeeklyCard({ life, spotId, here, cloud, onCheck }: { life: Life;
       </p>
       <p className="text-xs text-white/75">{live.event.detail}</p>
       {crowd ? (
-        <p className="mt-1 text-xs">
-          👥 {crowd.count ?? 0} checked in{crowd.names?.length ? `: ${crowd.names.slice(0, 5).join(", ")}` : ""}
+        <p className="mt-1 truncate text-xs">
+          👥 {crowd.count ?? 0} checked in{crowd.names?.length ? ` · ${crowd.names.slice(0, 3).join(", ")}` : ""}
         </p>
       ) : null}
-      <button type="button" disabled={!here || done} onClick={onCheck} className="mt-2 w-full rounded-full bg-[#FCD116] py-2 text-sm font-bold text-[#121212] disabled:opacity-50">
+      <button type="button" disabled={!here || done} onClick={onCheck} className="relative z-10 mt-2 w-full rounded-full bg-[#FCD116] py-2 text-sm font-bold text-[#121212] disabled:opacity-50">
         {done ? "Checked in ✓" : here ? `Check in · +${cedis(checkInReward(life, new Date(now)))}` : "Go there to check in"}
       </button>
     </div>

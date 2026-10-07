@@ -70,6 +70,26 @@ const BEATS: Record<string, Beat[]> = {
     { slots: ["afternoon", "evening"], heat: "packed", emoji: "🏖️", line: "Drums on the sand. Horses. A grill every few steps.", verbs: [verb({ id: "hap-beach-drums", label: "Dance to the drums", detail: "The circle opens. Somebody pulls you in.", minutes: 50, cost: 10, effects: { fun: 30, social: 18, energy: -10, hygiene: -8 }, tag: "party", emoji: "🥁" }), verb({ id: "hap-beach-swim", label: "Swim and dry off", detail: "Salt water, then the sun does the rest.", minutes: 40, cost: 0, effects: { fun: 22, energy: -6, hygiene: -6 }, emoji: "🌊" })] },
     { slots: ["morning"], heat: "quiet", emoji: "🌅", line: "Soft light. Joggers. The sea before the speakers wake up.", verbs: [verb({ id: "hap-beach-dawn", label: "Morning shoreline walk", detail: "Just you, the tide, and Accra waking up.", minutes: 35, effects: { fun: 16, energy: 10 }, emoji: "🌅" })] },
   ],
+  knust: [
+    { slots: ["morning", "afternoon"], heat: "busy", emoji: "🎓", line: "Lectures letting out. The paths under the trees are full.", verbs: [verb({ id: "hap-knust-campus", label: "Cross the campus", detail: "You follow the students and end up somewhere green.", minutes: 40, effects: { fun: 12, social: 8, energy: -4 }, emoji: "🌳" })] },
+    { slots: ["evening"], heat: "quiet", emoji: "📚", line: "The library lights are still on. Campus is thinning.", verbs: [verb({ id: "hap-knust-read", label: "Read till close", detail: "One chapter. Then the walk back to the gate.", minutes: 50, effects: { fun: 8, energy: -4 }, emoji: "📚" })] },
+  ],
+  "tech-junction": [
+    { slots: ["morning", "afternoon", "evening"], heat: "packed", emoji: "🍛", line: "Waakye smoke and trotros. Everybody is either late or hungry.", verbs: [verb({ id: "hap-tech-chop", label: "Eat standing up", detail: "Leaf, egg, and a bus that will not wait.", minutes: 25, cost: 14, effects: { hunger: 36, social: 8 }, tag: "food", emoji: "🍛" })] },
+  ],
+  "komfo-anokye": [
+    { slots: ["morning", "afternoon", "evening"], heat: "busy", emoji: "🏥", line: "The waiting benches are full. Somebody is praying under their breath.", verbs: [verb({ id: "hap-kath-sit", label: "Sit with someone", detail: "You brought fruit and quiet company.", minutes: 50, effects: { social: 18, energy: -4 }, emoji: "🙏" })] },
+  ],
+  "ahodwo-gym": [
+    { slots: ["morning", "evening"], heat: "packed", emoji: "🏋️", line: "Afrobeats on the speakers. The racks are taken.", verbs: [verb({ id: "hap-ahodwo-class", label: "Join the class", detail: "Sweat, mirrors, and a playlist that does not quit.", minutes: 55, cost: 30, effects: { energy: -20, hygiene: -18, fun: 10 }, skill: "fitness", tag: "gym", emoji: "🏋️" })] },
+    { slots: ["afternoon"], heat: "busy", emoji: "💪", line: "The floor is open. A trainer is walking the room.", verbs: [verb({ id: "hap-ahodwo-lift", label: "Lift with a spotter", detail: "One honest set. No phone on the rack.", minutes: 45, cost: 25, effects: { energy: -16, hygiene: -12, fun: 8 }, skill: "fitness", tag: "gym", emoji: "💪" })] },
+  ],
+  "kumasi-mall": [
+    { slots: ["afternoon", "evening"], heat: "packed", emoji: "🛍️", line: "Air-con full. The cinema queue is already arguing about seats.", verbs: [verb({ id: "hap-kcm-film", label: "Catch a film", detail: "Cold room and a trailer that lasts too long.", minutes: 120, cost: 45, effects: { fun: 26, energy: -4 }, emoji: "🎬" })] },
+  ],
+  suame: [
+    { slots: ["morning", "afternoon"], heat: "packed", emoji: "🔧", line: "Engines on the ground. An apprentice is already under a car.", verbs: [verb({ id: "hap-suame-watch", label: "Watch a repair", detail: "They name the fault before the owner finishes the story.", minutes: 30, effects: { fun: 8, social: 8 }, emoji: "🔧" })] },
+  ],
   korlebu: [
     { slots: ["morning", "afternoon", "evening"], heat: "busy", emoji: "🏥", line: "The waiting area is full. Somebody is praying under their breath.", verbs: [verb({ id: "hap-hospital-visit", label: "Sit with someone", detail: "You brought fruit and quiet company.", minutes: 50, effects: { social: 18, fun: -2, energy: -4 }, emoji: "🙏" })] },
   ],
@@ -182,7 +202,7 @@ export function happeningsAt(spotId: string, at = new Date()): Happening[] {
     {
       id: `${spotId}-ambient`,
       emoji: spot.emoji,
-      line: `${spot.name} is open. Accra is already moving through it.`,
+      line: `${spot.name} is open. The city is already moving through it.`,
       heat: "quiet",
       verbs: [
         verb({

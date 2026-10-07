@@ -1494,6 +1494,24 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 onBoards={() => setBoardId((current) => (current ? null : "oxford"))}
                 onRoutes={() => setRoutesOn((on) => !on)}
                 onQuery={setMapQuery}
+                onPerson={(person) => {
+                  const here = (life.town ?? "accra") as TownId;
+                  if (!person.where || person.where === "home") {
+                    flash(`${person.name} is at home.`);
+                    return;
+                  }
+                  const spot = SPOTS.find((item) => item.id === person.where);
+                  if (!spot) {
+                    flash(`${person.name} is out.`);
+                    return;
+                  }
+                  const theirs = (spot.town ?? "accra") as TownId;
+                  if (theirs !== here) {
+                    flash(`${person.name} is in ${townOf(theirs).name}.`);
+                    return;
+                  }
+                  setPlaceId(spot.id);
+                }}
                 onTravel={() => setTravelOpen(true)}
                 onShow={() => {
                   chipsHidden.current = false;
@@ -2455,6 +2473,7 @@ function MapFilterBar({
   onBoards,
   onRoutes,
   onQuery,
+  onPerson,
   onTravel,
   onShow,
 }: {
@@ -2469,14 +2488,16 @@ function MapFilterBar({
   onBoards: () => void;
   onRoutes: () => void;
   onQuery: (value: string) => void;
+  onPerson: (person: SitePerson) => void;
   onTravel: () => void;
   onShow: () => void;
 }) {
   const [more, setMore] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const chips: { id: string; label: string; icon: ChipName; active: boolean; onClick: () => void; late?: boolean }[] = [
     { id: "all", label: "Road", icon: "road", active: filter === "all", onClick: () => onFilter("all") },
     { id: "boards", label: "Boards", icon: "sign", active: boards, onClick: onBoards },
-    { id: "hang", label: "People", icon: "users", active: filter === "hang", onClick: () => onFilter("hang") },
+    { id: "people", label: "People", icon: "users", active: peopleOpen, onClick: () => setPeopleOpen((open) => !open) },
     { id: "sea", label: "Sea", icon: "waves", active: filter === "sea", onClick: () => onFilter("sea") },
     { id: "civic", label: "Gov", icon: "landmark", active: filter === "civic", onClick: () => onFilter("civic") },
     { id: "work", label: "Work", icon: "briefcase", active: filter === "work", onClick: () => onFilter("work"), late: true },
@@ -2497,7 +2518,10 @@ function MapFilterBar({
               <button
                 key={chip.id}
                 type="button"
-                onClick={chip.onClick}
+                onClick={() => {
+                  if (chip.id !== "people") setPeopleOpen(false);
+                  chip.onClick();
+                }}
                 className={`inline-flex h-7 shrink-0 snap-start items-center gap-1 rounded-full border px-2 text-[11px] leading-none transition active:scale-95 ${chip.late && !more ? "max-sm:hidden" : ""} ${chip.active ? "border-[#c9a227] bg-[#FCD116] font-bold text-[#121212]" : "border-[#ead9a0] bg-[#fff8e6]/95 font-semibold text-[#121212] hover:bg-[#f6e7b0]"}`}
               >
                 <ChipIcon name={chip.icon} />
@@ -2521,6 +2545,14 @@ function MapFilterBar({
               <ChipIcon name={more ? "up" : "down"} />
             </button>
           </div>
+        {peopleOpen && !tucked ? (
+          <PeopleMenu
+            onPick={(person) => {
+              setPeopleOpen(false);
+              onPerson(person);
+            }}
+          />
+        ) : null}
       </div>
       {tucked ? (
         <button type="button" onClick={onShow} className="pointer-events-auto absolute left-1 top-0.5 inline-flex h-7 items-center gap-1 rounded-full border border-[#ead9a0] bg-[#fff8e6] px-2 text-[11px] font-bold text-[#121212] shadow-sm">
@@ -2528,6 +2560,88 @@ function MapFilterBar({
           Filters
         </button>
       ) : null}
+    </div>
+  );
+}
+
+type SitePerson = { username: string; name: string; where: string | null; town?: string | null };
+
+function placeLine(person: SitePerson) {
+  if (!person.where || person.where === "home") return "At home";
+  const spot = SPOTS.find((item) => item.id === person.where);
+  if (!spot) return "Out";
+  return `${spot.name} · ${townOf((spot.town ?? "accra") as TownId).name}`;
+}
+
+function PeopleMenu({ onPick }: { onPick: (person: SitePerson) => void }) {
+  const [people, setPeople] = useState<SitePerson[]>([]);
+  const [q, setQ] = useState("");
+  const [state, setState] = useState<"load" | "ready" | "off">("load");
+
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/live/people?list=1")
+      .then((response) => response.json())
+      .then((payload: { people?: SitePerson[] }) => {
+        if (stop) return;
+        setPeople(Array.isArray(payload.people) ? payload.people : []);
+        setState("ready");
+      })
+      .catch(() => {
+        if (!stop) setState("off");
+      });
+    return () => {
+      stop = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const text = q.trim();
+    if (text.length < 2) return;
+    const timer = window.setTimeout(() => {
+      fetch(`/api/live/people?q=${encodeURIComponent(text)}`)
+        .then((response) => response.json())
+        .then((payload: { people?: SitePerson[] }) => {
+          const found = Array.isArray(payload.people) ? payload.people : [];
+          setPeople((current) => {
+            const seen = new Set(current.map((person) => person.username));
+            return [...current, ...found.filter((person) => !seen.has(person.username))];
+          });
+        })
+        .catch(() => {});
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [q]);
+
+  const text = q.trim().toLowerCase();
+  const shown = people.filter((person) => !text || person.name.toLowerCase().includes(text) || person.username.toLowerCase().includes(text));
+
+  return (
+    <div className="absolute left-2 top-9 z-40 w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-[#ead9a0] bg-[#fff8e6] shadow-xl">
+      <p className="px-3 pt-2 text-[10px] font-bold tracking-wide text-[#8a7d62]">PEOPLE ON ACCRA LIFE</p>
+      <input
+        value={q}
+        onChange={(event) => setQ(event.target.value)}
+        placeholder="Find a name"
+        aria-label="Find a person"
+        className="mx-2 mt-1 h-8 w-[calc(100%-1rem)] rounded-full border border-[#ead9a0] bg-white px-3 text-xs font-semibold outline-none"
+      />
+      <div className="max-h-64 overflow-auto py-1">
+        {state === "load" ? <p className="px-3 py-2 text-xs text-[#5c6b82]">Looking…</p> : null}
+        {state === "off" ? <p className="px-3 py-2 text-xs text-[#5c6b82]">People are offline right now.</p> : null}
+        {state === "ready" && !shown.length ? <p className="px-3 py-2 text-xs text-[#5c6b82]">Nobody else is on the map yet.</p> : null}
+        {shown.map((person) => (
+          <button key={person.username} type="button" onClick={() => onPick(person)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#f6e7b0]">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#006B3F] text-[11px] font-bold text-white">{person.name.slice(0, 1).toUpperCase()}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-bold">{person.name}</span>
+              <span className="block truncate text-[10px] text-[#5c6b82]">
+                @{person.username} · {placeLine(person)}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

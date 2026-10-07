@@ -122,8 +122,8 @@ const ACCRA_SKIN: TownSkin = {
 };
 
 const KUMASI_SKIN: TownSkin = {
-  ground: "#c9e2a8",
-  groundNight: "#1a2618",
+  ground: "#efe6cf",
+  groundNight: "#46546e",
   beach: "#d7c4a2",
   sea: "#8fb8d8",
   deep: "#6f9bbf",
@@ -226,7 +226,7 @@ export const TOWNS: Town[] = [
     priceIndex: 0.9,
     weather: "Greener, wetter, cooler under the trees than Accra.",
     skin: KUMASI_SKIN,
-    neighborhoods: ["Adum", "Manhyia", "Bantama", "Asokwa", "Ahodwo", "KNUST"],
+    neighborhoods: ["Adum", "Manhyia", "Bantama", "Asokwa", "Ahodwo", "KNUST", "Suame", "Nhyiaeso"],
     landmarks: [
       { id: "kejetia", name: "Kejetia Market", kind: "shopping", neighborhood: "Adum", hours: "6:00 – 18:00", cost: "From ₵8", blurb: "The biggest market in West Africa. You will lose the lane and find a price.", x: 780, y: 620 },
       { id: "kumasi-central", name: "Kumasi Central Market", kind: "shopping", neighborhood: "Adum", hours: "6:00 – 18:00", cost: "From ₵6", blurb: "The older lanes beside Kejetia. Cloth and second-hand shoes.", x: 700, y: 740 },
@@ -238,6 +238,13 @@ export const TOWNS: Town[] = [
       { id: "fufu-joint", name: "Asafo fufu joint", kind: "food", neighborhood: "Asafo", hours: "11:00 – 21:00", cost: "From ₵25", blurb: "Ashanti fufu and light soup. You will need the bench after.", x: 620, y: 500 },
       { id: "kumasi-airport", name: "Kumasi Airport", kind: "transport", neighborhood: "Airport Road", hours: "Always", cost: "Fare on the board", blurb: "Passion Airways back to Kotoka. A short terminal and a long queue.", x: 1700, y: 280 },
       { id: "bonwire-stall", name: "Bonwire kente stall", kind: "shopping", neighborhood: "Adum", hours: "9:00 – 17:00", cost: "From ₵180", blurb: "Handwoven strips. Heavy, bright, and not cheap.", x: 980, y: 700 },
+      { id: "tech-junction", name: "Tech Junction", kind: "food", neighborhood: "KNUST", hours: "6:00 – 21:00", cost: "From ₵5", blurb: "Waakye, trotros, and the gate of the university.", x: 1340, y: 300 },
+      { id: "komfo-anokye", name: "Komfo Anokye", kind: "landmark", neighborhood: "Bantama", hours: "Always", cost: "From ₵30", blurb: "The teaching hospital. Wards, queues, and malt for the person you came to see.", x: 360, y: 520 },
+      { id: "ahodwo-gym", name: "Ahodwo Gym", kind: "work", neighborhood: "Ahodwo", hours: "5:30 – 21:00", cost: "From ₵25", blurb: "Weights, a class, and afrobeats.", x: 1280, y: 1000 },
+      { id: "kumasi-mall", name: "Kumasi City Mall", kind: "shopping", neighborhood: "Lake Road", hours: "10:00 – 21:00", cost: "From ₵12", blurb: "Cinema and a food court on Lake Road.", x: 860, y: 1000 },
+      { id: "cultural-centre", name: "Cultural Centre", kind: "landmark", neighborhood: "Bantama", hours: "9:00 – 17:00", cost: "From ₵10", blurb: "Drums and craft stalls.", x: 300, y: 260 },
+      { id: "rattray", name: "Rattray Park", kind: "landmark", neighborhood: "Nhyiaeso", hours: "9:00 – 18:00", cost: "₵15 gate", blurb: "A lake path and shade.", x: 1600, y: 760 },
+      { id: "suame", name: "Suame Magazine", kind: "work", neighborhood: "Suame", hours: "7:00 – 18:00", cost: "From ₵40", blurb: "Spare parts and apprentices.", x: 960, y: 220 },
     ],
     people: [
       { id: "yaa", name: "Yaa", line: "Yaa is at Kejetia", x: 800, y: 600, shirt: "#FCD116", slang: "Chale, the price is the price." },

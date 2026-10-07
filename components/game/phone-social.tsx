@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { NameSuggest } from "@/components/game/name-hints";
 import { cedis, handleOf, type Life } from "@/lib/game/world";
 
-export type ChatMsg = { who: "me" | "them" | "note"; text: string; time: string };
+export type ChatMsg = { who: "me" | "them" | "note"; text: string; time: string; at?: string };
 
 export type GroupRow = { id: string; name: string; last: string; time: string; members: string[] };
 
@@ -118,13 +119,13 @@ function Inbox({
     const load = () => {
       fetch("/api/live/chat")
         .then((response) => response.json())
-        .then((payload: { threads?: { username: string; name: string; last?: string; time?: string; mine?: boolean }[] }) => {
+        .then((payload: { threads?: { username: string; name: string; last?: string; time?: string; at?: string; mine?: boolean }[] }) => {
           if (stop) return;
           if (!Array.isArray(payload.threads)) {
             setReady(true);
             return;
           }
-          const threads = payload.threads;
+          const threads = [...payload.threads].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
           setFound((current) => {
             const known = new Set(threads.map((thread) => thread.username));
             return [...threads.map((thread) => ({ username: thread.username, name: thread.name })), ...current.filter((person) => !known.has(person.username))];
@@ -132,7 +133,7 @@ function Inbox({
           setPreviews((current) => ({
             ...current,
             ...Object.fromEntries(
-              threads.filter((thread) => thread.last).map((thread) => [`user:${thread.username}`, { who: thread.mine ? "me" : "them", text: thread.last ?? "", time: thread.time ?? "" } as ChatMsg]),
+              threads.filter((thread) => thread.last).map((thread) => [`user:${thread.username}`, { who: thread.mine ? "me" : "them", text: thread.last ?? "", time: thread.time ?? "", at: thread.at ?? "" } as ChatMsg]),
             ),
           }));
           setReady(true);
@@ -150,10 +151,12 @@ function Inbox({
   }, []);
   const people = peopleBook([...players, ...found]).filter((person) => !blocked.includes(person.id));
   const unreadTotal = people.reduce((sum, person) => sum + (unread[person.id] ?? 0), 0) + groups.reduce((sum, group) => sum + (unread[group.id] ?? 0), 0);
-  const shown = people.filter((person) => {
-    const hay = `${person.name} ${person.handle}`.toLowerCase();
-    return hay.includes(query.trim().toLowerCase());
-  });
+  const shown = people
+    .filter((person) => {
+      const hay = `${person.name} ${person.handle}`.toLowerCase();
+      return hay.includes(query.trim().toLowerCase());
+    })
+    .sort((a, b) => recentAt(b.id, chats, previews).localeCompare(recentAt(a.id, chats, previews)));
   const hasInbox = groups.length > 0 || people.length > 0 || Object.keys(chats).length > 0;
 
   async function findPerson() {
@@ -239,8 +242,18 @@ function Inbox({
                 onChange={(event) => setLookup(event.target.value)}
                 placeholder="Message someone: @username"
                 className="w-full bg-transparent text-sm outline-none"
+                autoComplete="off"
               />
             </form>
+            <NameSuggest
+              query={lookup}
+              known={found}
+              onPick={(person) => {
+                setLookup("");
+                setNotice("");
+                onOpen(`user:${person.username}`);
+              }}
+            />
             {notice ? <p className="mt-2 text-xs text-[#c4563a]">{notice}</p> : null}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-[11px] font-bold tracking-wide text-[#8b97ab]">GROUPS</p>
@@ -625,6 +638,18 @@ function PhoneTitle({ title, onBack }: { title: string; onBack: () => void }) {
   );
 }
 
+function recentAt(id: string, chats: Record<string, ChatMsg[]>, previews: Record<string, ChatMsg>) {
+  const thread = chats[id];
+  return thread?.[thread.length - 1]?.at || previews[id]?.at || "";
+}
+
+function purseStamp(id: string) {
+  const part = id.split("-")[1] ?? "";
+  const ms = Number.parseInt(part, 36);
+  if (!Number.isFinite(ms) || ms < 1_000_000_000_000) return "";
+  return new Date(ms).toISOString();
+}
+
 function peopleBook(players: { username: string; name: string }[]) {
   const seen = new Set<string>();
   return players.flatMap((player) => {
@@ -665,6 +690,7 @@ function previewsFromMoney(life: Life) {
       who: mine ? "me" : "them",
       text: mine ? `💸 You sent ${cedis(Math.abs(note.delta))}` : `💸 @${match[1].toLowerCase()} sent you ${cedis(Math.abs(note.delta))}`,
       time: "",
+      at: purseStamp(note.id),
     };
   }
   return out;

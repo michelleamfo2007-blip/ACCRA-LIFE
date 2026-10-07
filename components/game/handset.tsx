@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
+import { NameSuggest } from "@/components/game/name-hints";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
 import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
@@ -285,7 +286,7 @@ export function Handset({
   function pushChat(id: string, message: ChatMsg) {
     setChats((current) => {
       const base = current[id] ?? [];
-      return { ...current, [id]: [...base, message] };
+      return { ...current, [id]: [...base, { ...message, at: message.at ?? new Date().toISOString() }] };
     });
   }
 
@@ -1126,11 +1127,21 @@ function ContactsScreen({ onBack, onOpen }: { life: Life; onBack: () => void; on
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <AppHeader title="Contacts" onBack={onBack} />
       <form className="mx-4 mt-3 flex gap-2" onSubmit={search}>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="@username" className="h-10 flex-1 rounded-full bg-white px-4 text-sm outline-none" />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="@username" className="h-10 flex-1 rounded-full bg-white px-4 text-sm outline-none" autoComplete="off" />
         <button type="submit" className="rounded-full bg-[#121212] px-4 text-sm font-semibold text-white">
           Find
         </button>
       </form>
+      <NameSuggest
+        className="mx-4"
+        query={query}
+        onPick={(person) => {
+          setQuery(person.username);
+          setPeople([person]);
+          setNotice("");
+          onOpen(`user:${person.username}`);
+        }}
+      />
       {notice ? <p className="px-4 pt-3 text-sm text-[#8b97ab]">{notice}</p> : null}
       <div className="min-h-0 flex-1 overflow-auto">
         {people.map((person) => (

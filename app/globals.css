@@ -2211,7 +2211,24 @@ body {
   }
 }
 
+@keyframes tree-sway {
+  0%,
+  100% {
+    transform: rotate(-1.1deg);
+  }
+  50% {
+    transform: rotate(1.1deg);
+  }
+}
+.tree-sway {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: tree-sway 5.5s ease-in-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
+  .tree-sway {
+    animation: none;
+  }
   html {
     scroll-behavior: auto;
   }

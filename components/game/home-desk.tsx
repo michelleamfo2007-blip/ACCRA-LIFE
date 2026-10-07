@@ -12,6 +12,7 @@ import {
   minutesAway,
   type HomeGuest,
 } from "@/lib/game/home-life";
+import { NameSuggest } from "@/components/game/name-hints";
 import { cedis, type Life } from "@/lib/game/world";
 
 export type HomeFriend = { username: string; name: string };
@@ -201,11 +202,13 @@ export function HomeDesk({
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="@username"
                   className="h-9 min-w-0 flex-1 rounded-full bg-[#f4f7fb] px-3 text-sm outline-none"
+                  autoComplete="off"
                 />
                 <button type="submit" disabled={busy} className="rounded-full bg-[#121212] px-3 text-xs font-bold text-white disabled:opacity-40">
                   Find
                 </button>
               </form>
+              <NameSuggest query={query} known={people} onPick={(person) => pick(person.username)} />
               {notice ? <p className="text-[11px] text-[#8b97ab]">{notice}</p> : null}
               {hits.map((person) => (
                 <button key={person.username} type="button" onClick={() => pick(person.username)} className="flex w-full items-center gap-2 rounded-xl bg-[#fff4c2] px-3 py-2 text-left">

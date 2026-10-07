@@ -265,7 +265,22 @@ export async function listPlayersForAdmin(limit = 200): Promise<AdminPlayer[]> {
   });
 }
 
-export type FoundPlayer = { username: string; name: string; where: string | null; look?: Life["look"]; spot?: SpotPos | null };
+export type FoundPlayer = { username: string; name: string; where: string | null; town?: string | null; look?: Life["look"]; spot?: SpotPos | null };
+
+/** Public directory for the map People menu. Names and where they are. No email, cash, or home. */
+export async function listSitePeople(): Promise<FoundPlayer[]> {
+  const client = db();
+  if (!client) return [];
+  const { data } = await client.from("players").select("username, name, life").limit(80);
+  const rows = ((data ?? []) as { username: string; name: string; life?: { where?: string; town?: string; seen?: string } | null }[]).slice();
+  rows.sort((a, b) => (b.life?.seen ?? "").localeCompare(a.life?.seen ?? ""));
+  return rows.slice(0, 40).map((row) => ({
+    username: row.username,
+    name: row.name,
+    where: row.life?.where ?? null,
+    town: row.life?.town ?? null,
+  }));
+}
 
 function cleanQuery(query: string) {
   return query.trim().replace(/^@/, "").replace(/[%_,.()"'\\]/g, "").slice(0, 32);
@@ -326,16 +341,17 @@ export async function listChats(username: string) {
         .filter((mail) => mail.who === "them" && mail.at)
         .slice(-30)
         .map((mail) => ({ at: mail.at, text: mail.text }));
-      return { username: id, name: other?.name ?? id, last: last?.text ?? "", time: last?.time ?? "", mine: last?.who === "me", incoming };
+      return { username: id, name: other?.name ?? id, last: last?.text ?? "", time: last?.time ?? "", at: last?.at ?? "", mine: last?.who === "me", incoming };
     }),
   );
+  threads.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
   return threads;
 }
 
 export async function readChat(username: string, withUser: string) {
   const player = await readPlayer(username);
   if (!player) return [];
-  return (mailBag(player.life)[withUser] ?? []).map(({ who, text, time }) => ({ who, text, time }));
+  return (mailBag(player.life)[withUser] ?? []).map(({ who, text, time, at }) => ({ who, text, time, at }));
 }
 
 export function mutedNote(life: Life | null | undefined) {
