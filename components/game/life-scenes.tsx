@@ -606,7 +606,7 @@ export function FlightRide({
       {cam === "seat" ? <Seatback from={code} to={dest} line={spoken} minutes={minutes} gone={gone} /> : null}
 
       <div className="absolute right-3 top-[max(4.8rem,calc(env(safe-area-inset-top)+4rem))] z-10 w-[min(230px,58vw)] rounded-2xl bg-[#12141c]/90 p-3 text-white shadow-xl">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#f5c518]">Passion Air · Ghana</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#f5c518]">Passion Airways</p>
         <div className="mt-1 flex items-start justify-between gap-2">
           <p className="text-sm font-semibold">OP 204 · {cabin}</p>
           <p className="text-xs font-bold text-white">
@@ -632,7 +632,7 @@ export function FlightRide({
         </div>
       </div>
 
-      <div className="absolute left-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1.5">
+      <div className="absolute bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-[#12141c]/80 p-1 shadow-lg">
         {(
           [
             ["outside", "Outside"],
@@ -644,7 +644,7 @@ export function FlightRide({
             key={id}
             type="button"
             onClick={() => setCam(id)}
-            className={`rounded-full px-3 py-1.5 text-xs font-bold shadow ${cam === id ? "bg-white text-[#121212]" : "bg-[#121212]/75 text-white"}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold ${cam === id ? "bg-white text-[#121212]" : "text-white"}`}
           >
             {label}
           </button>

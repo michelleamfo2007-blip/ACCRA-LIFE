@@ -65,7 +65,7 @@ export function TripsApp({ life, onBack, onGo, onApply, onFly }: { life: Life; o
 
       <Label>✈️ ACCRA ↔ KUMASI</Label>
       <Card>
-        <p className="font-semibold">Passion Air</p>
+        <p className="font-semibold">Passion Airways</p>
         <p className="mt-1 text-xs text-[#5c6b82]">About 50 minutes, Accra to Kumasi and back. Check in at Kotoka to fly up, or at Kumasi to fly home. Pick your cabin.</p>
         <div className="mt-3 grid gap-2">
           {(Object.keys(CABINS) as Cabin[]).map((id) => {
