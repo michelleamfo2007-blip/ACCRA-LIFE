@@ -12,6 +12,7 @@ export function Apartment({
   pose,
   heading,
   dark,
+  night = false,
   bedColor,
   sofaColor,
   onAsk,
@@ -32,6 +33,7 @@ export function Apartment({
   pose: "idle" | "walk" | "act" | "sleep" | "sit";
   heading: number;
   dark: boolean;
+  night?: boolean;
   bedColor: string;
   sofaColor: string | null;
   onAsk: () => void;
@@ -61,19 +63,21 @@ export function Apartment({
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
       <CameraRig frozen={placing} follow={placing && focus ? focus : pos} lift={placing ? 0.85 : 0} />
-      <color attach="background" args={[dark ? "#10131a" : look.sky]} />
-      <ambientLight intensity={dark ? 0.22 : grade === "low" ? 0.42 : grade === "high" ? 1.05 : grade === "hall" ? 0.72 : 0.82} />
-      <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : grade === "low" ? 0.45 : grade === "high" ? 1.15 : 0.95} />
+      <color attach="background" args={[dark ? "#1a140f" : night ? "#1b2744" : look.sky]} />
+      <hemisphereLight args={[night || dark ? "#ffe4c2" : "#f3f7ff", "#d9c4a4", dark ? 0.28 : 0.42]} />
+      <ambientLight color={night || dark ? "#ffe7c8" : "#fffaf3"} intensity={dark ? 0.72 : night ? 0.58 : grade === "low" ? 0.55 : grade === "high" ? 0.9 : 0.78} />
+      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.38 : night ? 0.42 : grade === "low" ? 0.55 : grade === "high" ? 1.2 : 1} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
       </mesh>
       <Floor grade={grade} floorId={life.floor} span={span} />
       <Walls grade={grade} span={span} />
-      {grade === "hall" ? <StripLight /> : null}
+      {grade !== "low" ? <PictureWindow span={span} glow={night && !dark} /> : null}
+      {grade === "hall" ? <StripLight glow={!dark} /> : null}
       {grade === "high" ? <Cooler /> : null}
-      {!dark && grade !== "low" && grade !== "hall" ? <Sconces /> : null}
-      {grade === "low" ? <Bulb /> : null}
+      {(grade === "mid" || grade === "high") && !dark ? <Sconces glow={night} /> : null}
+      {grade === "low" ? <Bulb glow={dark || night} /> : null}
       <Door color={look.door} x={-room.halfW + 0.1} onGo={onGo} />
       <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
         <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
@@ -621,16 +625,19 @@ function Walls({ grade, span = 0 }: { grade: HomeGrade; span?: number }) {
   const frontCenter = (0.85 + halfD) / 2;
   return (
     <group>
-      <Box color={look.wall} position={[0, y, -halfD]} size={[halfW * 2 + 0.2, h, 0.18]} />
-      <Box color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} />
-      <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} />
-      <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} />
-      <Box color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} />
-      <Box color={look.wall} position={[3.4, y, -1.35]} size={[3.2, h, 0.16]} />
-      <Box color={look.side} position={[-3.15, y, 2.85]} size={[0.16, h, 3.1]} />
-      <Box color={look.wall} position={[-4.6, y, 1.25]} size={[2.6, h, 0.16]} />
+      <Box color={look.wall} position={[0, y, -halfD]} size={[halfW * 2 + 0.2, h, 0.18]} flat={false} />
+      <Box color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} flat={false} />
+      <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} flat={false} />
+      <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} flat={false} />
+      <Box color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} flat={false} />
+      <Box color={look.wall} position={[3.4, y, -1.35]} size={[3.2, h, 0.16]} flat={false} />
+      <Box color={look.side} position={[-3.15, y, 2.85]} size={[0.16, h, 3.1]} flat={false} />
+      <Box color={look.wall} position={[-4.6, y, 1.25]} size={[2.6, h, 0.16]} flat={false} />
+      <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[0, 0.07, -halfD + 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
+      <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[halfW - 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
       {grade === "mid" || grade === "high" ? <WoodFloor pale={grade === "high"} /> : null}
       {grade === "high" ? <Rug /> : null}
+      {grade === "hall" || grade === "mid" ? <Mat /> : null}
       {grade === "low" || grade === "mid" ? <WindowBars rusty={grade === "low"} /> : null}
     </group>
   );
@@ -646,22 +653,48 @@ function WoodFloor({ pale }: { pale: boolean }) {
   );
 }
 
-function Sconces() {
+function PictureWindow({ span, glow }: { span: number; glow: boolean }) {
+  const room = roomReach(span);
   return (
-    <group>
-      <Light at={[-2.2, 1.7, -4.35]} />
-      <Light at={[2.4, 1.7, -4.35]} />
-      <Light at={[5.85, 1.7, 1.2]} />
+    <group position={[-1.1, 1.05, -room.halfD + 0.12]}>
+      <mesh>
+        <boxGeometry args={[1.85, 1.02, 0.05]} />
+        <meshStandardMaterial color="#f7f1e6" roughness={0.55} />
+      </mesh>
+      <mesh position={[0, 0.02, 0.03]}>
+        <boxGeometry args={[1.5, 0.72, 0.02]} />
+        <meshBasicMaterial color={glow ? "#243656" : "#c9e7f8"} />
+      </mesh>
+      <mesh position={[0, 0.02, 0.045]}>
+        <boxGeometry args={[0.035, 0.72, 0.02]} />
+        <meshStandardMaterial color="#e6d3ae" />
+      </mesh>
+      <Cushion color="#f4e4cf" position={[-0.98, -0.05, 0.08]} size={[0.16, 0.95, 0.05]} />
+      <Cushion color="#f4e4cf" position={[0.98, -0.05, 0.08]} size={[0.16, 0.95, 0.05]} />
+      {glow ? <pointLight position={[0, 0, 0.8]} color="#ffd7a1" intensity={1.6} distance={9} decay={2} /> : null}
     </group>
   );
 }
 
-function Light({ at }: { at: [number, number, number] }) {
+function Sconces({ glow }: { glow: boolean }) {
   return (
-    <mesh position={at}>
-      <sphereGeometry args={[0.08, 8, 6]} />
-      <meshBasicMaterial color="#fff4c4" />
-    </mesh>
+    <group>
+      <Light at={[-2.2, 1.45, -4.35]} glow={glow} />
+      <Light at={[2.4, 1.45, -4.35]} glow={glow} />
+      <Light at={[5.85, 1.45, 1.2]} glow={glow} />
+    </group>
+  );
+}
+
+function Light({ at, glow }: { at: [number, number, number]; glow?: boolean }) {
+  return (
+    <group position={at}>
+      <mesh>
+        <sphereGeometry args={[0.07, 10, 8]} />
+        <meshBasicMaterial color="#fff1c2" />
+      </mesh>
+      {glow ? <pointLight intensity={1.8} distance={7.5} decay={2} color="#ffd59a" /> : null}
+    </group>
   );
 }
 
@@ -791,29 +824,52 @@ function WindowBars({ rusty }: { rusty: boolean }) {
   );
 }
 
-function Bulb() {
+function Bulb({ glow }: { glow?: boolean }) {
   return (
-    <mesh position={[0, 1.55, 0]}>
-      <sphereGeometry args={[0.08, 8, 6]} />
-      <meshBasicMaterial color="#e7c56a" />
-    </mesh>
+    <group position={[0, 1.55, 0]}>
+      <mesh>
+        <sphereGeometry args={[0.08, 8, 6]} />
+        <meshBasicMaterial color="#e7c56a" />
+      </mesh>
+      {glow ? <pointLight intensity={1.3} distance={8} decay={2} color="#ffd59a" /> : null}
+    </group>
   );
 }
 
-function StripLight() {
-  return <Box color="#f4f7fb" position={[0, 1.62, 0]} size={[2.4, 0.06, 0.18]} />;
+function StripLight({ glow }: { glow?: boolean }) {
+  return (
+    <group position={[0, 1.62, 0]}>
+      <Box color={glow ? "#fff6d8" : "#d9dee6"} position={[0, 0, 0]} size={[2.4, 0.06, 0.18]} flat={false} />
+      {glow ? <pointLight intensity={2.4} distance={12} decay={2} color="#fff1cc" /> : null}
+    </group>
+  );
 }
 
 function Cooler() {
   return <Box color="#d9dee6" position={[5.7, 1.35, -1.4]} size={[0.16, 0.28, 0.7]} />;
 }
 
+function Mat() {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.35, 0.02, 0.2]}>
+      <planeGeometry args={[2.2, 1.35]} />
+      <meshStandardMaterial color="#2f6f8f" roughness={0.84} />
+    </mesh>
+  );
+}
+
 function Rug() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.2, 0.02, 0.35]}>
-      <planeGeometry args={[2.4, 1.5]} />
-      <meshLambertMaterial color="#c4a46a" />
-    </mesh>
+    <group position={[-1.35, 0.02, 0.2]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2.7, 1.75]} />
+        <meshStandardMaterial color="#8b1e3f" roughness={0.86} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]}>
+        <planeGeometry args={[2.25, 1.3]} />
+        <meshStandardMaterial color="#e7c56a" roughness={0.8} />
+      </mesh>
+    </group>
   );
 }
 
@@ -942,11 +998,11 @@ function Screen({ wide, color }: { wide: boolean; color: string }) {
   );
 }
 
-function Box({ color, position, size }: { color: string; position: [number, number, number]; size: [number, number, number] }) {
+function Box({ color, position, size, flat = true }: { color: string; position: [number, number, number]; size: [number, number, number]; flat?: boolean }) {
   return (
     <mesh position={position}>
       <boxGeometry args={size} />
-      <meshLambertMaterial color={color} flatShading />
+      <meshLambertMaterial color={color} flatShading={flat} />
     </mesh>
   );
 }

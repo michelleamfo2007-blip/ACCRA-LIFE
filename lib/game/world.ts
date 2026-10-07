@@ -1066,8 +1066,8 @@ export function homeById(id: string): Home {
 }
 
 const ROOM_LOOKS: Record<HomeGrade, { label: string; wall: string; side: string; tileA: string; tileB: string; woodA: string; woodB: string; bed: string; sofa: string; frame: string; sheet: string; door: string; yard: string; sky: string }> = {
-  low: { label: "Worn plaster, stained floor", wall: "#c2ad8e", side: "#a89072", tileA: "#b7a07c", tileB: "#9c8664", woodA: "#8d6b45", woodB: "#6f5234", bed: "#6e5344", sofa: "#8a6a45", frame: "#5c4030", sheet: "#d9cbb6", door: "#5c4030", yard: "#6d7848", sky: "#c4b89a" },
-  hall: { label: "Bunk, linoleum, strip light", wall: "#d9d3c4", side: "#b7c0b4", tileA: "#8fa8a4", tileB: "#7d9894", woodA: "#9aa7a3", woodB: "#879490", bed: "#3d5c78", sofa: "#6d7c86", frame: "#8b9094", sheet: "#e4e7ea", door: "#6e767c", yard: "#8ea35a", sky: "#d5dde6" },
+  low: { label: "Worn plaster, stained floor", wall: "#e7d3b4", side: "#d2b48c", tileA: "#e2cba8", tileB: "#d2b48a", woodA: "#8d6b45", woodB: "#6f5234", bed: "#6e5344", sofa: "#c47a4a", frame: "#5c4030", sheet: "#f3e6d0", door: "#5c4030", yard: "#6d7848", sky: "#c4b89a" },
+  hall: { label: "Bunk, linoleum, strip light", wall: "#f6f0e4", side: "#e6d9c6", tileA: "#d5ebe4", tileB: "#c3ddd4", woodA: "#c9ddd4", woodB: "#b7cfc6", bed: "#243056", sofa: "#2f8f6b", frame: "#8b9094", sheet: "#f7f4ef", door: "#6e767c", yard: "#8ea35a", sky: "#d5dde6" },
   mid: { label: "Painted self-contain", wall: "#3e8f84", side: "#357a70", tileA: "#ead7b6", tileB: "#dcc6a2", woodA: "#e7d2a4", woodB: "#dcc497", bed: "#243056", sofa: "#2f8f6b", frame: "#6b4428", sheet: "#f7f4ef", door: "#7a4a2c", yard: "#8ea35a", sky: "#d7e7f2" },
   high: { label: "Marble, gold, air-conditioned", wall: "#f6f1e7", side: "#e4d8c4", tileA: "#f7f4ee", tileB: "#e7e2d8", woodA: "#f3ead6", woodB: "#e6d7b4", bed: "#f4efe6", sofa: "#c4a46a", frame: "#c4a46a", sheet: "#fffdf8", door: "#8c6239", yard: "#9db56a", sky: "#d7e7f2" },
 };

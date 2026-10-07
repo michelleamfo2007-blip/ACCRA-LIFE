@@ -281,6 +281,7 @@ export function RoomView({
         pose={pose}
         heading={heading}
         dark={dark}
+        night={night}
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
         guests={guests.map((guest) => ({ name: guest.name, doing: guest.doing }))}
