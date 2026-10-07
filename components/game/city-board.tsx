@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, memo, type PointerEvent as ReactPointerEvent } from "react";
 import { happeningsAt, heatLabel, type Heat } from "@/lib/game/happenings";
 import { npcsAt, phaseEmoji, type NpcLive } from "@/lib/game/npcs";
-import { ROADS_X, ROADS_Y } from "@/lib/game/roads";
+import { roadPath, ROADS_X, ROADS_Y } from "@/lib/game/roads";
+import { roadTone, spotMatches, spotOnMap, townOf, type TownId } from "@/lib/game/towns";
 import { SPOTS, type Spot } from "@/lib/game/world";
 
 const WORLD = { w: 2000, h: 1400 };
@@ -12,8 +13,6 @@ const MAX_Z = 2.4;
 
 type View = { x: number; y: number; z: number };
 
-const ROAD_NAMES_H = ["RING ROAD NORTH", "LIBERATION ROAD", "OXFORD / OSU", "SPINTEX ROAD", "LABADI BEACH ROAD"];
-const ROAD_NAMES_V = ["N1 LINK", "ACHIMOTA RD", "INDEPENDENCE AVE", "CANTONMENTS", "LABONE LINK", "TEMA MOTORWAY"];
 const TRAFFIC = makeTraffic(false);
 const TRAFFIC_LITE = makeTraffic(true);
 
@@ -38,22 +37,7 @@ export const BOARDS: { id: string; x: number; y: number; fill: string; road: str
   { id: "airport", x: 1700, y: 280, fill: "#121212", road: "Airport road", text: "ECG, hold on", price: 80 },
 ];
 
-const AREAS = [
-  [620, 250, "OSU"],
-  [1320, 500, "LABONE"],
-  [1620, 230, "EAST LEGON"],
-  [250, 430, "AIRPORT"],
-  [280, 760, "MAKOLA"],
-  [900, 470, "CANTONMENTS"],
-  [980, 1040, "LABADI"],
-  [1580, 1158, "TESHIE"],
-  [1800, 1158, "NUNGUA"],
-  [1050, 112, "MADINA"],
-  [590, 112, "ACHIMOTA"],
-  [420, 636, "KANESHIE"],
-  [240, 1132, "DANSOMAN"],
-  [1600, 982, "SPINTEX"],
-];
+const WALKERS = makeWalkers();
 
 function applyTransform(node: HTMLElement, view: View) {
   node.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.z})`;
@@ -66,18 +50,34 @@ export const CityBoard = memo(function CityBoard({
   ads = {},
   active = null,
   at,
+  town = "accra",
+  query = "",
+  stars = [],
+  player = null,
+  aim = null,
+  transport = false,
   onSelect,
   onBoard,
+  onPan,
 }: {
-  filter: Spot["group"] | "all";
+  filter: string;
   boards?: boolean;
   night?: boolean;
   ads?: Record<string, string>;
   active?: string | null;
   at?: Date;
+  town?: string;
+  query?: string;
+  stars?: string[];
+  player?: { x: number; y: number; name: string } | null;
+  aim?: { x: number; y: number } | null;
+  transport?: boolean;
   onSelect: (id: string) => void;
   onBoard?: (id: string) => void;
+  onPan?: () => void;
 }) {
+  const onPanRef = useRef(onPan);
+  onPanRef.current = onPan;
   const boardRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<HTMLDivElement>(null);
   const floorZ = useRef(MIN_Z);
@@ -169,11 +169,24 @@ export const CityBoard = memo(function CityBoard({
     };
   }, []);
 
+  const townId = (town === "kumasi" ? "kumasi" : "accra") as TownId;
+  const skin = townOf(townId).skin;
+
+  useEffect(() => {
+    const node = boardRef.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const z = Math.max(floorZ.current, rect.width < 760 ? 0.95 : 0.72);
+    paint({ z, x: rect.width / 2 - skin.focus.x * z, y: rect.height / 2 - skin.focus.y * z });
+  }, [townId]);
+
   useEffect(() => {
     const node = boardRef.current;
     if (!node) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
+      onPanRef.current?.();
       const box = boardRect();
       show(zoomToward(viewRef.current, event.clientX - box.left, event.clientY - box.top, viewRef.current.z * (event.deltaY < 0 ? 1.12 : 0.89), floorZ.current));
     };
@@ -267,6 +280,7 @@ export const CityBoard = memo(function CityBoard({
             event.currentTarget.setPointerCapture(event.pointerId);
           } catch {}
         }
+        onPanRef.current?.();
         show({ z: viewRef.current.z, x: drag.current.px + dx, y: drag.current.py + dy });
       }}
       onPointerUp={release}
@@ -295,9 +309,12 @@ export const CityBoard = memo(function CityBoard({
           transform: `translate3d(${start.x}px, ${start.y}px, 0) scale(${start.z})`,
         }}
       >
-        <CityArt night={night} boards={boards} ads={ads} onBoard={onBoard} lite={lite} />
-        <SpotPins filter={filter} active={active} vibes={vibes} onSelect={onSelect} lite={lite} />
-        <HustleLayer lite={lite} />
+        <CityArt night={night} boards={boards && townId === "accra"} ads={ads} onBoard={onBoard} lite={lite} town={townId} at={at ?? new Date()} />
+        {transport ? <TransitLayer town={townId} /> : null}
+        {player && aim ? <DirectionLine from={player} to={aim} /> : null}
+        <SpotPins filter={filter} active={active} vibes={vibes} onSelect={onSelect} lite={lite} town={townId} query={query} stars={stars} />
+        <HustleLayer lite={lite} town={townId} />
+        {player ? <PlayerPin name={player.name} x={player.x} y={player.y} /> : null}
       </div>
       <div data-zoom className="absolute bottom-[max(7.5rem,calc(env(safe-area-inset-bottom)+6.5rem))] right-3 z-30 flex flex-col gap-2">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
@@ -306,7 +323,7 @@ export const CityBoard = memo(function CityBoard({
         <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)} className="grid h-11 w-11 place-items-center rounded-full bg-white text-xl font-bold shadow-lg">
           −
         </button>
-        <button type="button" aria-label="Show all of Accra" onClick={zoomOutAll} className="grid h-11 w-11 place-items-center rounded-full bg-white text-base font-bold shadow-lg">
+        <button type="button" aria-label="Show the whole city" onClick={zoomOutAll} className="grid h-11 w-11 place-items-center rounded-full bg-white text-base font-bold shadow-lg">
           ⤢
         </button>
       </div>
@@ -314,20 +331,95 @@ export const CityBoard = memo(function CityBoard({
   );
 });
 
-function HustleLayer({ lite }: { at?: Date; lite: boolean }) {
+function HustleLayer({ lite, town }: { at?: Date; lite: boolean; town: TownId }) {
+  const locals = town === "accra" ? null : townOf(town).people;
   const [live, setLive] = useState<NpcLive[]>(() => npcsAt());
   useEffect(() => {
+    if (town !== "accra") return;
     const pulse = () => setLive(npcsAt());
     pulse();
     const id = window.setInterval(pulse, lite ? 2000 : 1000);
     return () => window.clearInterval(id);
-  }, [lite]);
+  }, [lite, town]);
+  if (locals) {
+    return (
+      <>
+        {locals.map((npc) => (
+          <div key={npc.id} className="pointer-events-none absolute z-[12] flex -translate-x-1/2 -translate-y-full flex-col items-center" style={{ left: npc.x, top: npc.y }} title={npc.line}>
+            <span className="mb-0.5 max-w-[8rem] truncate rounded-full bg-[#FCD116] px-2 py-0.5 text-[9px] font-bold text-[#121212] shadow-sm">{npc.line}</span>
+            <span className="grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold text-white shadow ring-2 ring-white/80" style={{ background: npc.shirt }}>
+              {npc.name.slice(0, 1)}
+            </span>
+          </div>
+        ))}
+      </>
+    );
+  }
   return (
     <>
       {live.map((npc) => (
         <NpcPin key={npc.id} npc={npc} lite={lite} />
       ))}
     </>
+  );
+}
+
+function PlayerPin({ name, x, y }: { name: string; x: number; y: number }) {
+  return (
+    <div className="pointer-events-none absolute z-[18] flex -translate-x-1/2 -translate-y-full flex-col items-center" style={{ left: x, top: y }}>
+      <span className="mb-0.5 rounded-full bg-[#006B3F] px-2 py-0.5 text-[9px] font-bold text-white shadow">You</span>
+      <span className="grid h-8 w-8 place-items-center rounded-full border-2 border-[#FCD116] bg-[#121212] text-[11px] font-bold text-white">{name.slice(0, 1)}</span>
+    </div>
+  );
+}
+
+function DirectionLine({ from, to }: { from: { x: number; y: number }; to: { x: number; y: number } }) {
+  const points = roadPath(from, to);
+  const d = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="pointer-events-none absolute inset-0 h-full w-full">
+      <path d={d} fill="none" stroke="#006B3F" strokeWidth="6" strokeLinecap="round" strokeDasharray="14 10" />
+    </svg>
+  );
+}
+
+function TransitLayer({ town }: { town: TownId }) {
+  const city = townOf(town);
+  return (
+    <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="pointer-events-none absolute inset-0 h-full w-full">
+      {city.lines.map((line) => (
+        <g key={line.id}>
+          <polyline points={line.points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={line.color} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.9" />
+          <text x={line.points[0].x + 8} y={line.points[0].y - 10} fill="#121212" fontSize="12" fontWeight="700" fontFamily="ui-sans-serif">
+            {line.name}
+          </text>
+        </g>
+      ))}
+      {city.taxis.map((stop) => (
+        <g key={stop.name}>
+          <circle cx={stop.x} cy={stop.y} r="8" fill="#FCD116" stroke="#121212" />
+          <text x={stop.x + 12} y={stop.y + 4} fill="#121212" fontSize="11" fontWeight="700" fontFamily="ui-sans-serif">
+            Taxi · {stop.name}
+          </text>
+        </g>
+      ))}
+      {city.okada.map((zone) => (
+        <g key={zone.name}>
+          <rect x={zone.x - 18} y={zone.y - 12} width="36" height="24" rx="6" fill="none" stroke="#CE1126" strokeDasharray="4 3" />
+          <text x={zone.x + 22} y={zone.y + 4} fill="#CE1126" fontSize="11" fontWeight="700" fontFamily="ui-sans-serif">
+            Okada · {zone.name}
+          </text>
+        </g>
+      ))}
+      {city.stops.map((stop) => (
+        <g key={stop.name}>
+          <rect x={stop.x - 5} y={stop.y - 5} width="10" height="10" fill="#006B3F" />
+          <text x={stop.x + 10} y={stop.y + 4} fill="#006B3F" fontSize="11" fontWeight="700" fontFamily="ui-sans-serif">
+            {stop.name}
+          </text>
+        </g>
+      ))}
+    </svg>
   );
 }
 
@@ -356,23 +448,35 @@ const NpcPin = memo(function NpcPin({ npc, lite }: { npc: NpcLive; lite: boolean
   );
 });
 
+const GROUPS = new Set(["all", "home", "hang", "sea", "civic", "work", "trip", "soon"]);
+
 const SpotPins = memo(function SpotPins({
   filter,
   active,
   vibes,
   onSelect,
   lite,
+  town,
+  query,
+  stars,
 }: {
-  filter: Spot["group"] | "all";
+  filter: string;
   active: string | null;
   vibes: Map<string, { emoji: string; line: string; heat: Heat }>;
   onSelect: (id: string) => void;
   lite: boolean;
+  town: TownId;
+  query: string;
+  stars: string[];
 }) {
   return (
     <>
       {SPOTS.map((spot) => {
-        const faded = filter !== "all" && spot.group !== filter && spot.group !== "soon";
+        if (!spotOnMap(spot, town)) return null;
+        if (filter === "stars" && !stars.includes(spot.id)) return null;
+        const matched = spotMatches(spot, filter, query);
+        if (!matched && (query.trim() || !GROUPS.has(filter))) return null;
+        const faded = !matched && filter !== "all";
         const open = active === spot.id;
         const vibe = vibes.get(spot.id) ?? null;
         const tag = spot.soon
@@ -459,35 +563,50 @@ const CityArt = memo(function CityArt({
   ads,
   onBoard,
   lite = false,
+  town,
+  at,
 }: {
   night: boolean;
   boards: boolean;
   ads: Record<string, string>;
   onBoard?: (id: string) => void;
   lite?: boolean;
+  town: TownId;
+  at: Date;
 }) {
   const buildings = lite ? CITY_LITE : CITY;
   const trees = lite ? TREES_LITE : TREES;
+  const skin = townOf(town).skin;
   return (
     <svg viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} className="h-full w-full" style={{ pointerEvents: boards ? "auto" : "none" }}>
-      <rect width={WORLD.w} height={WORLD.h} fill="#d7ebbc" />
+      <rect width={WORLD.w} height={WORLD.h} fill={night ? skin.groundNight : skin.ground} />
       <Hills />
-      <path d="M0 1196 C 500 1172, 1000 1212, 1500 1180 C 1800 1164, 2000 1192, 2000 1192 V 1400 H 0 Z" fill="#f4e3c4" />
-      <path d="M0 1296 C 500 1272, 1000 1312, 1500 1280 C 1800 1264, 2000 1292, 2000 1292 V 1400 H 0 Z" fill="#b9e4f5" />
-      <path d="M0 1336 C 500 1316, 1000 1352, 1500 1320 C 1800 1306, 2000 1332, 2000 1332 V 1400 H 0 Z" fill="#8fd0ea" />
-      <ellipse cx="500" cy="1048" rx="168" ry="70" fill="#7ec4e4" />
-      <ellipse cx="500" cy="1048" rx="118" ry="44" fill="#c5e9f6" />
+      {skin.coast ? (
+        <>
+          <path d="M0 1196 C 500 1172, 1000 1212, 1500 1180 C 1800 1164, 2000 1192, 2000 1192 V 1400 H 0 Z" fill={skin.beach} />
+          <path d="M0 1296 C 500 1272, 1000 1312, 1500 1280 C 1800 1264, 2000 1292, 2000 1292 V 1400 H 0 Z" fill={skin.sea} />
+          <path d="M0 1336 C 500 1316, 1000 1352, 1500 1320 C 1800 1306, 2000 1332, 2000 1332 V 1400 H 0 Z" fill={skin.deep} />
+        </>
+      ) : (
+        <ellipse cx="1000" cy="700" rx="820" ry="520" fill={night ? "#243424" : "#b7d48a"} />
+      )}
+      {skin.lake ? (
+        <>
+          <ellipse cx={skin.lake.x} cy={skin.lake.y} rx="168" ry="70" fill="#7ec4e4" />
+          <ellipse cx={skin.lake.x} cy={skin.lake.y} rx="118" ry="44" fill="#c5e9f6" />
+        </>
+      ) : null}
       <ellipse cx="960" cy="760" rx="130" ry="78" fill="#c5e2a4" />
       {ROADS_Y.map((y, index) => (
         <g key={`hy-${y}`}>
           <rect x="28" y={y - 22} width="1944" height="44" rx="4" fill="#9aa3ad" />
-          <rect x="36" y={y - 16} width="1928" height="32" rx="3" fill="#3a414c" />
+          <rect x="36" y={y - 16} width="1928" height="32" rx="3" fill={roadTone(index, at)} />
           <line x1="52" y1={y} x2="1948" y2={y} stroke="#FCD116" strokeWidth="2.2" strokeDasharray="18 16" strokeOpacity="0.85" />
           <line x1="52" y1={y - 14} x2="1948" y2={y - 14} stroke="white" strokeWidth="1.2" strokeOpacity="0.35" />
           <line x1="52" y1={y + 14} x2="1948" y2={y + 14} stroke="white" strokeWidth="1.2" strokeOpacity="0.35" />
-          {ROAD_NAMES_H[index] ? (
+          {skin.roadsH[index] ? (
             <text x="120" y={y - 20} fill="white" fillOpacity="0.55" fontSize="11" fontWeight="700" letterSpacing="1.5" fontFamily="ui-sans-serif">
-              {ROAD_NAMES_H[index]}
+              {skin.roadsH[index]}
             </text>
           ) : null}
         </g>
@@ -495,19 +614,19 @@ const CityArt = memo(function CityArt({
       {ROADS_X.map((x, index) => (
         <g key={`vx-${x}`}>
           <rect x={x - 22} y="20" width="44" height="1160" rx="4" fill="#9aa3ad" />
-          <rect x={x - 16} y="28" width="32" height="1145" rx="3" fill="#3a414c" />
+          <rect x={x - 16} y="28" width="32" height="1145" rx="3" fill={roadTone(index + 1, at)} />
           <line x1={x} y1="44" x2={x} y2="1168" stroke="#FCD116" strokeWidth="2.2" strokeDasharray="18 16" strokeOpacity="0.85" />
           <line x1={x - 12} y1="44" x2={x - 12} y2="1168" stroke="white" strokeWidth="1.2" strokeOpacity="0.3" />
           <line x1={x + 12} y1="44" x2={x + 12} y2="1168" stroke="white" strokeWidth="1.2" strokeOpacity="0.3" />
-          {ROAD_NAMES_V[index] ? (
+          {skin.roadsV[index] ? (
             <text x={x + 24} y="80" transform={`rotate(90 ${x + 24} 80)`} fill="white" fillOpacity="0.5" fontSize="11" fontWeight="700" letterSpacing="1.5" fontFamily="ui-sans-serif">
-              {ROAD_NAMES_V[index]}
+              {skin.roadsV[index]}
             </text>
           ) : null}
         </g>
       ))}
-      <Highway x={0} label="N1 WEST · CAPE COAST · ELMINA · KAKUM" />
-      <Highway x={1904} label="MOTORWAY EAST · SHAI HILLS · AKOSOMBO · ADA" />
+      <Highway x={0} label={skin.west} />
+      <Highway x={1904} label={skin.east} />
       <circle cx="780" cy="620" r="42" fill="#9aa3ad" />
       <circle cx="780" cy="620" r="34" fill="#3a414c" />
       <circle cx="780" cy="620" r="14" fill="#b7d48c" />
@@ -518,6 +637,12 @@ const CityArt = memo(function CityArt({
       ))}
       {trees.map((tree) => (
         <Tree key={`${tree.x}-${tree.y}`} x={tree.x} y={tree.y} r={tree.r} lite={lite} />
+      ))}
+      {WALKERS.map((walker) => (
+        <g key={`${walker.x}-${walker.y}`} opacity={night ? 0.35 : 0.9}>
+          <circle cx={walker.x} cy={walker.y - 7} r="3.2" fill="#c68a62" />
+          <rect x={walker.x - 3.5} y={walker.y - 3} width="7" height="9" rx="2" fill={walker.shirt} />
+        </g>
       ))}
       <Traffic lite={lite} />
       {boards
@@ -533,18 +658,21 @@ const CityArt = memo(function CityArt({
             />
           ))
         : null}
-      {AREAS.map(([x, y, label]) => (
-        <text key={String(label)} x={Number(x)} y={Number(y)} textAnchor="middle" fill="white" fillOpacity="0.92" fontSize="20" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
-          {label}
+      {skin.areas.map((area) => (
+        <text key={area.label} x={area.x} y={area.y} textAnchor="middle" fill={night ? "#f4efe6" : "white"} fillOpacity="0.92" fontSize="20" fontWeight="700" letterSpacing="3" fontFamily="ui-sans-serif">
+          {area.label}
         </text>
       ))}
-      <text x="500" y="1054" textAnchor="middle" fill="white" fontSize="16" letterSpacing="3" fontFamily="ui-sans-serif">
-        KORLE
-      </text>
-      <text x="1000" y="1364" textAnchor="middle" fill="white" fontSize="22" letterSpacing="6" fontFamily="ui-sans-serif">
-        GULF OF GUINEA
-      </text>
-      {night ? <rect width={WORLD.w} height={WORLD.h} fill="rgba(10,16,40,.16)" /> : null}
+      {skin.lake ? (
+        <text x={skin.lake.x} y={skin.lake.y + 6} textAnchor="middle" fill="white" fontSize="16" letterSpacing="3" fontFamily="ui-sans-serif">
+          {skin.lake.name}
+        </text>
+      ) : null}
+      {skin.coast ? (
+        <text x="1000" y="1364" textAnchor="middle" fill="white" fontSize="22" letterSpacing="6" fontFamily="ui-sans-serif">
+          {skin.seaLabel}
+        </text>
+      ) : null}
     </svg>
   );
 });
@@ -581,6 +709,20 @@ function makeCity() {
     }
   }
   return buildings;
+}
+
+function makeWalkers() {
+  const people: { x: number; y: number; shirt: string }[] = [];
+  const shirts = ["#121212", "#FCD116", "#CE1126", "#006B3F", "#f7f4ef"];
+  let n = 3;
+  for (const y of ROADS_Y) {
+    for (let x = 100; x < 1900; x += 170) {
+      n += 1;
+      if (roll(n) % 3 !== 0) continue;
+      people.push({ x: x + (roll(n) % 16), y: y + 30, shirt: shirts[n % shirts.length] });
+    }
+  }
+  return people;
 }
 
 function makeTrees() {

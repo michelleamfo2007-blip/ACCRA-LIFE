@@ -32,6 +32,9 @@ import { PlayerChops, WeeklyCard } from "@/components/game/city-apps";
 import { chopSign } from "@/lib/game/kitchen";
 import { checkIn } from "@/lib/game/weekly";
 import { CABINS, bookFlight, routeOf } from "@/lib/game/flights";
+import { TravelSheet } from "@/components/game/travel-sheet";
+import { placeCard, spotOnMap, townEventNow, townOf, type TownId } from "@/lib/game/towns";
+import { quoteTravel, type TravelMode } from "@/lib/game/travel";
 import type { Cabin } from "@/lib/game/flights";
 import { TOUR, finishTour, skipTour, type TourId } from "@/lib/game/tour";
 import {
@@ -79,6 +82,7 @@ import {
   widenRoom,
   receiveCash,
   goTo,
+  toggleStar,
   carFuelBlock,
   homeById,
   homeLook,
@@ -916,7 +920,13 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
 function Play({ account, flash }: { account: Account; flash: (message: string) => void }) {
   const life = account.life;
   const [tab, setTab] = useState<"home" | "buy" | "map" | "phone">("home");
-  const [filter, setFilter] = useState<Spot["group"] | "all">("all");
+  const [filter, setFilter] = useState<string>("all");
+  const [mapQuery, setMapQuery] = useState("");
+  const [routesOn, setRoutesOn] = useState(false);
+  const [chipsOpen, setChipsOpen] = useState(true);
+  const chipTimer = useRef<number | null>(null);
+  const chipsHidden = useRef(false);
+  const [travelOpen, setTravelOpen] = useState(false);
   const [boards, setBoards] = useState(true);
   const [ads, setAds] = useState<Record<string, string>>({});
   const [boardId, setBoardId] = useState<string | null>(null);
@@ -1163,7 +1173,24 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           ads={ads}
           active={placeId}
           at={mapAt}
+          town={life.town}
+          query={mapQuery}
+          stars={life.stars ?? []}
+          transport={routesOn}
+          player={spotOnMap(spotById(life.where), (life.town ?? "accra") === "kumasi" ? "kumasi" : "accra") ? { x: spotById(life.where).x, y: spotById(life.where).y, name: account.name } : null}
+          aim={place && spotOnMap(place, (life.town ?? "accra") === "kumasi" ? "kumasi" : "accra") && place.id !== life.where ? { x: place.x, y: place.y } : null}
           onBoard={setBoardId}
+          onPan={() => {
+            if (!chipsHidden.current) {
+              chipsHidden.current = true;
+              setChipsOpen(false);
+            }
+            if (chipTimer.current) window.clearTimeout(chipTimer.current);
+            chipTimer.current = window.setTimeout(() => {
+              chipsHidden.current = false;
+              setChipsOpen(true);
+            }, 700);
+          }}
           onSelect={(id) => {
             const spot = spotById(id);
             if (spot.soon) {
@@ -1349,7 +1376,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 : `${enRouteGuests(life)[0].name} · ${enRouteGuests(life)[0].ride} from ${enRouteGuests(life)[0].from} · ${minutesAway(life, enRouteGuests(life)[0])}m`}
             </button>
           ) : null}
-          <div className={`absolute left-2 z-20 max-w-[min(10rem,calc(100%-6.5rem))] space-y-1 sm:left-3 ${tab === "map" ? "top-[max(7.4rem,calc(env(safe-area-inset-top)+6.6rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
+          <div className={`absolute left-2 z-20 max-w-[min(10rem,calc(100%-6.5rem))] space-y-1 sm:left-3 ${tab === "map" ? "top-[max(6.15rem,calc(env(safe-area-inset-top)+5.5rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
             <button
               type="button"
               className="w-full truncate rounded-full bg-white px-2.5 py-1 text-left text-xs font-bold shadow"
@@ -1454,31 +1481,26 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             </div>
           </div>
           {tab === "map" ? (
-            <div className="no-scrollbar absolute left-2 right-2 top-[max(4.6rem,calc(env(safe-area-inset-top)+4.1rem))] z-30 flex justify-start gap-2 overflow-x-auto px-1 pb-1 sm:left-3 sm:right-3 sm:top-[max(4.15rem,calc(env(safe-area-inset-top)+3.4rem))] sm:justify-center">
-              <LayerChip active={filter === "all"} onClick={() => setFilter("all")}>
-                Free road
-              </LayerChip>
-              <LayerChip active={boards || Boolean(boardId)} onClick={() => setBoardId((current) => (current ? null : "oxford"))}>
-                Billboards
-              </LayerChip>
-              <LayerChip active={filter === "hang"} onClick={() => setFilter("hang")}>
-                Neighbours
-              </LayerChip>
-              <LayerChip active={filter === "sea"} onClick={() => setFilter("sea")}>
-                Sea
-              </LayerChip>
-              <LayerChip active={filter === "civic"} onClick={() => setFilter("civic")}>
-                Gov
-              </LayerChip>
-              <LayerChip active={filter === "work"} onClick={() => setFilter("work")}>
-                Work
-              </LayerChip>
-              <LayerChip active={filter === "trip"} onClick={() => setFilter("trip")}>
-                Day trips
-              </LayerChip>
-              <span className="rounded-full bg-[#121212]/80 px-3 py-1.5 text-[11px] font-semibold text-white shadow">
-                🚌 Hustle loop live
-              </span>
+            <div className="pointer-events-none absolute left-2 right-2 top-[max(3.35rem,calc(env(safe-area-inset-top)+2.85rem))] z-30 sm:left-3 sm:right-3 sm:top-[max(3.15rem,calc(env(safe-area-inset-top)+2.55rem))]">
+              <MapFilterBar
+                tucked={!chipsOpen}
+                filter={filter}
+                boards={boards || Boolean(boardId)}
+                routesOn={routesOn}
+                query={mapQuery}
+                town={townOf(life.town).name}
+                eventTitle={townEventNow(townOf(life.town), mapAt)?.title ?? "Hustle loop live"}
+                onFilter={setFilter}
+                onBoards={() => setBoardId((current) => (current ? null : "oxford"))}
+                onRoutes={() => setRoutesOn((on) => !on)}
+                onQuery={setMapQuery}
+                onTravel={() => setTravelOpen(true)}
+                onShow={() => {
+                  chipsHidden.current = false;
+                  if (chipTimer.current) window.clearTimeout(chipTimer.current);
+                  setChipsOpen(true);
+                }}
+              />
             </div>
           ) : null}
           <button
@@ -1593,7 +1615,31 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           ) : null}
         </Sheet>
       ) : null}
-      {place && tab === "map" ? (
+      {travelOpen && tab === "map" ? (
+        <TravelSheet
+          life={life}
+          onClose={() => setTravelOpen(false)}
+          onConfirm={(townId: TownId, mode: TravelMode) => {
+            const quote = quoteTravel(life, townId, mode);
+            if (quote.error) {
+              flash(quote.error);
+              return;
+            }
+            setTravelOpen(false);
+            if (quote.ride.cost <= 0 && quote.ride.minutes <= 0) {
+              apply(goTo(life, quote.placeId, quote.ride));
+              setTab("map");
+              return;
+            }
+            if (mode === "flight" && quote.routeId) {
+              setFlight({ routeId: quote.routeId, cabin: "economy" });
+              return;
+            }
+            setTrip({ name: townOf(townId).name, placeId: quote.placeId, ride: rideIn(quote.ride, city.weather) });
+          }}
+        />
+      ) : null}
+      {place && tab === "map" && !travelOpen ? (
         <PlaceSheet
           place={place}
           from={life.where}
@@ -1637,6 +1683,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             apply(payOffer(life, verb, offerFrom(verb), place.id));
           }}
           onGem={gemSpotId(life.minutes) === place.id ? () => apply(huntGem(life)) : null}
+          starred={(life.stars ?? []).includes(place.id)}
+          onStar={() => apply({ life: toggleStar(life, place.id), notes: [] })}
         >
           <HappeningBanner spotId={place.id} at={now ? new Date(now) : new Date()} people={sheetPeople.length} />
           <WeeklyCard life={life} spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
@@ -1890,6 +1938,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setTab("home");
             setPhoneApp(null);
           }}
+          onMap={() => {
+            setPhoneApp(null);
+            setTab("map");
+          }}
           onArrange={() => {
             if (life.homeId !== "own-house") {
               flash("Move into the house first. Then you arrange the rooms.");
@@ -2122,6 +2174,8 @@ function PlaceSheet({
   onGo,
   onAct,
   onGem,
+  starred = false,
+  onStar,
   children,
 }: {
   children?: ReactNode;
@@ -2138,11 +2192,14 @@ function PlaceSheet({
   onGo: () => void;
   onAct: (verb: Verb) => void;
   onGem: (() => void) | null;
+  starred?: boolean;
+  onStar?: () => void;
 }) {
   const rides = car ? [...RIDES, car] : RIDES;
   const ride = farRide(rideIn(rides.find((item) => item.id === rideId) ?? RIDES[1], sky), from, place.id);
   const far = distanceOf(from, place.id);
   const area = areaOf(place);
+  const card = placeCard(place);
   const blurb = place.blurb.startsWith(`${area}.`) ? place.blurb.slice(area.length + 1).trim() : place.blurb;
   const [copied, setCopied] = useState(false);
   return (
@@ -2152,13 +2209,22 @@ function PlaceSheet({
         <span className="grid h-12 w-12 place-items-center rounded-full bg-[#f4f7fb] text-2xl">{place.emoji}</span>
         <span className="min-w-0 flex-1">
           <span className="block font-display text-2xl">{place.name}</span>
-          <span className="text-sm text-[#5c6b82]">{area}</span>
+          <span className="text-sm text-[#5c6b82]">{card.neighborhood || area}</span>
         </span>
+        {onStar ? (
+          <button type="button" aria-label={starred ? "Unsave place" : "Save place"} onClick={onStar} className={`rounded-full px-3 py-1 text-sm font-semibold ${starred ? "bg-[#FCD116]" : "bg-[#f4f7fb]"}`}>
+            {starred ? "★" : "☆"}
+          </button>
+        ) : null}
         <button type="button" onClick={onClose} className="rounded-full bg-[#f4f7fb] px-3 py-1 text-sm font-semibold">
           Hide
         </button>
       </div>
       <p className="mt-3 text-sm leading-6 text-[#5c6b82]">{blurb}</p>
+      <p className="mt-2 text-xs font-semibold text-[#5c6b82]">
+        {card.hours} · {card.cost}
+        {far ? ` · ${far} min away` : ""}
+      </p>
       <button
         type="button"
         className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#CE1126]"
@@ -2371,9 +2437,202 @@ function Swatches({ label, colors, value, onChange }: { label: string; colors: r
 
 function LayerChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold shadow ${active ? "bg-[#121212] text-white" : "bg-white"}`}>
+    <button type="button" onClick={onClick} className={`inline-flex h-7 shrink-0 items-center rounded-full border px-2.5 text-[11px] font-semibold ${active ? "border-[#006B3F] bg-[#006B3F] font-bold text-white" : "border-[#ead9a0] bg-[#fff8e6] text-[#121212] hover:bg-[#f6e7b0] active:scale-95"}`}>
       {children}
     </button>
+  );
+}
+
+function MapFilterBar({
+  tucked,
+  filter,
+  boards,
+  routesOn,
+  query,
+  town,
+  eventTitle,
+  onFilter,
+  onBoards,
+  onRoutes,
+  onQuery,
+  onTravel,
+  onShow,
+}: {
+  tucked: boolean;
+  filter: string;
+  boards: boolean;
+  routesOn: boolean;
+  query: string;
+  town: string;
+  eventTitle: string;
+  onFilter: (id: string) => void;
+  onBoards: () => void;
+  onRoutes: () => void;
+  onQuery: (value: string) => void;
+  onTravel: () => void;
+  onShow: () => void;
+}) {
+  const [more, setMore] = useState(false);
+  const chips: { id: string; label: string; icon: ChipName; active: boolean; onClick: () => void; late?: boolean }[] = [
+    { id: "all", label: "Road", icon: "road", active: filter === "all", onClick: () => onFilter("all") },
+    { id: "boards", label: "Boards", icon: "sign", active: boards, onClick: onBoards },
+    { id: "hang", label: "People", icon: "users", active: filter === "hang", onClick: () => onFilter("hang") },
+    { id: "sea", label: "Sea", icon: "waves", active: filter === "sea", onClick: () => onFilter("sea") },
+    { id: "civic", label: "Gov", icon: "landmark", active: filter === "civic", onClick: () => onFilter("civic") },
+    { id: "work", label: "Work", icon: "briefcase", active: filter === "work", onClick: () => onFilter("work"), late: true },
+    { id: "trip", label: "Day trips", icon: "pin", active: filter === "trip", onClick: () => onFilter("trip"), late: true },
+    { id: "food", label: "Food", icon: "utensils", active: filter === "food", onClick: () => onFilter("food"), late: true },
+    { id: "nightlife", label: "Night", icon: "moon", active: filter === "nightlife", onClick: () => onFilter("nightlife"), late: true },
+    { id: "shopping", label: "Shop", icon: "bag", active: filter === "shopping", onClick: () => onFilter("shopping"), late: true },
+    { id: "worship", label: "Worship", icon: "worship", active: filter === "worship", onClick: () => onFilter("worship"), late: true },
+    { id: "transport", label: "Ride", icon: "car", active: filter === "transport", onClick: () => onFilter("transport"), late: true },
+    { id: "stars", label: "Saved", icon: "bookmark", active: filter === "stars", onClick: () => onFilter("stars"), late: true },
+    { id: "routes", label: "Routes", icon: "route", active: routesOn, onClick: onRoutes, late: true },
+  ];
+  return (
+    <div className="relative h-8">
+      <div className={`pointer-events-auto absolute inset-x-0 top-0 transition duration-200 ${tucked ? "pointer-events-none -translate-y-1 opacity-0" : "translate-y-0 opacity-100"}`}>
+        <div className="no-scrollbar flex h-8 items-center gap-1 overflow-x-auto scroll-smooth overscroll-x-contain px-1 [mask-image:linear-gradient(to_right,transparent,black_10px,black_calc(100%-18px),transparent)] [scroll-snap-type:x_mandatory]">
+            {chips.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={chip.onClick}
+                className={`inline-flex h-7 shrink-0 snap-start items-center gap-1 rounded-full border px-2 text-[11px] leading-none transition active:scale-95 ${chip.late && !more ? "max-sm:hidden" : ""} ${chip.active ? "border-[#c9a227] bg-[#FCD116] font-bold text-[#121212]" : "border-[#ead9a0] bg-[#fff8e6]/95 font-semibold text-[#121212] hover:bg-[#f6e7b0]"}`}
+              >
+                <ChipIcon name={chip.icon} />
+                {chip.label}
+              </button>
+            ))}
+            <button type="button" onClick={onTravel} className="inline-flex h-7 shrink-0 snap-start items-center rounded-full bg-[#006B3F] px-2.5 text-[11px] font-bold leading-none text-white active:scale-95">
+              {town}
+            </button>
+            <input
+              value={query}
+              onChange={(event) => onQuery(event.target.value)}
+              placeholder="Search"
+              aria-label="Search the map"
+              className="h-7 w-[4.75rem] shrink-0 snap-start rounded-full border border-[#ead9a0] bg-[#fff8e6] px-2 text-[11px] font-semibold text-[#121212] outline-none placeholder:text-[#8a7d62]"
+            />
+            <span className={`inline-flex h-7 max-w-[8.5rem] shrink-0 snap-start items-center truncate rounded-full bg-[#121212]/85 px-2 text-[10px] font-semibold leading-none text-white ${more ? "" : "max-sm:hidden"}`}>
+              {eventTitle}
+            </span>
+            <button type="button" onClick={() => setMore((open) => !open)} aria-label={more ? "Fewer filters" : "More filters"} className="inline-flex h-7 w-7 shrink-0 snap-start items-center justify-center rounded-full border border-[#ead9a0] bg-[#fff8e6] text-[#121212] active:scale-95 sm:hidden">
+              <ChipIcon name={more ? "up" : "down"} />
+            </button>
+          </div>
+      </div>
+      {tucked ? (
+        <button type="button" onClick={onShow} className="pointer-events-auto absolute left-1 top-0.5 inline-flex h-7 items-center gap-1 rounded-full border border-[#ead9a0] bg-[#fff8e6] px-2 text-[11px] font-bold text-[#121212] shadow-sm">
+          <ChipIcon name="pin" />
+          Filters
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+type ChipName = "road" | "sign" | "users" | "waves" | "landmark" | "briefcase" | "pin" | "utensils" | "moon" | "bag" | "worship" | "car" | "bookmark" | "route" | "up" | "down";
+
+function ChipIcon({ name }: { name: ChipName }) {
+  const pen = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" aria-hidden {...pen}>
+      {name === "waves" ? (
+        <>
+          <path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+          <path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+          <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1" />
+        </>
+      ) : null}
+      {name === "landmark" ? (
+        <>
+          <path d="M3 22h18" />
+          <path d="M6 18V9" />
+          <path d="M10 18V9" />
+          <path d="M14 18V9" />
+          <path d="M18 18V9" />
+          <path d="m12 2 9 7H3l9-7z" />
+        </>
+      ) : null}
+      {name === "briefcase" ? (
+        <>
+          <rect x="2" y="7" width="20" height="14" rx="2" />
+          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+          <path d="M2 13h20" />
+        </>
+      ) : null}
+      {name === "pin" ? (
+        <>
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </>
+      ) : null}
+      {name === "utensils" ? (
+        <>
+          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
+          <path d="M7 2v20" />
+          <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+        </>
+      ) : null}
+      {name === "moon" ? <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /> : null}
+      {name === "bag" ? (
+        <>
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+          <path d="M3 6h18" />
+          <path d="M16 10a4 4 0 0 1-8 0" />
+        </>
+      ) : null}
+      {name === "worship" ? (
+        <>
+          <path d="M12 2v5" />
+          <path d="M9.5 4.5h5" />
+          <path d="M4 22V10l8-4 8 4v12" />
+          <path d="M4 22h16" />
+          <path d="M10 22v-6h4v6" />
+        </>
+      ) : null}
+      {name === "car" ? (
+        <>
+          <path d="M19 17h2a1 1 0 0 0 1-1v-3a2 2 0 0 0-1.5-1.9L19 10s-1.3-1.4-2.2-2.3A2 2 0 0 0 15 7H5a2 2 0 0 0-1.4.9L2 11v5a1 1 0 0 0 1 1h2" />
+          <circle cx="7" cy="17" r="2" />
+          <circle cx="17" cy="17" r="2" />
+        </>
+      ) : null}
+      {name === "bookmark" ? <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /> : null}
+      {name === "route" ? (
+        <>
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </>
+      ) : null}
+      {name === "road" ? (
+        <>
+          <path d="M4 19 8 5" />
+          <path d="M20 19 16 5" />
+          <path d="M12 6v2" />
+          <path d="M12 11v2" />
+          <path d="M12 16v2" />
+        </>
+      ) : null}
+      {name === "sign" ? (
+        <>
+          <rect x="3" y="4" width="18" height="12" rx="2" />
+          <path d="M12 16v5" />
+        </>
+      ) : null}
+      {name === "users" ? (
+        <>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </>
+      ) : null}
+      {name === "up" ? <path d="m6 14 6-6 6 6" /> : null}
+      {name === "down" ? <path d="m6 10 6 6 6-6" /> : null}
+    </svg>
   );
 }
 

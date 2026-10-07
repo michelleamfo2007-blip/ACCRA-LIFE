@@ -10,13 +10,31 @@ import { HomeApp, InviteApp, TurfApp } from "@/components/game/ladder-apps";
 import { PeopleApp, SusuApp, type NetAction } from "@/components/game/social-apps";
 import { AlertsApp, BankApp, CalendarApp, CommunityApp, FeedApp, FleetApp, FootballApp, GuideApp, MarketApp, PetsApp, StoriesApp } from "@/components/game/town-apps";
 import { HUSTLES, MONEY_LINE, doHustle, hustleLabel, hustleLock, nextMoneyStep } from "@/lib/game/money-path";
+import {
+  WALLPAPERS,
+  chargePhone,
+  cloutTier,
+  followersOf,
+  hasSignal,
+  hideApp,
+  lastPost,
+  phoneNotices,
+  phoneOf,
+  replacePhone,
+  setWallpaper,
+  todayCards,
+  topUpAirtime,
+  useAirtime,
+  wallpaperCss,
+  wallpaperOf,
+} from "@/lib/game/phone-shell";
 import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
 import { askPromotion, nextRank } from "@/lib/game/ladder";
 import { askOver } from "@/lib/game/home-life";
-import { callPerson, cloutLabel, cloutOf, postClout, textPerson, weatherBrief, type CallKind } from "@/lib/game/phone-life";
+import { callPerson, cloutOf, postClout, textPerson, weatherBrief, type CallKind } from "@/lib/game/phone-life";
 import { storyReady } from "@/lib/game/story";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
 import type { Weather } from "@/lib/game/sky";
@@ -95,9 +113,12 @@ type AppId =
   | "charts"
   | "house"
   | "turf"
-  | "invite";
+  | "invite"
+  | "photos"
+  | "delivery"
+  | "papers";
 
-const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite"];
+const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "papers"];
 
 export function Handset({
   life,
@@ -131,6 +152,7 @@ export function Handset({
   sky,
   onGo,
   onFly,
+  onMap,
   onArrange,
   openTo,
 }: {
@@ -140,6 +162,7 @@ export function Handset({
   sky: Weather;
   onGo: (spot: string) => void;
   onFly: (routeId: string, cabin: string) => void;
+  onMap?: () => void;
   onArrange?: () => void;
   friends: { username: string; name: string }[];
   life: Life;
@@ -238,8 +261,13 @@ export function Handset({
   }, [thread]);
 
   useEffect(() => () => onAir(false), [onAir]);
-  const battery = Math.max(8, Math.min(100, life.needs.energy));
-  const inApp = app !== "home" || Boolean(thread);
+  const handset = phoneOf(life);
+  const battery = handset.battery;
+  const signal = hasSignal(life.where);
+  const paper = wallpaperOf(life, sky, hourOf(life.minutes));
+  const lost = Boolean(handset.lostUntil && life.minutes < handset.lostUntil);
+  const dead = battery <= 0 && !lost;
+  const inApp = (app !== "home" || Boolean(thread)) && !lost && !dead;
   const unreadTotal = Object.values(unread).reduce((sum, count) => sum + count, 0);
   const clout = cloutOf(life);
   const weatherLine = weatherBrief(sky, hourOf(life.minutes));
@@ -290,32 +318,46 @@ export function Handset({
         <span className="absolute -left-[3px] top-[40%] h-12 w-[3px] rounded-l-sm bg-[#2c3038]" />
         <span className="absolute -right-[3px] top-[32%] h-16 w-[3px] rounded-r-sm bg-[#2c3038]" />
         <div className="flex h-full flex-col rounded-[46px] bg-gradient-to-b from-[#4a4e57] via-[#2a2d33] to-[#16181c] p-[11px] shadow-[0_40px_90px_rgba(0,0,0,.5),inset_0_0_0_1px_rgba(255,255,255,.2)]">
-          <div className={`relative min-h-0 flex-1 overflow-hidden rounded-[36px] ${inApp ? "bg-white" : "bg-[#5b4bdb]"}`}>
-            {inApp ? null : (
-              <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(180deg, #5b4bdb 0%, #c45c9a 42%, #f08a3c 78%, #f6c15a 100%)" }} />
-            )}
+          <div className={`relative min-h-0 flex-1 overflow-hidden rounded-[36px] ${inApp ? "bg-white" : ""}`}>
+            {inApp ? null : <div className="pointer-events-none absolute inset-0" style={{ background: wallpaperCss(paper) }} />}
             {inApp ? null : <Skyline />}
             {inApp ? null : <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/30 to-transparent" />}
-            <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} />
+            <Status time={time} battery={battery} ink={inApp ? "dark" : "light"} signal={signal} />
             <div className="relative flex h-[calc(100%-28px)] flex-col">
-              {app === "home" && !thread ? (
+              {lost || dead ? (
+                <PhoneLock
+                  lost={lost}
+                  atHome={life.where === "home"}
+                  onCharge={() => onSocial(chargePhone(life))}
+                  onReplace={() => onSocial(replacePhone(life))}
+                  onClose={onClose}
+                />
+              ) : null}
+              {app === "home" && !thread && !lost && !dead ? (
                 <HomeScreen
-                  date={now == null ? "Accra" : longDate(new Date(now))}
+                  date={now == null ? townName(life) : `${longDate(new Date(now)).replace(" · Accra", "")} · ${townName(life)}`}
                   time={time || "--:--"}
                   inbox={unreadTotal}
                   asks={asks}
                   daily={now != null && !streakState(life, now).claimed}
                   sick={Boolean(life.health?.sick)}
-                  alerts={alertsFor(life).length}
+                  alerts={phoneNotices(life).length}
                   stories={storyReady(life)}
                   guide={guideLeft(life).filter((step) => step.done(life)).length}
-                  weather={weatherLine}
+                  cards={todayCards(life, sky, hourOf(life.minutes), weatherLine)}
+                  notices={phoneNotices(life)}
+                  now={now}
                   mood={`${moodOf(life.needs).emoji} ${moodOf(life.needs).label}`}
                   clout={clout}
-                  cloutTag={cloutLabel(clout)}
+                  tier={cloutTier(clout)}
+                  followers={followersOf(life)}
+                  post={lastPost(life)}
+                  airtime={handset.airtime}
+                  hidden={handset.hidden}
                   onOpen={setApp}
                   onRide={onRide}
                   onMarket={onMarket}
+                  onMap={onMap}
                   onPost={() => onSocial(postClout(life, spotById(life.where).name))}
                 />
               ) : null}
@@ -345,6 +387,12 @@ export function Handset({
                   onBack={() => (thread ? setThread(null) : setApp("home"))}
                   onSend={(text) => {
                     if (!thread) return;
+                    const sent = useAirtime(life, 1);
+                    if (sent.error) {
+                      pushChat(thread, { who: "note", text: sent.error, time });
+                      return;
+                    }
+                    onSocial(sent);
                     pushChat(thread, { who: "me", text, time });
                     const room = parseGroupThread(thread);
                     if (room) {
@@ -515,6 +563,18 @@ export function Handset({
                   onChat={(other) => openThread(`user:${other}`)}
                 />
               ) : null}
+              {app === "photos" ? <PhotosScreen life={life} onBack={() => setApp("home")} onSnap={() => onSocial(postClout(life, spotById(life.where).name))} /> : null}
+              {app === "delivery" ? <DeliveryScreen life={life} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} /> : null}
+              {app === "papers" ? (
+                <PapersScreen
+                  life={life}
+                  onBack={() => setApp("home")}
+                  onPaper={(id) => onSocial(setWallpaper(life, id))}
+                  onTopUp={(bundle) => onSocial(topUpAirtime(life, bundle))}
+                  onHide={(id) => onSocial(hideApp(life, id))}
+                  onCharge={() => onSocial(chargePhone(life))}
+                />
+              ) : null}
               {app === "settings" ? (
                 <SettingsApp email={email} onBack={() => setApp("home")} onEmail={onEmail} onLogout={onLogout} onMenu={onClose} onNewLife={onNewLife} />
               ) : null}
@@ -532,7 +592,12 @@ export function Handset({
   );
 }
 
-function Status({ time, battery, ink }: { time: string; battery: number; ink: "light" | "dark" }) {
+function townName(life: Life) {
+  if (life.town === "kumasi") return "Kumasi";
+  return "Accra";
+}
+
+function Status({ time, battery, ink, signal }: { time: string; battery: number; ink: "light" | "dark"; signal: boolean }) {
   const color = ink === "dark" ? "text-[#121212]" : "text-white";
   return (
     <div className={`relative z-10 flex items-center justify-between px-6 pt-3 text-[12px] font-semibold ${color}`}>
@@ -540,7 +605,7 @@ function Status({ time, battery, ink }: { time: string; battery: number; ink: "l
       <span className="absolute left-1/2 top-2 h-6 w-24 -translate-x-1/2 rounded-full bg-black" />
       <span className="flex items-center gap-1.5">
         <Signal />
-        <span className="text-[10px]">5G</span>
+        <span className="text-[10px]">{signal ? "5G" : "No service"}</span>
         <span className={`relative h-2.5 w-6 rounded-[3px] border ${ink === "dark" ? "border-[#121212]/70" : "border-white/80"}`}>
           <span className={`absolute inset-y-[1px] left-[1px] rounded-[2px] ${ink === "dark" ? "bg-[#121212]" : "bg-white"}`} style={{ width: `${Math.max(8, battery - 8)}%` }} />
         </span>
@@ -573,13 +638,20 @@ function HomeScreen({
   alerts,
   stories,
   guide,
-  weather,
+  cards,
+  notices,
+  now,
   mood,
   clout,
-  cloutTag,
+  tier,
+  followers,
+  post,
+  airtime,
+  hidden,
   onOpen,
   onRide,
   onMarket,
+  onMap,
   onPost,
 }: {
   date: string;
@@ -591,33 +663,73 @@ function HomeScreen({
   alerts: number;
   stories: number;
   guide: number;
-  weather: string;
+  cards: { id: string; app: string; kicker: string; title: string; detail: string }[];
+  notices: { id: string; emoji: string; text: string; app: string }[];
+  now: number | null;
   mood: string;
   clout: number;
-  cloutTag: string;
+  tier: string;
+  followers: number;
+  post: string;
+  airtime: number;
+  hidden: string[];
   onOpen: (app: AppId) => void;
   onRide: () => void;
   onMarket: () => void;
+  onMap?: () => void;
   onPost: () => void;
 }) {
+  const [shade, setShade] = useState(false);
+  const card = cards[Math.floor((now ?? 0) / 8000) % Math.max(1, cards.length)] ?? cards[0];
+  const show = (id: string) => !hidden.includes(id);
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-8 pt-3 text-white">
+    <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-8 pt-3 text-white">
+      <button type="button" onClick={() => setShade((open) => !open)} className="mx-auto mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
+        {shade ? "Close shade" : "Pull shade"}
+      </button>
+      {shade ? (
+        <div className="no-scrollbar mb-2 max-h-48 space-y-1.5 overflow-y-auto rounded-2xl bg-black/45 p-2 backdrop-blur">
+          {notices.length ? null : <p className="px-2 py-2 text-xs text-white/80">Nothing waiting.</p>}
+          {notices.map((notice) => (
+            <button
+              key={notice.id}
+              type="button"
+              onClick={() => {
+                setShade(false);
+                if (notice.app === "map") onMap?.();
+                else onOpen(APP_IDS.includes(notice.app as AppId) ? (notice.app as AppId) : "alerts");
+              }}
+              className="block w-full rounded-xl bg-white/15 px-3 py-2 text-left text-[12px] leading-4"
+            >
+              {notice.emoji} {notice.text}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <p className="text-center text-[52px] font-semibold leading-none tracking-tight">{time}</p>
       <p className="mt-1 text-center text-[13px] text-white/85">{date}</p>
-      <button type="button" onClick={() => onOpen("news")} className="mt-3 rounded-2xl bg-black/25 px-3 py-2 text-left text-[11px] leading-4 text-white/95 backdrop-blur">
-        {weather}
-      </button>
-      <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-white/15 px-3 py-2 backdrop-blur">
-        <button type="button" onClick={onPost} className="text-left">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">Clout</p>
-          <p className="text-sm font-semibold">
-            {clout} · {cloutTag}
-          </p>
-          <p className="text-[11px] text-white/80">{mood}</p>
+      {card ? (
+        <button type="button" onClick={() => (card.app === "map" ? onMap?.() : onOpen(APP_IDS.includes(card.app as AppId) ? (card.app as AppId) : "news"))} className="mt-3 rounded-2xl bg-black/25 px-3 py-2 text-left backdrop-blur">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/70">{card.kicker}</p>
+          <p className="text-[13px] font-semibold leading-4">{card.title}</p>
+          <p className="text-[11px] leading-4 text-white/80">{card.detail}</p>
         </button>
-        <button type="button" onClick={onPost} className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-[#121212]">
-          Post
-        </button>
+      ) : null}
+      <div className="mt-2 rounded-2xl bg-white/15 px-3 py-2 backdrop-blur">
+        <div className="flex items-start justify-between gap-2">
+          <button type="button" onClick={() => onOpen("feed")} className="min-w-0 text-left">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-white/70">Clout · {tier}</p>
+            <p className="text-sm font-semibold">{clout}</p>
+            <p className="text-[11px] text-white/80">
+              {followers.toLocaleString("en-GH")} followers · {mood}
+            </p>
+          </button>
+          <button type="button" onClick={onPost} className="shrink-0 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-[#121212]">
+            Post
+          </button>
+        </div>
+        <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-white/85">{post}</p>
+        <p className="mt-1 text-[10px] font-semibold text-white/70">Airtime {airtime}</p>
       </div>
       <div className="mt-4 grid grid-cols-4 gap-x-1 gap-y-4">
         <AppIcon label="Alerts" color="#243044" badge={alerts} onClick={() => onOpen("alerts")}>
@@ -633,6 +745,28 @@ function HomeScreen({
           <span className="text-2xl">📔</span>
         </AppIcon>
       </div>
+      <Section title="Pocket">
+        {show("map") ? (
+          <AppIcon label="Map" color="#1f7a4d" onClick={() => onMap?.()}>
+            <span className="text-2xl">🗺️</span>
+          </AppIcon>
+        ) : null}
+        {show("photos") ? (
+          <AppIcon label="Photos" color="#c45c9a" onClick={() => onOpen("photos")}>
+            <span className="text-2xl">🖼️</span>
+          </AppIcon>
+        ) : null}
+        {show("delivery") ? (
+          <AppIcon label="Delivery" color="#CE1126" onClick={() => onOpen("delivery")}>
+            <span className="text-2xl">🚲</span>
+          </AppIcon>
+        ) : null}
+        {show("papers") ? (
+          <AppIcon label="Look" color="#f6e7c1" onClick={() => onOpen("papers")}>
+            <span className="text-2xl">🎨</span>
+          </AppIcon>
+        ) : null}
+      </Section>
       <Section title="Life">
         <AppIcon label="Money" color="#006B3F" onClick={() => onOpen("work")}>
           <Briefcase />
@@ -845,6 +979,121 @@ function MemoriesScreen({ life, onBack }: { life: Life; onBack: () => void }) {
           <p key={`${index}-${line.slice(0, 24)}`} className="rounded-2xl bg-white px-4 py-3 text-sm leading-6 shadow-sm">
             {line}
           </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PhoneLock({ lost, atHome, onCharge, onReplace, onClose }: { lost: boolean; atHome: boolean; onCharge: () => void; onReplace: () => void; onClose: () => void }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center text-white">
+      <p className="text-3xl font-semibold">{lost ? "Phone snatched" : "Battery dead"}</p>
+      <p className="mt-2 text-sm text-white/80">{lost ? "A hand took it in the crowd. Replace it, or wait four hours." : atHome ? "Plug in. The socket is here." : "Get home, then charge."}</p>
+      {lost ? (
+        <button type="button" onClick={onReplace} className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#121212]">
+          Replace · ₵150
+        </button>
+      ) : (
+        <button type="button" onClick={onCharge} className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#121212]">
+          Charge at home
+        </button>
+      )}
+      <button type="button" onClick={onClose} className="mt-3 text-sm font-semibold text-white/80">
+        Put it down
+      </button>
+    </div>
+  );
+}
+
+function PhotosScreen({ life, onBack, onSnap }: { life: Life; onBack: () => void; onSnap: () => void }) {
+  const shots = life.log.filter((line) => line.startsWith("Posted"));
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#111] text-white">
+      <AppHeader title="Photos" onBack={onBack} />
+      <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 py-3">
+        <button type="button" onClick={onSnap} className="w-full rounded-2xl bg-white py-3 text-sm font-bold text-[#121212]">
+          Snap this place · 1 airtime
+        </button>
+        {shots.length ? null : <p className="text-sm text-white/70">The roll is empty. Snap where you are standing.</p>}
+        {shots.map((line, index) => (
+          <p key={`${index}-${line.slice(0, 18)}`} className="rounded-2xl bg-white/10 px-3 py-3 text-sm leading-6">
+            {line}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DeliveryScreen({ life, onBack, onRun }: { life: Life; onBack: () => void; onRun: () => void }) {
+  const runs = life.stats?.hustles ?? 0;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#fff6df] text-[#121212]">
+      <AppHeader title="Delivery" onBack={onBack} />
+      <div className="space-y-3 px-4 py-4">
+        <p className="text-sm leading-6 text-[#5c6b82]">One order, one address. Cash when you hand it over. Hustle skill raises the pay.</p>
+        <p className="text-sm font-semibold">Runs so far: {runs}</p>
+        <button type="button" onClick={onRun} className="w-full rounded-full bg-[#CE1126] py-3 text-sm font-bold text-white">
+          Take a bike order
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PapersScreen({
+  life,
+  onBack,
+  onPaper,
+  onTopUp,
+  onHide,
+  onCharge,
+}: {
+  life: Life;
+  onBack: () => void;
+  onPaper: (id: string) => void;
+  onTopUp: (bundle: 5 | 15) => void;
+  onHide: (id: string) => void;
+  onCharge: () => void;
+}) {
+  const phone = phoneOf(life);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
+      <AppHeader title="Look" onBack={onBack} />
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 py-3">
+        <p className="text-sm text-[#5c6b82]">
+          Battery {phone.battery}% · Airtime {phone.airtime} · {phone.ringtone}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onTopUp(5)} className="rounded-full bg-[#121212] px-3 py-2 text-xs font-bold text-white">
+            ₵5 airtime
+          </button>
+          <button type="button" onClick={() => onTopUp(15)} className="rounded-full bg-[#006B3F] px-3 py-2 text-xs font-bold text-white">
+            ₵15 airtime
+          </button>
+          <button type="button" onClick={onCharge} className="rounded-full bg-white px-3 py-2 text-xs font-bold">
+            Charge
+          </button>
+        </div>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-[#8b97ab]">Wallpapers</p>
+        {WALLPAPERS.map((paper) => {
+          const open = paper.unlock(life);
+          return (
+            <button key={paper.id} type="button" disabled={!open} onClick={() => onPaper(paper.id)} className="flex w-full items-center justify-between rounded-2xl bg-white px-3 py-2 text-left disabled:opacity-40">
+              <span>
+                <span className="block text-sm font-semibold">{paper.name}</span>
+                <span className="text-[11px] text-[#8b97ab]">{open ? paper.hint : paper.hint}</span>
+              </span>
+              <span className="h-8 w-8 rounded-lg" style={{ background: `linear-gradient(180deg, ${paper.from}, ${paper.to})` }} />
+            </button>
+          );
+        })}
+        <p className="text-[11px] font-bold uppercase tracking-wide text-[#8b97ab]">Hide an app</p>
+        {["photos", "delivery", "map"].map((id) => (
+          <button key={id} type="button" onClick={() => onHide(id)} className="w-full rounded-full bg-white px-3 py-2 text-left text-sm font-semibold">
+            {phone.hidden.includes(id) ? `Show ${id}` : `Hide ${id}`}
+          </button>
         ))}
       </div>
     </div>

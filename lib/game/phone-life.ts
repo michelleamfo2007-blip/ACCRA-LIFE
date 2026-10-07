@@ -1,3 +1,4 @@
+import { phoneOf, spendAirtime } from "@/lib/game/phone-shell";
 import { seasonOf, type Weather } from "@/lib/game/sky";
 import { trafficFactor } from "@/lib/game/roads";
 import { askOver, type InvitePurpose } from "@/lib/game/home-life";
@@ -43,8 +44,18 @@ export function weatherBrief(sky: Weather, hour: number) {
 export type CallKind = "gist" | "plan" | "come-home" | "check" | "work";
 
 export function callPerson(life: Life, name: string, kind: CallKind = "gist", purpose: InvitePurpose = "gist"): StepResult {
-  if (kind === "come-home") return askOver(life, name, purpose);
+  const blocked = spendAirtime(life, 1);
+  if (blocked) return { life, notes: [], error: blocked };
+  if (kind === "come-home") {
+    const asked = askOver(life, name, purpose);
+    if (asked.error) return asked;
+    const linePhone = phoneOf(life);
+    asked.life.phone = { ...linePhone, airtime: Math.max(0, linePhone.airtime - 1), battery: Math.max(0, linePhone.battery - 1) };
+    return asked;
+  }
   const next = cloneLife(life);
+  const linePhone = phoneOf(life);
+  next.phone = { ...linePhone, airtime: Math.max(0, linePhone.airtime - 1), battery: Math.max(0, linePhone.battery - 1) };
   const known = next.relations.find((person) => person.name === name);
   const score = known?.score ?? 0;
   if (score < 5 && kind !== "check") {
@@ -75,8 +86,12 @@ export function callPerson(life: Life, name: string, kind: CallKind = "gist", pu
 }
 
 export function textPerson(life: Life, name: string, kind: "hi" | "plan" | "come" | "thanks" = "hi"): StepResult {
+  const blocked = spendAirtime(life, 1);
+  if (blocked) return { life, notes: [], error: blocked };
   if (kind === "come") return askOver(life, name, "pass");
   const next = cloneLife(life);
+  const linePhone = phoneOf(life);
+  next.phone = { ...linePhone, airtime: Math.max(0, linePhone.airtime - 1), battery: Math.max(0, linePhone.battery - 1) };
   next.minutes += 2;
   next.needs.social = Math.min(100, next.needs.social + 4);
   const known = next.relations.find((person) => person.name === name);
@@ -95,9 +110,11 @@ export function textPerson(life: Life, name: string, kind: "hi" | "plan" | "come
 }
 
 export function postClout(life: Life, place: string): StepResult {
+  const blocked = spendAirtime(life, 1);
+  if (blocked) return { life, notes: [], error: blocked };
   const next = cloneLife(life);
-  if (life.cash < 5) return { life, notes: [], error: "Data money no dey." };
-  next.cash -= 5;
+  const phone = phoneOf(life);
+  next.phone = { ...phone, airtime: Math.max(0, phone.airtime - 1), battery: Math.max(0, phone.battery - 2) };
   next.minutes += 5;
   next.needs.fun = Math.min(100, next.needs.fun + 6);
   next.needs.social = Math.min(100, next.needs.social + 4);

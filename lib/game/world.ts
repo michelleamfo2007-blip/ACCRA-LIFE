@@ -1,5 +1,7 @@
 import { ACCRA_SPOTS, CLUB_IDS } from "@/lib/game/accra-spots";
 import { MORE_SPOTS, TRIP_IDS } from "@/lib/game/more-spots";
+import { tickPhone } from "@/lib/game/phone-shell";
+import { arrivalFor, crossedTownNote, type TownId } from "@/lib/game/towns";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
 import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night";
@@ -43,6 +45,10 @@ export type Life = {
   minutes: number;
   skills: Skills;
   where: string;
+  /** Which city map the player is standing in. Missing means Accra. */
+  town?: string;
+  /** Starred place ids. */
+  stars?: string[];
   inventory: string[];
   log: string[];
   inbox: string[];
@@ -115,6 +121,16 @@ export type Life = {
   seenParcels?: string[];
   stamps?: string[];
   flewAt?: number;
+  phone?: {
+    wallpaper: string;
+    airtime: number;
+    battery: number;
+    model: "basic" | "smart" | "pro";
+    ringtone: string;
+    hidden: string[];
+    lostUntil?: number;
+    snatchedDay?: number;
+  };
   checkins?: string[];
   weekly?: { week: number; streak: number; count: number };
   chop?: ChopBar | null;
@@ -270,6 +286,8 @@ export type Spot = {
   x: number;
   y: number;
   group: "home" | "hang" | "sea" | "civic" | "work" | "trip" | "soon";
+  /** City map this pin belongs to. Missing means Accra. */
+  town?: string;
   blurb: string;
   soon?: boolean;
   far?: number;
@@ -595,6 +613,18 @@ export const JOBS: { id: string; place: string; title: string; verb: Verb }[] = 
     place: "tema",
     title: "Tema dockhand",
     verb: eat({ id: "job-tema", label: "Dock shift", detail: "Lashing containers while the cranes swing overhead.", minutes: 300, earn: 95, effects: { energy: -30, hunger: -14, hygiene: -14 }, skill: "fitness", job: true }),
+  },
+  {
+    id: "kejetia-hand",
+    place: "kejetia",
+    title: "Kejetia hand",
+    verb: eat({ id: "job-kejetia", label: "Carry at Kejetia", detail: "Boxes, cloth, and a lane that does not move aside.", minutes: 280, earn: 60, effects: { energy: -24, hunger: -12, hygiene: -10 }, skill: "hustle", job: true }),
+  },
+  {
+    id: "palace-guide",
+    place: "manhyia",
+    title: "Palace museum guide",
+    verb: eat({ id: "job-manhyia", label: "Guide the museum", detail: "Stools, gold weights, and the same question every hour.", minutes: 240, earn: 85, effects: { energy: -14, social: 10 }, skill: "charm", job: true }),
   },
 ];
 
@@ -1275,6 +1305,7 @@ function clone(life: Life): Life {
     community: life.community ? { ...life.community, projects: [...life.community.projects], givenDay: life.community.givenDay ? { ...life.community.givenDay } : undefined, chief: life.community.chief ? { ...life.community.chief } : life.community.chief } : undefined,
     guide: [...(life.guide ?? [])],
     seenParcels: [...(life.seenParcels ?? [])],
+    phone: life.phone ? { ...life.phone, hidden: [...(life.phone.hidden ?? [])] } : life.phone,
   };
 }
 
@@ -1297,6 +1328,15 @@ export function bump(life: Life, stat: string, by = 1) {
 
 export function cloneLife(life: Life) {
   return clone(life);
+}
+
+export function toggleStar(life: Life, id: string) {
+  const next = clone(life);
+  const stars = new Set(next.stars ?? []);
+  if (stars.has(id)) stars.delete(id);
+  else stars.add(id);
+  next.stars = [...stars];
+  return next;
 }
 
 export function logLine(life: Life, line: string) {
@@ -1357,6 +1397,8 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
       career: 0,
     },
     where: "home",
+    town: "accra",
+    stars: [],
     inventory: ["bed", "cooler", "stove"],
     log: [`You have the key to ${home.name} in ${home.area}.`, `Your wallet opens with ${cedis(wallet)}.`],
     inbox: ["Welcome to Accra. The city is already moving — keep your needs up and your name clean."],
@@ -1414,6 +1456,7 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
   }
   checkHealth(next, clockTo, notes);
   checkPets(next, clockTo, notes);
+  tickPhone(next, minutes, notes);
   return { life: next, notes };
 }
 
@@ -1513,8 +1556,14 @@ export const RIDES: Ride[] = [
 
 export const STAMP_BONUS = 300;
 
+function mapTown(id: string) {
+  if (id === "home") return "accra";
+  return spotById(id).town ?? "accra";
+}
+
 export function distanceOf(from: string, to: string) {
-  return Math.max(spotById(from).far ?? 0, spotById(to).far ?? 0);
+  const hop = mapTown(from) !== mapTown(to) ? 270 : 0;
+  return Math.max(spotById(from).far ?? 0, spotById(to).far ?? 0, hop);
 }
 
 export function farRide<T extends Ride>(ride: T, from: string, to: string): T & { blocked?: string; fuel?: number } {
@@ -1549,7 +1598,18 @@ export function carFuelBlock(life: Life, fuel: number) {
 }
 
 export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepResult {
-  if (life.where === placeId) return { life, notes: [] };
+  const fromTown = (life.town ?? "accra") as TownId;
+  const landed = arrivalFor(placeId, spotById(placeId).town);
+  if (life.where === landed.where && fromTown === landed.town) return { life, notes: [] };
+  if (life.where === placeId && fromTown !== landed.town) {
+    const next = clone(life);
+    next.where = landed.where;
+    next.town = landed.town;
+    const away = crossedTownNote(fromTown, landed.town, false, Boolean(life.car));
+    const notes = away ? [away] : [`You are in ${spotById(landed.where).name}.`];
+    for (const line of notes) pushLog(next, line);
+    return { life: next, notes };
+  }
   const ride = farRide(base, life.where, placeId);
   if (ride.blocked) return { life, notes: [], error: ride.blocked };
   const fuel = ride.fuel ?? FUEL_PER_TRIP;
@@ -1559,12 +1619,18 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
     if (blocked) return { life, notes: [], error: blocked };
   }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
-  timed.life.where = placeId;
+  timed.life.where = landed.where;
+  timed.life.town = landed.town;
   bump(timed.life, "trips");
   const fare = ride.cost ? ` ${cedis(ride.cost)}.` : ".";
   const noteExtra = "note" in ride && typeof (ride as { note?: string }).note === "string" ? ` (${(ride as { note?: string }).note})` : "";
   const heading = ride.id === "car" ? "Drove your car" : ride.label;
-  timed.notes.unshift(`${heading} to ${spotById(placeId).name}${fare}${noteExtra}`);
+  timed.notes.unshift(`${heading} to ${spotById(landed.where).name}${fare}${noteExtra}`);
+  const away = crossedTownNote(fromTown, landed.town, ride.id === "car", Boolean(life.car));
+  if (away) {
+    timed.notes.push(away);
+    timed.life.inbox = [away, ...timed.life.inbox].slice(0, 20);
+  }
   collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
     const wear = 6 + Math.floor(fuel / 2);

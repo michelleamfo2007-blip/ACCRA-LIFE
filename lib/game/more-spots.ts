@@ -1,3 +1,4 @@
+import { KUMASI_SPOTS } from "@/lib/game/kumasi-spots";
 import type { Spot, Verb } from "@/lib/game/world";
 
 function act(partial: Partial<Verb> & Pick<Verb, "id" | "label" | "detail">): Verb {
@@ -114,6 +115,32 @@ const NEIGHBOURHOODS: Spot[] = [
     actions: [
       act({ id: "spintex-shop", label: "Shop the strip", detail: "Furniture showrooms, a phone shop and a pharmacy in one long walk.", minutes: 50, cost: 40, effects: { fun: 16, energy: -6 }, emoji: "🛍️" }),
       plate("spintex-lunch", "Office lunch spot", "Fried rice and chicken in a takeaway pack.", 30, 38),
+    ],
+  },
+  {
+    id: "jamestown-light",
+    name: "Jamestown Lighthouse",
+    emoji: "🗼",
+    x: 180,
+    y: 1080,
+    group: "civic",
+    blurb: "Jamestown. The lighthouse over the harbour. Climb it and the canoes look small.",
+    actions: [
+      stroll("light-climb", "Climb the lighthouse", "The steps are narrow. The harbour, the castle, and the city sit under you."),
+      plate("light-fish", "Fish on the rocks", "Fried fish from a pan on the harbour wall.", 14, 28),
+    ],
+  },
+  {
+    id: "osu-castle",
+    name: "Osu Castle",
+    emoji: "🏰",
+    x: 760,
+    y: 1088,
+    group: "civic",
+    blurb: "Osu. The castle on the rocks. The gate is closed. The road along the wall is not.",
+    actions: [
+      stroll("castle-walk", "Walk the castle road", "Waves on the rocks, the wall on your shoulder, and a photographer who will not leave you alone."),
+      act({ id: "castle-photo", label: "Take the wall photo", detail: "You stand where everyone stands. The sea does the rest.", minutes: 15, cost: 10, effects: { fun: 10, social: 6 }, emoji: "📸" }),
     ],
   },
 ];
@@ -258,4 +285,4 @@ const TRIPS: Spot[] = [
 
 export const TRIP_IDS = TRIPS.map((spot) => spot.id);
 
-export const MORE_SPOTS: Spot[] = [...NEIGHBOURHOODS, ...GATEWAYS, ...TRIPS];
+export const MORE_SPOTS: Spot[] = [...NEIGHBOURHOODS, ...GATEWAYS, ...TRIPS, ...KUMASI_SPOTS];
