@@ -30,6 +30,9 @@ import {
   wallpaperOf,
 } from "@/lib/game/phone-shell";
 import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
+import { askPrice, buyGarment, RACK, TIERS, wearGarment, type RackItem, type Tier } from "@/lib/game/boutique";
+import { lostToday, betCard, betColour, betDice, BET_CAP } from "@/lib/game/bet";
+import { ADDRESSES, MENU, RIDERS, collectErrand, errandLine, placeErrand, rateDrop } from "@/lib/game/errand";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
@@ -117,9 +120,10 @@ type AppId =
   | "invite"
   | "photos"
   | "delivery"
+  | "bet"
   | "papers";
 
-const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "papers"];
+const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "bet", "papers"];
 
 export function Handset({
   life,
@@ -513,7 +517,16 @@ export function Handset({
                 <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} onPromote={(jobId) => onSocial(askPromotion(life, jobId))} onHustle={(id) => onSocial(doHustle(life, id))} onOpen={setApp} />
               ) : null}
               {app === "goals" ? <GoalsScreen life={life} onBack={() => setApp("home")} /> : null}
-              {app === "momo" ? <MomoScreen life={life} username={username} onBack={() => setApp("home")} onRepay={onRepay} onLogout={onLogout} /> : null}
+              {app === "momo" ? (
+                <MomoScreen
+                  life={life}
+                  username={username}
+                  onBack={() => setApp("home")}
+                  onRepay={onRepay}
+                  onLogout={onLogout}
+                  onSend={(handle, amount) => onPay(handle, handle, amount)}
+                />
+              ) : null}
               {app === "contacts" ? <ContactsScreen life={life} onBack={() => setApp("home")} onOpen={openThread} /> : null}
               {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy FM is on.", "Highlife, a gospel hour, and whoever just walked into the studio."]} /> : null}
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
@@ -547,7 +560,7 @@ export function Handset({
               {app === "trips" ? <TripsApp life={life} onBack={() => setApp("home")} onGo={onGo} onApply={onSocial} onFly={onFly} /> : null}
               {app === "chop" ? <ChopApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "charts" ? <ChartsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
-              {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onWear={onWear} /> : null}
+              {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "susu" ? <SusuApp me={username} life={life} social={social} cloud={cloud} onBack={() => setApp("home")} onAction={onNet} /> : null}
@@ -565,7 +578,10 @@ export function Handset({
                 />
               ) : null}
               {app === "photos" ? <PhotosScreen life={life} onBack={() => setApp("home")} onSnap={() => onSocial(postClout(life, spotById(life.where).name))} /> : null}
-              {app === "delivery" ? <DeliveryScreen life={life} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} /> : null}
+              {app === "delivery" ? (
+                <DeliveryScreen life={life} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} onApply={onSocial} />
+              ) : null}
+              {app === "bet" ? <BetScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "papers" ? (
                 <PapersScreen
                   life={life}
@@ -760,6 +776,11 @@ function HomeScreen({
         {show("delivery") ? (
           <AppIcon label="Delivery" color="#CE1126" onClick={() => onOpen("delivery")}>
             <span className="text-2xl">🚲</span>
+          </AppIcon>
+        ) : null}
+        {show("bet") ? (
+          <AppIcon label="Bet" color="#121212" onClick={() => onOpen("bet")}>
+            <span className="text-2xl">♠️</span>
           </AppIcon>
         ) : null}
         {show("papers") ? (
@@ -1027,17 +1048,142 @@ function PhotosScreen({ life, onBack, onSnap }: { life: Life; onBack: () => void
   );
 }
 
-function DeliveryScreen({ life, onBack, onRun }: { life: Life; onBack: () => void; onRun: () => void }) {
+function DeliveryScreen({ life, onBack, onRun, onApply }: { life: Life; onBack: () => void; onRun: () => void; onApply: (result: StepResult) => void }) {
   const runs = life.stats?.hustles ?? 0;
+  const [item, setItem] = useState<string>(MENU[0].id);
+  const [rider, setRider] = useState<string>(RIDERS[0].id);
+  const [speed, setSpeed] = useState("standard");
+  const [address, setAddress] = useState<string>(ADDRESSES[0]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!life.errand) return;
+    const id = window.setInterval(() => setTick((value) => value + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [life.errand]);
+  void tick;
+  const row = MENU.find((entry) => entry.id === item) ?? MENU[0];
+  const who = RIDERS.find((entry) => entry.id === rider) ?? RIDERS[0];
+  const speedFee = speed === "same" ? 2.2 : speed === "express" ? 1.6 : 1;
+  const fee = Math.round(row.price + who.fee * speedFee);
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#fff6df] text-[#121212]">
       <AppHeader title="Delivery" onBack={onBack} />
-      <div className="space-y-3 px-4 py-4">
-        <p className="text-sm leading-6 text-[#5c6b82]">One order, one address. Cash when you hand it over. Hustle skill raises the pay.</p>
-        <p className="text-sm font-semibold">Runs so far: {runs}</p>
-        <button type="button" onClick={onRun} className="w-full rounded-full bg-[#CE1126] py-3 text-sm font-bold text-white">
-          Take a bike order
-        </button>
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">
+        {life.errand ? (
+          <div className="rounded-3xl bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold">{errandLine(life)}</p>
+            <p className="mt-1 text-sm text-[#5c6b82]">
+              {life.errand.vehicle} · {life.errand.address} · {cedis(life.errand.paid)}
+            </p>
+            <button type="button" onClick={() => onApply(collectErrand(life))} className="mt-3 w-full rounded-full bg-[#006B3F] py-3 text-sm font-bold text-white">
+              Open the gate
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold">What</p>
+            <div className="flex flex-wrap gap-2">
+              {MENU.map((entry) => (
+                <button key={entry.id} type="button" onClick={() => setItem(entry.id)} className={`rounded-full px-3 py-2 text-xs font-bold ${item === entry.id ? "bg-[#121212] text-white" : "bg-white"}`}>
+                  {entry.label} {cedis(entry.price)}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm font-semibold">Who</p>
+            <div className="flex flex-wrap gap-2">
+              {RIDERS.map((entry) => (
+                <button key={entry.id} type="button" onClick={() => setRider(entry.id)} className={`rounded-full px-3 py-2 text-xs font-bold ${rider === entry.id ? "bg-[#CE1126] text-white" : "bg-white"}`}>
+                  {entry.name} · {entry.vehicle} · {entry.rating}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm font-semibold">Speed</p>
+            <div className="flex flex-wrap gap-2">
+              {["standard", "express", "same"].map((entry) => (
+                <button key={entry} type="button" onClick={() => setSpeed(entry)} className={`rounded-full px-3 py-2 text-xs font-bold ${speed === entry ? "bg-[#121212] text-white" : "bg-white"}`}>
+                  {entry}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm font-semibold">Where</p>
+            <div className="flex flex-wrap gap-2">
+              {ADDRESSES.map((entry) => (
+                <button key={entry} type="button" onClick={() => setAddress(entry)} className={`rounded-full px-3 py-2 text-xs font-bold ${address === entry ? "bg-[#121212] text-white" : "bg-white"}`}>
+                  {entry}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={() => onApply(placeErrand(life, item, rider, speed, address))} className="w-full rounded-full bg-[#CE1126] py-3 text-sm font-bold text-white">
+              Order · {cedis(fee)}
+            </button>
+          </div>
+        )}
+        {life.drop ? (
+          <div className="rounded-3xl bg-white p-4 shadow-sm">
+            <p className="text-sm font-semibold">Rate {life.drop.rider}</p>
+            <div className="mt-2 flex gap-2">
+              {[1, 2, 3, 4, 5].map((stars) => (
+                <button key={stars} type="button" onClick={() => onApply(rateDrop(life, stars))} className="rounded-full bg-[#fff1c9] px-3 py-2 text-sm font-bold">
+                  {stars}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="rounded-3xl bg-white p-4 shadow-sm">
+          <p className="text-sm leading-6 text-[#5c6b82]">Or ride it yourself. Cash when you hand it over. Hustle skill raises the pay.</p>
+          <p className="mt-1 text-sm font-semibold">Runs so far: {runs}</p>
+          <button type="button" onClick={onRun} className="mt-3 w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
+            Take a bike order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BetScreen({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: (result: StepResult) => void }) {
+  const [stake, setStake] = useState("10");
+  const amount = Math.round(Number(stake) || 0);
+  const lost = lostToday(life);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-[#14110e] text-white">
+      <AppHeader title="Bet" onBack={onBack} />
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">
+        <p className="text-sm text-white/70">
+          In-game cedis. Lost today {cedis(lost)} of {cedis(BET_CAP)}.
+        </p>
+        <input value={stake} onChange={(event) => setStake(event.target.value)} inputMode="numeric" className="w-full rounded-2xl bg-white/10 px-3 py-3 text-sm" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Red or black</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onApply(betColour(life, amount, "red"))} className="flex-1 rounded-full bg-[#CE1126] py-3 text-sm font-bold">
+            Red
+          </button>
+          <button type="button" onClick={() => onApply(betColour(life, amount, "black"))} className="flex-1 rounded-full bg-black py-3 text-sm font-bold ring-1 ring-white/30">
+            Black
+          </button>
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Higher or lower</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onApply(betCard(life, amount, "higher"))} className="flex-1 rounded-full bg-white py-3 text-sm font-bold text-[#121212]">
+            Higher
+          </button>
+          <button type="button" onClick={() => onApply(betCard(life, amount, "lower"))} className="flex-1 rounded-full bg-white/15 py-3 text-sm font-bold">
+            Lower
+          </button>
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Dice</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onApply(betDice(life, amount, "under"))} className="flex-1 rounded-full bg-[#006B3F] py-3 text-sm font-bold">
+            Under 7
+          </button>
+          <button type="button" onClick={() => onApply(betDice(life, amount, "seven"))} className="flex-1 rounded-full bg-[#f5c542] py-3 text-sm font-bold text-[#121212]">
+            Exact 7
+          </button>
+          <button type="button" onClick={() => onApply(betDice(life, amount, "over"))} className="flex-1 rounded-full bg-[#006B3F] py-3 text-sm font-bold">
+            Over 7
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1203,43 +1349,53 @@ function ThreadRow({ name, preview, time, onClick }: { name: string; preview: st
   );
 }
 
-function BoutiqueScreen({ life, onBack, onWear }: { life: Life; onBack: () => void; onWear: (look: Look, cost?: number) => void }) {
-  const [wear, setWear] = useState("Everyday");
-  const picks = CLOTHES.filter((item) => {
-    if (wear === "Sleep") return item.outfit === "All-white" || item.outfit === "Classic";
-    if (wear === "Date night") return item.outfit === "Office" || item.outfit === "Classic";
-    if (wear === "Home") return item.outfit === "Casual" || item.outfit === "Classic";
-    return true;
-  });
+function BoutiqueScreen({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: (result: StepResult) => void }) {
+  const [tier, setTier] = useState<Tier>("mid");
+  const [preview, setPreview] = useState<RackItem | null>(null);
+  const rack = RACK.filter((item) => item.tier === tier && (!item.city || item.city === (life.town ?? "accra")));
+  const look = preview ? { ...life.look, outfit: preview.outfit, cloth: preview.cloth } : life.look;
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
-      <AppHeader title="Accra Boutique" onBack={onBack} />
-      <div className="relative grid h-40 place-items-center bg-gradient-to-b from-[#f3e4ff] to-[#fff6df]">
-        <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} className="h-36" />
-        <p className="absolute bottom-2 left-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold shadow">Your look today</p>
+      <AppHeader title="Boutique" onBack={onBack} />
+      <div className="relative grid h-36 place-items-center bg-gradient-to-b from-[#f3e4ff] to-[#fff6df]">
+        <IsoHuman skin={look.skin} shirt={look.cloth} hair={look.hair} cloth={look.cloth} className="h-32" />
+        <p className="absolute bottom-2 left-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold shadow">{preview ? preview.label : life.look.outfit}</p>
       </div>
       <div className="flex gap-2 overflow-auto px-3 py-2 text-xs font-semibold">
-        {["Everyday", "Home", "Sleep", "Date night"].map((item) => (
-          <button key={item} type="button" onClick={() => setWear(item)} className={`shrink-0 rounded-full px-3 py-1.5 ${wear === item ? "bg-[#CE1126] text-white" : "bg-white"}`}>
-            {item}
+        {(Object.keys(TIERS) as Tier[]).map((item) => (
+          <button key={item} type="button" onClick={() => setTier(item)} className={`shrink-0 rounded-full px-3 py-1.5 ${tier === item ? "bg-[#CE1126] text-white" : "bg-white"}`}>
+            {TIERS[item].label}
           </button>
         ))}
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-auto px-3 pb-4">
-        {picks.map((item) => (
-          <button key={item.id} type="button" onClick={() => onWear({ ...life.look, outfit: item.outfit ?? life.look.outfit, cloth: item.cloth ?? life.look.cloth }, item.cost)} className={`block w-full rounded-2xl bg-white px-4 py-3 text-left shadow-sm ${life.look.outfit === item.outfit ? "ring-2 ring-[#006B3F]" : ""}`}>
-            <span className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{item.label}</span>
-              <span className="text-sm font-bold text-[#006B3F]">{cedis(item.cost)}</span>
-            </span>
-            <span className="mt-1 block text-xs text-[#5c6b82]">{item.detail} Wear it for {wear.toLowerCase()}.</span>
+        <p className="text-xs text-[#5c6b82]">{TIERS[tier].note}</p>
+        {rack.map((item) => {
+          const owned = (life.wardrobe ?? []).some((row) => row.id === item.id);
+          return (
+            <div key={item.id} className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+              <p className="font-semibold">
+                {item.label} · {cedis(askPrice(life, item))}
+              </p>
+              <p className="mt-1 text-xs text-[#5c6b82]">
+                {item.brand} · {item.category}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setPreview(item)} className="rounded-full bg-[#f6f1ea] px-3 py-1.5 text-xs font-bold">
+                  Try on
+                </button>
+                <button type="button" onClick={() => onApply(owned ? wearGarment(life, item.id) : buyGarment(life, item.id))} className="rounded-full bg-[#121212] px-3 py-1.5 text-xs font-bold text-white">
+                  {owned ? "Wear" : "Buy"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {(life.wardrobe ?? []).map((item) => (
+          <button key={item.id} type="button" onClick={() => onApply(wearGarment(life, item.id))} className="block w-full rounded-2xl bg-[#fff1c9] px-4 py-2 text-left text-sm font-semibold">
+            Wardrobe · {item.label}
           </button>
         ))}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {CLOTHS.map((cloth) => (
-            <button key={cloth} type="button" aria-label="Cloth colour" onClick={() => onWear({ ...life.look, cloth })} className={`h-8 w-8 rounded-full border-2 ${life.look.cloth === cloth ? "border-[#121212]" : "border-white"}`} style={{ background: cloth }} />
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -1351,14 +1507,25 @@ function MomoScreen({
   onBack,
   onRepay,
   onLogout,
+  onSend,
 }: {
   life: Life;
   username: string;
   onBack: () => void;
   onRepay: () => void;
   onLogout: () => void;
+  onSend: (handle: string, amount: number) => string | null | Promise<string | null>;
 }) {
   const home = homeById(life.homeId);
+  const [to, setTo] = useState("");
+  const [amount, setAmount] = useState("20");
+  const [line, setLine] = useState("");
+  useEffect(() => {
+    if (!line) return;
+    const id = window.setTimeout(() => setLine(""), 4600);
+    return () => window.clearTimeout(id);
+  }, [line]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <AppHeader title="MoMo" onBack={onBack} tone="yellow" />
@@ -1366,6 +1533,36 @@ function MomoScreen({
         <p className="text-xs font-semibold uppercase tracking-wide text-[#8a6a12]">Available</p>
         <p className="font-display text-4xl">{cedis(life.cash)}</p>
         <p className="mt-1 text-sm text-[#5c6b82]">@{username}</p>
+        <form
+          className="mt-4 space-y-2 rounded-3xl bg-white p-4 shadow-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const handle = to.trim().toLowerCase().replace(/^@/, "");
+            const value = Math.round(Number(amount));
+            void Promise.resolve(onSend(handle, value)).then((error) => {
+              setLine(error ?? `Sent ${cedis(value)} to @${handle}.`);
+            });
+          }}
+        >
+          <p className="text-sm font-semibold">Send to a player</p>
+          <input
+            value={to}
+            onChange={(event) => setTo(event.target.value)}
+            placeholder="username"
+            className="w-full rounded-2xl bg-[#f6f1ea] px-3 py-3 text-sm"
+            autoComplete="off"
+          />
+          <input
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            inputMode="numeric"
+            className="w-full rounded-2xl bg-[#f6f1ea] px-3 py-3 text-sm"
+          />
+          <button type="submit" className="w-full rounded-full bg-[#f5c542] py-3 text-sm font-bold">
+            Send
+          </button>
+          {line ? <p className="text-sm text-[#5c6b82]">{line}</p> : null}
+        </form>
         <div className="mt-4 space-y-2 rounded-3xl bg-white p-4 shadow-sm">
           <p className="text-sm">{life.loan > 0 ? `Susu left ${cedis(life.loan)} · ${cedis(life.weeklyLoan)} every Saturday` : "No susu on this line."}</p>
           <p className="text-sm text-[#5c6b82]">

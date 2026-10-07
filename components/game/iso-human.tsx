@@ -1,5 +1,8 @@
 "use client";
 
+export type BodyPose = "idle" | "walk" | "act" | "sit" | "dance" | "drink" | "watch" | "lean" | "dj";
+export type FaceExtra = "none" | "glasses" | "beard" | "earrings" | "chain" | "print";
+
 export function IsoHuman({
   skin = "#8d5a3b",
   shirt = "#ec4899",
@@ -9,6 +12,8 @@ export function IsoHuman({
   crown = false,
   pose = "idle",
   face = 1,
+  extra = "none",
+  beat = 0,
   className = "",
 }: {
   skin?: string;
@@ -17,15 +22,17 @@ export function IsoHuman({
   hair?: string;
   cloth?: string;
   crown?: boolean;
-  pose?: "idle" | "walk" | "act" | "sit";
+  pose?: BodyPose;
   face?: 1 | -1;
+  extra?: FaceExtra;
+  beat?: number;
   className?: string;
 }) {
   const shirtShade = mix(shirt, 0.22);
   const pantsShade = mix(pants, 0.2);
   const skinShade = mix(skin, 0.16);
   return (
-    <div className={`sim sim-tall sim-${pose} ${className}`} style={{ transform: face < 0 ? "scaleX(-1)" : undefined }} aria-hidden>
+    <div className={`sim sim-tall sim-${pose} ${className}`} style={{ transform: face < 0 ? "scaleX(-1)" : undefined, ["--beat" as string]: `${beat}s` }} aria-hidden>
       <svg viewBox="18 4 64 164" className="h-full w-auto overflow-visible">
         <ellipse cx="50" cy="160" rx="16" ry="4.5" fill="rgba(0,0,0,.22)" />
         <g className="sim-bob">
@@ -52,23 +59,56 @@ export function IsoHuman({
           </g>
           <path className="torso" d="M32 58 H68 L64 100 H36 Z" fill={shirt} />
           <path d="M54 58 H68 L64 100 H54 Z" fill={shirtShade} />
+          {extra === "print" ? (
+            <g stroke="#FCD116" strokeWidth="2.2" fill="none">
+              <path d="M36 68 H64" />
+              <path d="M36 78 H62" />
+              <path d="M37 88 H60" />
+            </g>
+          ) : null}
+          {extra === "chain" ? <path d="M42 64 Q50 74 58 64" stroke="#e6c15a" strokeWidth="1.6" fill="none" /> : null}
           <g className="arm arm-front">
             <rect x="66" y="62" width="9" height="28" rx="4" fill={skin} />
             <g className="forearm">
               <rect x="67" y="86" width="8" height="26" rx="4" fill={skin} />
+              {pose === "drink" ? <rect x="70" y="96" width="5" height="8" rx="1.4" fill="#d7f4ff" stroke="#9ad" strokeWidth="0.6" /> : null}
             </g>
           </g>
-          <Hair hair={hair} cloth={cloth} />
-          <rect x="46" y="50" width="8" height="10" rx="3" fill={skin} />
-          <circle cx="50" cy="40" r="14" fill={skin} />
-          <path d="M62 36 H68 L66 52 H60 Z" fill={skinShade} />
-          <ellipse cx="44.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
-          <ellipse cx="55.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
-          <ellipse cx="45.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
-          <ellipse cx="56.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
-          <path d="M42.2 34.6 H47.6" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
-          <path d="M52.4 34.6 H57.8" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
-          <path d="M45.5 46.2 Q50 50 54.5 46.2" stroke="#6a3030" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          <g className="head">
+            <Hair hair={hair} cloth={cloth} />
+            <rect x="46" y="50" width="8" height="10" rx="3" fill={skin} />
+            <circle cx="50" cy="40" r="14" fill={skin} />
+            <path d="M62 36 H68 L66 52 H60 Z" fill={skinShade} />
+            <ellipse className="eye" cx="44.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
+            <ellipse className="eye" cx="55.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
+            <ellipse cx="45.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
+            <ellipse cx="56.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
+            <path d="M42.2 34.6 H47.6" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
+            <path d="M52.4 34.6 H57.8" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
+            <path d="M45.5 46.2 Q50 50 54.5 46.2" stroke="#6a3030" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+            {extra === "beard" ? <path d="M42 46 Q50 56 58 46 Q54 52 50 52 Q46 52 42 46 Z" fill="#1c140f" opacity="0.85" /> : null}
+            {extra === "glasses" ? (
+              <g fill="none" stroke="#1a140f" strokeWidth="1.1">
+                <circle cx="45" cy="39" r="4.2" />
+                <circle cx="56" cy="39" r="4.2" />
+                <path d="M49.2 39 H51.8" />
+              </g>
+            ) : null}
+            {extra === "earrings" ? (
+              <g fill="#e6c15a">
+                <circle cx="36.5" cy="44" r="1.5" />
+                <circle cx="63.5" cy="44" r="1.5" />
+              </g>
+            ) : null}
+            {pose === "dj" ? (
+              <g fill="none" stroke="#111" strokeWidth="2">
+                <path d="M36 38 H32 V48" />
+                <path d="M64 38 H68 V48" />
+                <circle cx="32" cy="49" r="3.2" fill="#1a1a1a" />
+                <circle cx="68" cy="49" r="3.2" fill="#1a1a1a" />
+              </g>
+            ) : null}
+          </g>
         </g>
       </svg>
     </div>

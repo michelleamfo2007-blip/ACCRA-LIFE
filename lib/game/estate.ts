@@ -1,14 +1,14 @@
 import { BAG_LIMIT, GOODS, bagCount } from "@/lib/game/trade";
-import { cedis, cloneLife, logLine, passTime, seasonFlags, type FarmBed, type Life, type Plot, type StepResult, type Tenant } from "@/lib/game/world";
+import { cedis, cloneLife, logLine, passTime, seasonFlags, type FarmBed, type HousePlan, type Life, type Plot, type StepResult, type Tenant } from "@/lib/game/world";
 
 export const LAND = [
-  { id: "nima", label: "Nima", price: 4500, rooms: 3, rent: 22, blurb: "Tight streets, cheap land, everybody knows everybody." },
-  { id: "kasoa", label: "Kasoa", price: 8000, rooms: 4, rent: 40, blurb: "Far, dusty, and growing fast." },
-  { id: "ashaiman", label: "Ashaiman", price: 12000, rooms: 4, rent: 55, blurb: "Close to Tema. Workers need rooms." },
-  { id: "madina", label: "Madina", price: 20000, rooms: 5, rent: 80, blurb: "Market town energy. Students and traders." },
-  { id: "spintex", label: "Spintex", price: 35000, rooms: 6, rent: 130, blurb: "Gated estates and young families." },
-  { id: "east-legon", label: "East Legon", price: 90000, rooms: 6, rent: 300, blurb: "Embassy row. Rent paid in advance." },
-  { id: "airport", label: "Airport Residential", price: 160000, rooms: 8, rent: 480, blurb: "The expensive side. Quiet roads, heavy gates." },
+  { id: "nima", label: "Nima", price: 4500, rooms: 3, rent: 22, size: "40×80 ft", rule: "Residential only", blurb: "Tight streets, cheap land, everybody knows everybody." },
+  { id: "kasoa", label: "Kasoa", price: 8000, rooms: 4, rent: 40, size: "50×100 ft", rule: "Residential only", blurb: "Far, dusty, and growing fast." },
+  { id: "ashaiman", label: "Ashaiman", price: 12000, rooms: 4, rent: 55, size: "50×100 ft", rule: "A small shop is allowed", blurb: "Close to Tema. Workers need rooms." },
+  { id: "madina", label: "Madina", price: 20000, rooms: 5, rent: 80, size: "60×100 ft", rule: "Residential only", blurb: "Market town energy. Students and traders." },
+  { id: "spintex", label: "Spintex", price: 35000, rooms: 6, rent: 130, size: "80×100 ft", rule: "Residential, gated", blurb: "Gated estates and young families." },
+  { id: "east-legon", label: "East Legon", price: 90000, rooms: 6, rent: 300, size: "100×100 ft", rule: "Residential only", blurb: "Embassy row. Rent paid in advance." },
+  { id: "airport", label: "Airport Residential", price: 160000, rooms: 8, rent: 480, size: "100×200 ft", rule: "Residential only", blurb: "The expensive side. Quiet roads, heavy gates." },
 ] as const;
 
 export const HOUSES = [
@@ -16,6 +16,7 @@ export const HOUSES = [
   { id: "chamber", label: "Chamber and hall", rooms: 2, cost: 0.85, rent: 0.8, line: "A hall to sit, a room to sleep." },
   { id: "two", label: "2-bedroom", rooms: 3, cost: 1, rent: 1, line: "Two rooms and a hall." },
   { id: "three", label: "3-bedroom", rooms: 4, cost: 1.25, rent: 1.2, line: "Space for a family." },
+  { id: "four", label: "4-bedroom", rooms: 5, cost: 1.4, rent: 1.35, line: "Room for children and a guest." },
   { id: "duplex", label: "Duplex", rooms: 6, cost: 1.6, rent: 1.5, line: "Upstairs and downstairs." },
   { id: "mansion", label: "Mansion", rooms: 8, cost: 2.2, rent: 2, line: "The compound talks about you." },
 ] as const;
@@ -32,6 +33,126 @@ const TENANT_BOOK: { name: string; note: string; pays: Tenant["pays"] }[] = [
 ];
 
 export const STAGES = ["Bare plot", "Foundation", "Blocks and walls", "Roofing", "Plaster and paint", "Finished house"];
+export const STAGE_LINES = [
+  "Permit is in the first payment. The crew clears the plot and pours the foundation.",
+  "Blocks rise, course by course. You can stand in the doorway.",
+  "Roof frame, then the sheets or tiles. Rain stops being your problem.",
+  "Plaster, paint, windows, and the colour you picked.",
+  "Gate, compound, and the last sweep. Then you furnish and move in.",
+];
+
+export const ROOM_CHOICES = [
+  { id: "hall", label: "Hall", locked: true },
+  { id: "kitchen", label: "Kitchen", locked: true },
+  { id: "dining", label: "Dining room" },
+  { id: "master", label: "Master bedroom" },
+  { id: "ensuite", label: "Ensuite bath" },
+  { id: "guest", label: "Guest bedroom" },
+  { id: "children", label: "Children's room" },
+  { id: "study", label: "Study" },
+  { id: "prayer", label: "Prayer room" },
+  { id: "store", label: "Store" },
+  { id: "laundry", label: "Laundry" },
+  { id: "garage", label: "Garage" },
+  { id: "veranda", label: "Veranda" },
+  { id: "bq", label: "Boys' quarters" },
+  { id: "pool", label: "Pool" },
+  { id: "garden", label: "Garden" },
+  { id: "terrace", label: "Roof terrace" },
+] as const;
+
+export const STYLES = [
+  { id: "modern", label: "Modern", roof: "flat" },
+  { id: "ghanaian", label: "Traditional Ghanaian", roof: "pitch" },
+  { id: "colonial", label: "Colonial", roof: "pitch" },
+  { id: "minimal", label: "Minimalist", roof: "flat" },
+  { id: "luxury", label: "Luxury", roof: "pitch" },
+  { id: "compound", label: "Compound", roof: "pitch" },
+] as const;
+
+export const WALL_MATS = [
+  { id: "block", label: "Block", factor: 1 },
+  { id: "concrete", label: "Concrete", factor: 1.15 },
+  { id: "brick", label: "Brick", factor: 1.25 },
+  { id: "wood", label: "Wood", factor: 0.9 },
+] as const;
+export const ROOF_MATS = [
+  { id: "aluminium", label: "Aluminium sheets", factor: 1 },
+  { id: "tiles", label: "Tiles", factor: 1.2 },
+  { id: "concrete", label: "Concrete", factor: 1.35 },
+  { id: "thatch", label: "Thatch", factor: 0.75 },
+] as const;
+export const WINDOW_MATS = [
+  { id: "sliding", label: "Sliding" },
+  { id: "casement", label: "Casement" },
+  { id: "louvre", label: "Louvre" },
+] as const;
+export const FLOOR_MATS = [
+  { id: "tile", label: "Tiles", factor: 1 },
+  { id: "wood", label: "Wood", factor: 1.1 },
+  { id: "polish", label: "Polished concrete", factor: 1.05 },
+  { id: "marble", label: "Marble", factor: 1.4 },
+] as const;
+export const COMPOUNDS = [
+  { id: "none", label: "No wall" },
+  { id: "low", label: "Low wall" },
+  { id: "high", label: "High wall" },
+  { id: "electric", label: "High wall, electric" },
+] as const;
+export const GATES = [
+  { id: "manual", label: "Manual gate" },
+  { id: "sliding", label: "Sliding gate" },
+  { id: "auto", label: "Automatic gate" },
+] as const;
+export const PAINTS = ["#f4efe6", "#f3d7b5", "#e7e2d8", "#c4552a", "#1f4d3a", "#243044", "#6b1f3a", "#c9a227"];
+
+function matFactor(id: string, table: readonly { id: string; factor: number }[]) {
+  return table.find((item) => item.id === id)?.factor ?? 1;
+}
+
+export function planFactor(plot: Plot) {
+  const house = houseOf(plot)?.cost ?? 1;
+  const plan = plot.plan;
+  if (!plan) return house;
+  const extras = plan.rooms.filter((room) => room !== "hall" && room !== "kitchen").length;
+  const pool = plan.rooms.includes("pool") ? 0.18 : 0;
+  const fence = plan.compound === "electric" ? 0.08 : plan.compound === "high" ? 0.04 : 0;
+  const mix = (matFactor(plan.wall, WALL_MATS) + matFactor(plan.roofMat, ROOF_MATS) + matFactor(plan.floor, FLOOR_MATS)) / 3;
+  return house * mix * (1 + extras * 0.03 + pool + fence);
+}
+
+export function designQuote(area: string, plan: HousePlan) {
+  const fake: Plot = { id: "quote", area, stage: 0, stageAt: 0, spent: 0, tenants: 0, lastRent: 0, house: plan.house, plan };
+  let build = 0;
+  for (let stage = 0; stage < STAGES.length - 1; stage += 1) build += stageCost({ ...fake, stage });
+  const upkeep = Math.max(15, Math.round(build * 0.002));
+  return { build, permit: Math.round(landOf(area).price * 0.04), upkeep, days: 6 + Math.min(8, plan.bedrooms) };
+}
+
+export function defaultPlan(houseId = "two"): HousePlan {
+  const house = HOUSES.find((item) => item.id === houseId) ?? HOUSES[2];
+  const bedrooms = Math.max(1, house.rooms - 1);
+  const rooms = ["hall", "kitchen", "master"];
+  if (bedrooms > 1) rooms.push("guest");
+  if (bedrooms > 2) rooms.push("children");
+  if (house.id === "duplex" || house.id === "mansion") rooms.push("dining", "veranda", "garage");
+  if (house.id === "mansion") rooms.push("pool", "bq");
+  return {
+    house: house.id,
+    bedrooms,
+    rooms,
+    style: house.id === "mansion" ? "luxury" : "ghanaian",
+    wall: "block",
+    roofMat: "aluminium",
+    windows: "louvre",
+    floor: "tile",
+    wallColor: "#f4efe6",
+    roofColor: "#8d5a32",
+    accent: "#1f4d3a",
+    compound: "low",
+    gate: "manual",
+  };
+}
 const STAGE_COST = [0.3, 0.45, 0.3, 0.25, 0.2];
 export const STAGE_SECONDS = 8;
 export const MAX_PLOTS = 3;
@@ -59,7 +180,7 @@ export function rentRate(plot: Plot) {
 
 export function stageCost(plot: Plot) {
   if (plot.stage >= STAGES.length - 1) return 0;
-  return Math.round(landOf(plot.area).price * STAGE_COST[plot.stage] * (houseOf(plot)?.cost ?? 1));
+  return Math.round(landOf(plot.area).price * STAGE_COST[plot.stage] * planFactor(plot));
 }
 
 /** Seconds left before the next stage can start. Wall clock, so a stage is a few seconds. */
@@ -146,8 +267,22 @@ export function chooseHouse(life: Life, plotId: string, houseId: string): StepRe
   const house = HOUSES.find((item) => item.id === houseId);
   if (!plot || !house) return { life, notes: [], error: "That house is not on the plan." };
   if (plot.stage > 0) return { life, notes: [], error: "The foundation is already down. This is the house you are building." };
-  const next = withPlot(life, plotId, (item) => ({ ...item, house: house.id }));
+  const next = withPlot(life, plotId, (item) => ({ ...item, house: house.id, plan: item.plan?.house === house.id ? item.plan : defaultPlan(house.id) }));
   return { life: next, notes: [`You are building a ${house.label.toLowerCase()} in ${landOf(plot.area).label}. ${house.line}`] };
+}
+
+export function saveDesign(life: Life, plotId: string, plan: HousePlan): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  const house = HOUSES.find((item) => item.id === plan.house);
+  if (!plot || !house) return { life, notes: [], error: "That plan does not fit a plot you own." };
+  if (plot.stage > 0) return { life, notes: [], error: "The foundation is already down." };
+  if (plot.guard) return { life, notes: [], error: "Clear the land guards before you file a plan." };
+  const rooms = Array.from(new Set(["hall", "kitchen", ...plan.rooms]));
+  const next = withPlot(life, plotId, (item) => ({ ...item, house: house.id, plan: { ...plan, house: house.id, rooms, bedrooms: Math.max(1, Math.min(6, plan.bedrooms)) } }));
+  const quote = designQuote(plot.area, { ...plan, rooms });
+  const line = `Plan filed in ${landOf(plot.area).label}. A ${house.label.toLowerCase()}, ${cedis(quote.build)} all in. The permit is inside the first payment.`;
+  logLine(next, line);
+  return { life: next, notes: [line] };
 }
 
 export function setRentAsk(life: Life, plotId: string, ask: number): StepResult {
@@ -198,16 +333,19 @@ export function buildNext(life: Life, plotId: string): StepResult {
   const cost = stageCost(plot);
   if (life.cash < cost) return { life, notes: [], error: `${STAGES[plot.stage + 1]} costs ${cedis(cost)}.` };
   const done = plot.stage + 1 === STAGES.length - 1;
+  const rain = !done && Math.random() < 0.25;
   const next = withPlot(life, plotId, (item) => ({
     ...item,
     stage: item.stage + 1,
     stageAt: life.minutes,
-    readyAt: done ? undefined : Date.now() + STAGE_SECONDS * 1000,
+    readyAt: done ? undefined : Date.now() + STAGE_SECONDS * (rain ? 2 : 1) * 1000,
     spent: item.spent + cost,
     lastRent: life.minutes,
   }));
   next.cash -= cost;
-  const line = done ? `Your house in ${landOf(plot.area).label} is finished. Find tenants.` : `Builders started ${STAGES[plot.stage + 1].toLowerCase()} in ${landOf(plot.area).label}.`;
+  const line = done
+    ? `Your house in ${landOf(plot.area).label} is finished. Furnish a bed, a seat, and the kitchen, then move in. Extra rooms can be let.`
+    : `${STAGE_LINES[plot.stage] ?? `Builders started ${STAGES[plot.stage + 1].toLowerCase()}.`}${rain ? " Rain slowed the crew." : ""}`;
   logLine(next, line);
   return { life: next, notes: [line] };
 }

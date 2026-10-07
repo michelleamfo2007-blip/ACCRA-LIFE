@@ -544,6 +544,7 @@ export function FlightRide({
   fare,
   onArrive,
   onBack,
+  airline = "Passion Airways",
 }: {
   from: string;
   to: string;
@@ -552,6 +553,7 @@ export function FlightRide({
   fare: number;
   onArrive: () => void;
   onBack: () => void;
+  airline?: string;
 }) {
   const [cam, setCam] = useState<FlightCam>("outside");
   const [gone, setGone] = useState(0);
@@ -606,7 +608,7 @@ export function FlightRide({
       {cam === "seat" ? <Seatback from={code} to={dest} line={spoken} minutes={minutes} gone={gone} /> : null}
 
       <div className="absolute right-3 top-[max(4.8rem,calc(env(safe-area-inset-top)+4rem))] z-10 w-[min(230px,58vw)] rounded-2xl bg-[#12141c]/90 p-3 text-white shadow-xl">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#f5c518]">Passion Airways</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#f5c518]">{airline}</p>
         <div className="mt-1 flex items-start justify-between gap-2">
           <p className="text-sm font-semibold">OP 204 · {cabin}</p>
           <p className="text-xs font-bold text-white">

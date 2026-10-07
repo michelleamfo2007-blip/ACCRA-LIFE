@@ -79,6 +79,42 @@ const NEIGHBOURHOODS: Spot[] = [
     ],
   },
   {
+    id: "osu-rails",
+    name: "Oxford Rails",
+    emoji: "👗",
+    x: 460,
+    y: 520,
+    group: "hang",
+    blurb: "Osu. A street boutique. Local cuts, a fitting curtain, and a price you can argue.",
+    actions: [
+      act({ id: "osu-rails-look", label: "Ask the stylist", detail: "She pulls two tops and tells you which one is for tonight.", minutes: 15, effects: { fun: 8, social: 6 }, social: true, emoji: "👗" }),
+    ],
+  },
+  {
+    id: "mall-rails",
+    name: "Mall Rails",
+    emoji: "🛍️",
+    x: 1440,
+    y: 460,
+    group: "hang",
+    blurb: "Accra Mall. New clothes, cold air, and a cashier who writes a receipt.",
+    actions: [
+      act({ id: "mall-rails-look", label: "Browse the new rail", detail: "Imported basics and a Saturday dress.", minutes: 20, effects: { fun: 8, social: 4 }, emoji: "🛍️" }),
+    ],
+  },
+  {
+    id: "legon-rails",
+    name: "Legon Atelier",
+    emoji: "👜",
+    x: 1640,
+    y: 280,
+    group: "hang",
+    blurb: "East Legon. Designer tags, a guard at the door, and a mirror that costs money to stand in.",
+    actions: [
+      act({ id: "legon-rails-look", label: "Ask for evening wear", detail: "The stylist already knows the club you are going to.", minutes: 20, effects: { fun: 10, social: 8 }, social: true, emoji: "👜" }),
+    ],
+  },
+  {
     id: "kantamanto",
     name: "Kantamanto",
     emoji: "👕",

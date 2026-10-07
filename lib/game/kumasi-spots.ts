@@ -249,4 +249,17 @@ export const KUMASI_SPOTS: Spot[] = [
       act({ id: "suame-part", label: "Ask for a part", detail: "They know the year of the car before you finish the sentence.", minutes: 25, cost: 40, effects: { social: 8 }, skill: "hustle", emoji: "⚙️" }),
     ],
   },
+  {
+    id: "adum-print",
+    name: "Adum Print House",
+    emoji: "🧵",
+    x: 640,
+    y: 680,
+    group: "hang",
+    town: "kumasi",
+    blurb: "Adum. Kente, ankara, and a tailor who takes the measurement before the price.",
+    actions: [
+      act({ id: "adum-print-look", label: "Stand for a fitting", detail: "The tailor marks the cloth. The piece is not ready today.", minutes: 30, cost: 20, effects: { fun: 8, social: 8 }, social: true, emoji: "🧵" }),
+    ],
+  },
 ];

@@ -108,6 +108,51 @@ export function canBoard(life: Life, routeId: string, cabinId: string) {
   return null;
 }
 
+export function ownedJet(life: Life): "jet" | "heavy-jet" | null {
+  const held = new Set([...(life.stored ?? []), ...(life.furniture ?? []).map((piece) => piece.id)]);
+  if (held.has("heavy-jet")) return "heavy-jet";
+  if (held.has("jet")) return "jet";
+  return null;
+}
+
+export function jetFuel(life: Life) {
+  return ownedJet(life) === "heavy-jet" ? 280 : 180;
+}
+
+export function flyOwnJet(life: Life, routeId: string): StepResult {
+  const jet = ownedJet(life);
+  if (!jet) return { life, notes: [], error: "You do not have a jet in the yard." };
+  const route = routeOf(routeId);
+  if (!route) return { life, notes: [], error: "That hop is not on your chart." };
+  const fromTown = (life.town ?? "accra") as TownId;
+  const here = fromTown === "kumasi" ? "kumasi" : "accra";
+  const depart = route.from === "kumasi" ? "kumasi" : "accra";
+  if (here !== depart) return { life, notes: [], error: "Point the jet at the other city." };
+  const wait = flightWait(life);
+  if (wait > 0) return { life, notes: [], error: `The crew is turning the jet around. Next hop in ${boardingWaitLabel(wait)}.` };
+  const fuel = jetFuel(life);
+  if (life.cash < fuel) return { life, notes: [], error: `Fuel is ${cedis(fuel)}. MoMo is short.` };
+  if (life.needs.energy < 15) return { life, notes: [], error: "Too tired to fly. Rest first." };
+  const timed = passTime(cloneLife(life), 40).life;
+  timed.cash -= fuel;
+  const landed = route.to === "kumasi" ? { where: "kejetia", town: "kumasi" as const } : { where: "kotoka", town: "accra" as const };
+  timed.where = landed.where;
+  timed.town = landed.town;
+  timed.flewAt = timed.minutes;
+  timed.needs.fun = Math.max(0, Math.min(100, timed.needs.fun + (jet === "heavy-jet" ? 28 : 22)));
+  timed.needs.energy = Math.max(0, Math.min(100, timed.needs.energy + 6));
+  bump(timed, "trips");
+  bump(timed, "flights");
+  bump(timed, "jet-hops");
+  const name = jet === "heavy-jet" ? "Heavy jet" : "Private jet";
+  const notes = [`${name} to ${spotById(landed.where).name}. Fuel ${cedis(fuel)}. Nobody else was on the manifest.`];
+  const away = crossedTownNote(fromTown, landed.town, false, Boolean(life.car));
+  if (away) notes.push(away);
+  collectStamp(timed, route.to, notes);
+  for (const note of notes) logLine(timed, note);
+  return { life: timed, notes };
+}
+
 export function bookFlight(life: Life, routeId: string, cabinId: string): StepResult {
   const blocked = canBoard(life, routeId, cabinId);
   if (blocked) return { life, notes: [], error: blocked };

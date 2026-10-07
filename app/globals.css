@@ -114,10 +114,22 @@ body {
   transform-origin: 50px 156px;
 }
 
-.sim-idle .sim-bob,
-.sim-idle .arm,
-.sim-idle .arm-back {
-  animation: none;
+.sim-idle .sim-bob {
+  animation: sim-idle-sway 2.8s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-idle .leg-r {
+  transform: rotate(8deg);
+}
+
+.sim-idle .leg-r .shin {
+  transform: rotate(-12deg);
+}
+
+.sim-idle .head {
+  animation: sim-head 4.8s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
 }
 
 .sim-sit .sim-bob {
@@ -198,6 +210,81 @@ body {
   animation: none;
 }
 
+.sim-dance .sim-bob,
+.sim-dj .sim-bob {
+  animation: sim-idle-sway 0.48s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-dance .leg-l {
+  transform: rotate(10deg);
+}
+
+.sim-dance .leg-r {
+  transform: rotate(-12deg);
+}
+
+.sim-dance .shin {
+  transform: rotate(-16deg);
+}
+
+.sim-dance .arm-front,
+.sim-dance .arm-back {
+  animation: sim-hands 0.46s ease-in-out infinite alternate;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-dance .head,
+.sim-dj .head {
+  animation: sim-head 1.4s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-drink .arm-front {
+  transform: rotate(-46deg);
+}
+
+.sim-drink .arm-front .forearm {
+  transform: rotate(18deg);
+}
+
+.sim-drink .sim-bob,
+.sim-watch .sim-bob {
+  animation: sim-idle-sway 3.2s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-watch .arm-front,
+.sim-watch .arm-back {
+  transform: rotate(62deg);
+}
+
+.sim-watch .forearm {
+  transform: rotate(-48deg);
+}
+
+.sim-lean .sim-bob {
+  transform: rotate(-7deg);
+}
+
+.sim-lean .arm-front {
+  transform: rotate(18deg);
+}
+
+.sim-dj .arm-front {
+  animation: sim-dj-hand 0.62s ease-in-out infinite;
+  animation-delay: var(--beat, 0s);
+}
+
+.sim-dj .arm-back {
+  transform: rotate(36deg);
+}
+
+.sim .head {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
 .sim .eye {
   transform-box: fill-box;
   transform-origin: center;
@@ -206,6 +293,52 @@ body {
 
 .sim-shadow-walk {
   animation: sim-shadow 0.28s ease-in-out infinite;
+}
+
+@keyframes sim-idle-sway {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateX(2px) rotate(1.4deg);
+  }
+}
+
+@keyframes sim-head {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0deg);
+  }
+  80% {
+    transform: rotate(-7deg);
+  }
+  90% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes sim-hands {
+  from {
+    transform: rotate(-8deg);
+  }
+  to {
+    transform: rotate(-78deg);
+  }
+}
+
+@keyframes sim-dj-hand {
+  0%,
+  100% {
+    transform: rotate(24deg);
+  }
+  40% {
+    transform: rotate(8deg);
+  }
+  70% {
+    transform: rotate(-70deg);
+  }
 }
 
 @keyframes sim-breathe {
@@ -1585,6 +1718,15 @@ body {
 .venue-vignette {
   background: radial-gradient(ellipse at 48% 42%, transparent 42%, rgba(8, 6, 4, 0.38) 100%);
 }
+.venue-vignette-club {
+  background: radial-gradient(ellipse at 50% 46%, transparent 58%, rgba(28, 10, 32, 0.22) 100%);
+}
+.venue-grain {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+  mix-blend-mode: overlay;
+  opacity: 0.35;
+}
 .venue-beam {
   background:
     linear-gradient(115deg, transparent 35%, rgba(255, 45, 149, 0.08) 48%, transparent 58%),
@@ -1630,6 +1772,7 @@ body {
 }
 .venue-dance {
   animation: venue-dance 0.9s ease-in-out infinite alternate;
+  animation-delay: var(--beat, 0s);
 }
 @keyframes venue-dance {
   from {
@@ -2244,6 +2387,7 @@ body {
   .sim .forearm,
   .sim .torso,
   .sim .eye,
+  .sim .head,
   .sim-shadow-walk {
     animation: none !important;
   }

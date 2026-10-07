@@ -3,12 +3,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
 import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, nextMusicMove, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
-import { CROPS, HOUSES, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, cropOf, evictTenant, farmSize, goToCourt, harvestBed, houseOf, landOf, payGuards, plantCrop, plotsOf, rentDue, rentRate, roomsOf, sellPlot, setRentAsk, stageCost, waterBeds } from "@/lib/game/estate";
+import { CROPS, HOUSES, MAX_PLOTS, ROOM_CHOICES, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, cropOf, designQuote, evictTenant, farmSize, goToCourt, harvestBed, houseOf, landOf, payGuards, plantCrop, plotsOf, rentDue, rentRate, roomsOf, saveDesign, sellPlot, setRentAsk, stageCost, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
 import { CARS, CAR_PAINTS, INSURANCE, PLATE_FEE, RESPRAY, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, insureCar, nameCar, plateCar, repaintCar, sellCar, tradeIn } from "@/lib/game/garage";
 import { CLINIC_FEE, CLINIC_NHIS, MEDS_FEE, NHIS_FEE, buyNhis, hasNhis, restSick, seeClinic, selfMedicate, sickness } from "@/lib/game/health";
 import { MAX_ORDERS, STYLES, TAILOR_COLORS, collectOrder, orderStyle, styleOf, wearFit } from "@/lib/game/tailor";
 import { moveHome } from "@/lib/game/ladder";
+import { HouseWizard } from "@/components/game/house-wizard";
 import { PlotYard } from "@/components/game/plot-yard";
 import { cedis, type Life, type StepResult } from "@/lib/game/world";
 
@@ -70,6 +71,7 @@ export function Bar({ value, color = "#006B3F" }: { value: number; color?: strin
 export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBack: () => void; onApply: Apply; onArrange?: () => void }) {
   const plots = plotsOf(life);
   const [selling, setSelling] = useState<string | null>(null);
+  const [wizard, setWizard] = useState<string | null>(null);
   const [area, setArea] = useState(plots[0]?.area ?? "kasoa");
   const [picked, setPicked] = useState<string | null>(plots.find((plot) => plot.area === (plots[0]?.area ?? "kasoa"))?.id ?? null);
   const [now, setNow] = useState(() => Date.now());
@@ -127,19 +129,37 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
               </div>
             ) : plot.guard === "court" ? (
               <p className="mt-3 text-sm text-[#5c6b82]">The court is clearing the land guards. Back in {wait((plot.guardUntil ?? life.minutes) - life.minutes)}.</p>
+            ) : plot.stage === 0 && wizard === plot.id ? (
+              <div className="mt-3">
+                <HouseWizard
+                  area={plot.area}
+                  initial={plot.plan}
+                  onCancel={() => setWizard(null)}
+                  onSave={(plan) => {
+                    onApply(saveDesign(life, plot.id, plan));
+                    setWizard(null);
+                  }}
+                />
+              </div>
             ) : plot.stage === 0 ? (
               <div className="mt-3 space-y-2">
-                <p className="text-sm">{houseOf(plot)?.line ?? "Choose what you are building. Bigger houses cost more at every stage and rent for more."}</p>
+                <p className="text-sm">
+                  {land.size}. {land.rule}. {plot.plan ? `${houseOf(plot)?.label ?? "House"} is on the plan.` : "The sand is yours. Design the house, or leave it for later."}
+                </p>
+                {plot.plan ? <p className="text-xs text-[#5c6b82]">{plot.plan.bedrooms} bedrooms · {plot.plan.rooms.length} spaces · {cedis(designQuote(plot.area, plot.plan).build)} all in</p> : null}
                 <div className="flex flex-wrap gap-2">
+                  <Btn kind="dark" onClick={() => setWizard(plot.id)}>
+                    {plot.plan ? "Change the plan" : "Build now"}
+                  </Btn>
                   {HOUSES.map((house) => (
-                    <Btn key={house.id} kind={plot.house === house.id ? "dark" : "light"} onClick={() => onApply(chooseHouse(life, plot.id, house.id))}>
+                    <Btn key={house.id} kind={plot.house === house.id ? "gold" : "light"} onClick={() => onApply(chooseHouse(life, plot.id, house.id))}>
                       {house.label}
                     </Btn>
                   ))}
                 </div>
                 {plot.house ? (
-                  <Btn kind="dark" onClick={() => onApply(buildNext(life, plot.id))}>
-                    Start {STAGES[1].toLowerCase()} · {cedis(stageCost(plot))}
+                  <Btn kind="green" onClick={() => onApply(buildNext(life, plot.id))}>
+                    Pay the crew · {cedis(stageCost(plot))}
                   </Btn>
                 ) : null}
               </div>
@@ -148,6 +168,14 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
                 <p className="text-sm">
                   {houseOf(plot)?.label ?? "House"} · {plot.tenants}/{roomsOf(plot)} rooms let · {cedis(rentRate(plot))} a room a day
                 </p>
+                <div className="flex flex-wrap gap-1">
+                  {(plot.plan?.rooms ?? ["hall", "kitchen"]).map((room) => (
+                    <span key={room} className="rounded-full bg-[#f6f1ea] px-2 py-1 text-[10px] font-bold text-[#5c6b82]">
+                      {ROOM_CHOICES.find((item) => item.id === room)?.label ?? room}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-[#5c6b82]">The rooms start with the basics. Arrange the inside to place beds, seats, and the kitchen where you want them. A bed, a seat, and a stove are enough to move in.</p>
                 <p className={`text-sm font-semibold ${due > 0 ? "text-[#006B3F]" : "text-[#5c6b82]"}`}>{due > 0 ? `Rent due: ${cedis(due)}` : "No rent due yet."}</p>
                 <div className="flex flex-wrap gap-2">
                   <Btn kind={(plot.rentAsk ?? 1) < 1 ? "dark" : "light"} onClick={() => onApply(setRentAsk(life, plot.id, 0.8))}>

@@ -19,6 +19,38 @@ export type Look = {
   skin: string;
   cloth: string;
   accent: string;
+  height?: "short" | "medium" | "tall";
+  build?: "slim" | "average" | "athletic" | "heavy";
+  face?: "oval" | "round" | "square" | "heart";
+  beard?: "none" | "beard" | "goatee" | "mustache";
+};
+
+export type Errand = {
+  id: string;
+  label: string;
+  kind: string;
+  rider: string;
+  riderId: string;
+  vehicle: string;
+  address: string;
+  paid: number;
+  readyAt: number;
+  line: string;
+};
+
+export type Drop = {
+  riderId: string;
+  rider: string;
+  vehicle: string;
+  label: string;
+};
+
+export type Garment = {
+  id: string;
+  label: string;
+  outfit: string;
+  cloth: string;
+  pattern?: string;
 };
 
 export type Skills = {
@@ -71,6 +103,14 @@ export type Life = {
   }[];
   /** Nightlife session — bar → table → bottle → dance → leave. */
   club?: { spot: string; state: string; bottles: number; spend: number; danced: boolean; startedAt: number; posted?: boolean };
+  /** One parcel on the road. */
+  errand?: Errand | null;
+  /** Last parcel, waiting for a star rating. */
+  drop?: Drop | null;
+  /** Clothes you own. */
+  wardrobe?: Garment[];
+  /** Named looks: work, club, church, and the rest. */
+  outfits?: Record<string, string>;
   /** Soft next-morning penalty after a heavy club night. */
   hangover?: { until: number } | null;
   /** Seat you claimed at an eatery (for inviting friends to the table). */
@@ -161,7 +201,22 @@ export type Pet = { id: string; kind: string; name: string; fedAt: number; bough
 export type Community = { faith?: "church" | "mosque" | null; standing: number; lastService?: number; givenDay?: { day: number; amount: number }; projects: string[]; chief?: { stool: string; since: number } | null; lastCourt?: number };
 
 export type Tenant = { id: string; name: string; note: string; pays: "steady" | "late" | "trouble"; since: number };
-export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number; house?: string; rentAsk?: number; people?: Tenant[] };
+export type HousePlan = {
+  house: string;
+  bedrooms: number;
+  rooms: string[];
+  style: string;
+  wall: string;
+  roofMat: string;
+  windows: string;
+  floor: string;
+  wallColor: string;
+  roofColor: string;
+  accent: string;
+  compound: string;
+  gate: string;
+};
+export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number; house?: string; rentAsk?: number; people?: Tenant[]; plan?: HousePlan };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
 export type Song = { id: string; title: string; at: number; quality: number; paid: number; video?: boolean };
 export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number; lastShow?: number; shows?: number };
@@ -294,7 +349,11 @@ export type Spot = {
   actions: Verb[];
 };
 
-export const HAIRS = ["Braids", "Afro", "Bun", "Ponytail", "Long", "Locs", "Low cut", "Headwrap"];
+export const HAIRS = ["Braids", "Afro", "Bun", "Ponytail", "Long", "Locs", "Low cut", "Fade", "Weave", "Bald", "Headwrap"];
+export const HEIGHTS = ["short", "medium", "tall"] as const;
+export const BUILDS = ["slim", "average", "athletic", "heavy"] as const;
+export const FACES = ["oval", "round", "square", "heart"] as const;
+export const BEARDS = ["none", "beard", "goatee", "mustache"] as const;
 export const OUTFITS = ["Classic", "Casual", "Office", "All-white", "Site work"];
 export const PATTERNS = ["Plain", "Kente", "Ankara", "Tie-dye"];
 export const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d", "#3d2416", "#2a1a12"];
@@ -312,6 +371,8 @@ export const TRAITS = [
   { id: "night", emoji: "🌙", name: "Night Owl", detail: "Accra no dey sleep, and neither do you. Nightlife treats you well." },
   { id: "tech", emoji: "💻", name: "Tech Person", detail: "Three startup ideas before breakfast. Coding at the hub sticks." },
   { id: "musical", emoji: "🎶", name: "Musical", detail: "Hums in the trotro. Music skill grows whenever a speaker is on." },
+  { id: "lucky", emoji: "🍀", name: "Lucky", detail: "Cards and dice lean your way. Slightly. Do not tell the dealer." },
+  { id: "streetwise", emoji: "🛣️", name: "Streetwise", detail: "You read a street before you step on it. Packages and late nights go missing less often." },
 ] as const;
 
 export const DREAMS = [
@@ -1285,7 +1346,7 @@ function clone(life: Life): Life {
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
-    plots: (life.plots ?? []).map((plot) => ({ ...plot, people: plot.people?.map((person) => ({ ...person })) })),
+    plots: (life.plots ?? []).map((plot) => ({ ...plot, people: plot.people?.map((person) => ({ ...person })), plan: plot.plan ? { ...plot.plan, rooms: [...plot.plan.rooms] } : undefined })),
     kids: (life.kids ?? []).map((kid) => ({ ...kid })),
     music: life.music ? { ...life.music, songs: life.music.songs.map((song) => ({ ...song })) } : undefined,
     school: life.school ? { ...life.school, certs: [...life.school.certs] } : undefined,
@@ -1306,7 +1367,19 @@ function clone(life: Life): Life {
     guide: [...(life.guide ?? [])],
     seenParcels: [...(life.seenParcels ?? [])],
     phone: life.phone ? { ...life.phone, hidden: [...(life.phone.hidden ?? [])] } : life.phone,
+    errand: life.errand ? { ...life.errand } : life.errand,
+    drop: life.drop ? { ...life.drop } : life.drop,
+    wardrobe: (life.wardrobe ?? []).map((item) => ({ ...item })),
+    outfits: life.outfits ? { ...life.outfits } : life.outfits,
   };
+}
+
+export function dressNote(life: Life, nightlife: boolean) {
+  if (!nightlife) return "";
+  const outfit = life.look.outfit;
+  if (outfit === "Site work") return "The bouncer is looking at those boots.";
+  if (outfit === "All-white" || outfit === "Office" || outfit === "Classic") return "You look like you belong here.";
+  return "";
 }
 
 export function seasonFlags(minutes: number) {
@@ -1500,18 +1573,20 @@ function settleBills(life: Life, from: number, to: number) {
     if (new Date(day * 86400000).getUTCDay() !== 6 || life.lastRentAt === day) continue;
     life.lastRentAt = day;
     const rent = homeById(life.homeId).rent;
+    const own = life.homeId === "own-house" ? (life.plots ?? []).find((plot) => plot.stage >= 5) : undefined;
+    const rates = own ? Math.max(15, Math.round((own.spent || 8000) * 0.002)) : 0;
     const loanPay = Math.min(life.loan, life.weeklyLoan);
     const upkeep = SHOP.reduce((sum, item) => sum + (item.upkeep && life.inventory.includes(item.id) ? item.upkeep : 0), 0);
     const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level), 0);
     const fees = (life.kids ?? []).filter((kid) => kid.school).length * 40;
     const drivers = (life.fleet ?? []).reduce((sum, car) => sum + (car.driver ? (FLEET_WAGES[car.kind] ?? 0) : 0), 0);
-    life.cash -= rent + loanPay + upkeep + wages + fees + drivers;
+    life.cash -= rent + loanPay + upkeep + wages + fees + drivers + rates;
     life.loan -= loanPay;
     if (life.loan <= 0) {
       life.loan = 0;
       life.weeklyLoan = 0;
     }
-    notes.push(`Saturday bill: rent ${cedis(rent)}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${drivers ? ` and drivers ${cedis(drivers)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
+    notes.push(`Saturday bill: rent ${cedis(rent)}${rates ? ` and property upkeep ${cedis(rates)}` : ""}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${drivers ? ` and drivers ${cedis(drivers)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
     const bank = life.bank;
     if (bank && bank.loan > 0 && day * 1440 > bank.loanDue) {
       const fine = Math.round(bank.loan * 0.05);

@@ -19,6 +19,7 @@ import { hangoverActive, leaveClubNight, sessionOf } from "@/lib/game/club-night
 import { catchCash, sprayCash } from "@/lib/game/club-spray";
 import { postClout } from "@/lib/game/phone-life";
 import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
+import { kitVerbs } from "@/lib/game/place-kit";
 import { TradeSheet } from "@/components/game/trade-sheet";
 import { buyGood, sellGood } from "@/lib/game/trade";
 import { syncBadges } from "@/lib/game/badges";
@@ -31,7 +32,7 @@ import { claimGuide, guideNext } from "@/lib/game/guide";
 import { PlayerChops, WeeklyCard } from "@/components/game/city-apps";
 import { chopSign } from "@/lib/game/kitchen";
 import { checkIn } from "@/lib/game/weekly";
-import { CABINS, bookFlight, routeOf } from "@/lib/game/flights";
+import { CABINS, bookFlight, flyOwnJet, jetFuel, routeOf } from "@/lib/game/flights";
 import { TravelSheet } from "@/components/game/travel-sheet";
 import { placeCard, spotOnMap, townEventNow, townOf, type TownId } from "@/lib/game/towns";
 import { quoteTravel, type TravelMode } from "@/lib/game/travel";
@@ -56,9 +57,13 @@ const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").th
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
 import {
   ACCENTS,
+  BEARDS,
+  BUILDS,
   CLOTHS,
   DREAMS,
+  FACES,
   HAIRS,
+  HEIGHTS,
   HOME_VERBS,
   HOMES,
   JOBS,
@@ -291,6 +296,12 @@ export function GameApp() {
   const cookieOk = useCookie();
 
   useEffect(() => {
+    let noteTimer = 0;
+    const ping = (message: string) => {
+      setToast(message);
+      window.clearTimeout(noteTimer);
+      noteTimer = window.setTimeout(() => setToast((current) => (current === message ? null : current)), 4600);
+    };
     const id = window.setInterval(() => {
       const snap = parseRaw(getRaw());
       if (!snap.session) return;
@@ -311,7 +322,7 @@ export function GameApp() {
           if (timed.notes.length) settled.life.inbox = [...timed.notes, ...settled.life.inbox].slice(0, 20);
           life = settled.life;
           commitLife(account.username, life);
-          if (settled.notes[0]) setToast(settled.notes[0]);
+          if (settled.notes[0]) ping(settled.notes[0]);
         }
       }
       if (account.cloud) {
@@ -330,12 +341,15 @@ export function GameApp() {
             if (next === current) return;
             const gained = next.cash > current.cash;
             commitLife(account.username, next);
-            if (gained) setToast(next.log[0] ?? "Money landed in your wallet.");
+            if (gained) ping(next.log[0] ?? "Money landed in your wallet.");
           })
           .catch(() => undefined);
       }
     }, 15000);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(noteTimer);
+    };
   }, []);
 
   function flash(message: string) {
@@ -357,9 +371,9 @@ export function GameApp() {
         <Guest onAuth={setAuth} flash={flash} cookieOk={cookieOk} />
       )}
       {toast ? (
-        <div className="pointer-events-none absolute left-1/2 top-24 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-full bg-[#121212] px-4 py-3 text-center text-sm font-medium text-white shadow-xl">
+        <button type="button" onClick={() => setToast(null)} className="absolute left-1/2 top-24 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-full bg-[#121212] px-4 py-3 text-center text-sm font-medium text-white shadow-xl">
           {toast}
-        </div>
+        </button>
       ) : null}
       <div className="game-splash absolute inset-0 z-[60] flex items-center justify-center bg-[#fff6df]">
         <p className="font-display text-4xl tracking-tight text-[#121212]">Accra Life</p>
@@ -731,7 +745,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
     flash(`Keys in hand. ${homeById(homeId).area} is home.`);
   }
 
-  const canNext = step === 1 ? traits.length === 2 : true;
+  const canNext = step === 1 ? traits.length >= 2 : true;
 
   return (
     <div className="flex h-dvh flex-col bg-[#fff6df] lg:flex-row">
@@ -820,11 +834,17 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
             <Swatches label="Skin" colors={SKINS} value={look.skin} onChange={(skin) => setLook({ ...look, skin })} />
             <Swatches label="Top" colors={CLOTHS} value={look.cloth} onChange={(cloth) => setLook({ ...look, cloth })} />
             <Swatches label="Accent" colors={ACCENTS} value={look.accent} onChange={(accent) => setLook({ ...look, accent })} />
+            <Choice label="Height" options={[...HEIGHTS]} value={look.height ?? "medium"} onChange={(height) => setLook({ ...look, height: height as Look["height"] })} />
+            <Choice label="Build" options={[...BUILDS]} value={look.build ?? "average"} onChange={(build) => setLook({ ...look, build: build as Look["build"] })} />
+            <Choice label="Face" options={[...FACES]} value={look.face ?? "oval"} onChange={(face) => setLook({ ...look, face: face as Look["face"] })} />
+            {look.body === "man" ? (
+              <Choice label="Facial hair" options={[...BEARDS]} value={look.beard ?? "none"} onChange={(beard) => setLook({ ...look, beard: beard as Look["beard"] })} />
+            ) : null}
           </div>
         ) : null}
         {step === 1 ? (
           <div className="space-y-3">
-            <p className="text-sm text-[#5c6b82]">Choose 2 traits for {account.username}.</p>
+            <p className="text-sm text-[#5c6b82]">Choose 2 or 3 traits for {account.username}.</p>
             {TRAITS.map((trait) => {
               const on = traits.includes(trait.id);
               return (
@@ -834,7 +854,7 @@ function Creator({ account, flash }: { account: Account; flash: (message: string
                   onClick={() =>
                     setTraits((current) => {
                       if (current.includes(trait.id)) return current.filter((id) => id !== trait.id);
-                      if (current.length >= 2) return current;
+                      if (current.length >= 3) return current;
                       return [...current, trait.id];
                     })
                   }
@@ -939,7 +959,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [doOpen, setDoOpen] = useState(false);
   const [rideId, setRideId] = useState<Ride["id"]>(life?.car ? "car" : "trotro");
   const [trip, setTrip] = useState<{ name: string; placeId: string; ride: Ride } | null>(null);
-  const [flight, setFlight] = useState<{ routeId: string; cabin: Cabin } | null>(null);
+  const [flight, setFlight] = useState<{ routeId: string; cabin: Cabin; own?: boolean } | null>(null);
   const [shiftId, setShiftId] = useState<string | null>(null);
   const [payday, setPayday] = useState<{ earned: number; performance: number } | null>(null);
   const [chatLaunch, setChatLaunch] = useState<{ id: string } | null>(null);
@@ -1297,6 +1317,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             ...playerVerbs(life.where, playerEvents, life, now),
             ...eventVerbs(life.where, city),
             ...happeningVerbs(life.where, now ? new Date(now) : new Date()),
+            ...kitVerbs(spotById(life.where)),
             ...(CLUB_IDS.has(life.where) || spotById(life.where).group === "hang" || spotById(life.where).group === "sea"
               ? [
                   {
@@ -1322,6 +1343,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setTrip({ name: "Home", placeId: "home", ride: homeRide });
           }}
           onAct={(verb, person) => actHere(verb, person)}
+          onApply={apply}
           onPay={(person, amount, username) => paySomeone(person, amount, username)}
           onOpenChat={(username) => {
             setChatLaunch({ id: `user:${username}` });
@@ -1649,8 +1671,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               setTab("map");
               return;
             }
-            if (mode === "flight" && quote.routeId) {
-              setFlight({ routeId: quote.routeId, cabin: "economy" });
+            if ((mode === "flight" || mode === "jet") && quote.routeId) {
+              setFlight({ routeId: quote.routeId, cabin: "economy", own: mode === "jet" });
               return;
             }
             setTrip({ name: townOf(townId).name, placeId: quote.placeId, ride: rideIn(quote.ride, city.weather) });
@@ -1666,7 +1688,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           rideId={rideId}
           sky={city.weather}
           car={car}
-          extra={[...playerVerbs(place.id, playerEvents, life, now), ...eventVerbs(place.id, city), ...happeningVerbs(place.id, now ? new Date(now) : new Date())]}
+          extra={[...playerVerbs(place.id, playerEvents, life, now), ...eventVerbs(place.id, city), ...happeningVerbs(place.id, now ? new Date(now) : new Date()), ...kitVerbs(place)]}
           onRide={setRideId}
           onClose={() => setPlaceId(null)}
           onGo={() => {
@@ -1754,14 +1776,15 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         <FlightRide
           from={spotById(routeOf(flight.routeId)?.from ?? "kotoka").name}
           to={spotById(routeOf(flight.routeId)?.to ?? "kumasi").name}
-          cabin={CABINS[flight.cabin].label}
-          minutes={CABINS[flight.cabin].minutes}
-          fare={CABINS[flight.cabin].cost}
+          cabin={flight.own ? "Private" : CABINS[flight.cabin].label}
+          minutes={flight.own ? 40 : CABINS[flight.cabin].minutes}
+          fare={flight.own ? jetFuel(life) : CABINS[flight.cabin].cost}
+          airline={flight.own ? "Your jet" : "Passion Airways"}
           onBack={() => setFlight(null)}
           onArrive={() => {
             const going = flight;
             setFlight(null);
-            const result = bookFlight(life, going.routeId, going.cabin);
+            const result = going.own ? flyOwnJet(life, going.routeId) : bookFlight(life, going.routeId, going.cabin);
             if (result.error) {
               flash(result.error);
               return;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { quoteTravel, travelModes, type TravelMode } from "@/lib/game/travel";
+import { quoteTravel, travelModesFor, type TravelMode } from "@/lib/game/travel";
 import { TOWNS, townOf, type TownId } from "@/lib/game/towns";
 import { cedis, type Life } from "@/lib/game/world";
 
@@ -10,6 +10,7 @@ const MODE_LABEL: Record<TravelMode, string> = {
   taxi: "Taxi",
   car: "Your car",
   flight: "Passion Airways",
+  jet: "Your jet",
 };
 
 export function TravelSheet({
@@ -26,7 +27,7 @@ export function TravelSheet({
   const [townId, setTownId] = useState<TownId>(choices.find((town) => town.open)?.id ?? "kumasi");
   const [mode, setMode] = useState<TravelMode>("trotro");
   const picked = townOf(townId);
-  const modes = travelModes(here.id, picked.id, Boolean(life.car));
+  const modes = travelModesFor(life, here.id, picked.id);
   const active = modes.includes(mode) ? mode : modes[0] ?? "trotro";
   const quote = quoteTravel(life, picked.id, active);
 

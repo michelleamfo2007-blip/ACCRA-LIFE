@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { ClubSpray } from "@/components/game/club-spray";
-import { IsoHuman } from "@/components/game/iso-human";
+import { IsoHuman, type BodyPose, type FaceExtra } from "@/components/game/iso-human";
 import type { SprayId } from "@/lib/game/club-spray";
 import { CLUB_IDS, EATERY_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
@@ -18,7 +18,9 @@ import {
   type Bottle,
   type ClubNpc,
 } from "@/lib/game/club-night";
-import { accraHour, cedis, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
+import { BoutiqueFloor } from "@/components/game/boutique-floor";
+import { roomLine, roomOf, staffOf } from "@/lib/game/place-kit";
+import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
 
@@ -38,7 +40,7 @@ function startSpot(seed: string) {
   return { left: 24 + (hash % 40), top: 56 + (Math.floor(hash / 40) % 20) };
 }
 
-type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables" | "airport";
+type Kind = "hotel" | "club" | "shore" | "garden" | "gym" | "hall" | "tables" | "airport" | "shop" | "court" | "market" | "clinic";
 type TalkKind = "hello" | "gist" | "joke" | "shade" | "place";
 type Seat = { id: string; label: string; left: number; top: number; face?: 1 | -1 };
 
@@ -47,6 +49,7 @@ export function VenueFloor({
   people,
   onHome,
   onAct,
+  onApply,
   onOpenChat,
   onPay,
   focus = null,
@@ -72,6 +75,7 @@ export function VenueFloor({
   onTrade?: () => void;
   onHome: () => void;
   onAct: (verb: Verb, person?: string) => void;
+  onApply?: (result: StepResult) => void;
   onOpenChat: (person: string) => void;
   onPay: (person: string, amount: number, username?: string) => string | null | Promise<string | null>;
   onInviteTable?: (username: string, seatId: string) => void;
@@ -395,7 +399,10 @@ export function VenueFloor({
               skin={person.skin}
               shirt={person.shirt}
               hair={person.hair}
-              pants="#1c1917"
+              pants={person.role === "Bouncer" ? "#0a0a0a" : "#1c1917"}
+              pose={person.role === "DJ" ? "dj" : person.role === "Bartender" ? "drink" : person.role === "Bouncer" ? "watch" : "idle"}
+              extra={person.role === "Bouncer" ? "chain" : person.role === "Bartender" ? "earrings" : "none"}
+              size={person.role === "Bouncer" ? "h-24" : "h-20"}
               quiet={nightLife}
               onClick={() =>
                 approach(person.style, () => {
@@ -529,7 +536,7 @@ export function VenueFloor({
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-[max(8.5rem,calc(env(safe-area-inset-bottom)+8rem))] left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-1 text-[11px] font-semibold text-white sm:hidden">
-          {dining ? "Tap a chair · sit · then order" : nightLife ? "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
+          {dining ? "Tap a chair · sit · then order" : nightLife ? dressNote(life, true) || "Dance · bar · bottle service" : "Tap to walk · swipe to look around"}
         </p>
       )}
       {guest && nightLife && !who ? (
@@ -688,6 +695,8 @@ export function VenueFloor({
               ) : null}
             </div>
           ) : null}
+          <p className="mt-2 text-xs leading-5 text-[#5c6b82]">{roomLine(spot)}</p>
+          {roomOf(spot) === "boutique" && onApply ? <BoutiqueFloor life={life} onApply={onApply} /> : null}
           {zones.length ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {zones.map((zone) => {
@@ -715,7 +724,7 @@ export function VenueFloor({
           {party && !club ? (
             <p className="mt-3 rounded-full bg-[#121212] px-3 py-1.5 text-center text-xs font-semibold text-[#FCD116]">
               {nightLife
-                ? "Night open · bar, table, bottle, floor — then call it a night."
+                ? `Night open · bar, table, bottle, floor — then call it a night.${dressNote(life, true) ? ` ${dressNote(life, true)}` : ""}`
                 : lively
                   ? "Packed right now. Accra showed up."
                   : "Party on. Highlife, and the floor is already full."}
@@ -770,11 +779,24 @@ function ClubCrowd({ spotId, cheer, onPick }: { spotId: string; cheer: boolean; 
     const id = window.setInterval(pulse, 4000);
     return () => window.clearInterval(id);
   }, [spotId]);
-  const pants = ["#1c1917", "#243056", "#3a2418", "#141820"];
   return (
     <>
-      {crowd.map((npc) => {
-        const dancing = npc.state === "dance" || (cheer && npc.state !== "bar");
+      {crowd.map((npc, index) => {
+        const dancing = npc.state === "dance" || (cheer && npc.state !== "bar" && npc.state !== "table");
+        const look = clubLook(npc.name, index);
+        const pose: BodyPose = dancing
+          ? "dance"
+          : npc.state === "bar"
+            ? "drink"
+            : npc.state === "table"
+              ? "sit"
+              : npc.state === "watch"
+                ? index % 2 === 0
+                  ? "watch"
+                  : "lean"
+                : npc.state === "enter" || npc.state === "leave"
+                  ? "walk"
+                  : "idle";
         return (
           <PersonTag
             key={npc.id}
@@ -782,11 +804,13 @@ function ClubCrowd({ spotId, cheer, onPick }: { spotId: string; cheer: boolean; 
             tone="blue"
             style={{ left: `${npc.left}%`, top: `${npc.top}%` }}
             skin={npc.skin}
-            shirt={npc.shirt}
+            shirt={look.shirt || npc.shirt}
             hair={npc.hair}
-            pants={pants[npc.name.length % pants.length]}
-            pose={dancing ? "act" : npc.state === "table" ? "sit" : npc.state === "enter" || npc.state === "leave" ? "walk" : "idle"}
+            pants={look.pants}
+            extra={look.extra}
+            pose={pose}
             dance={dancing}
+            beat={index * 0.17}
             face={npc.face}
             glide
             quiet
@@ -796,6 +820,17 @@ function ClubCrowd({ spotId, cheer, onPick }: { spotId: string; cheer: boolean; 
       })}
     </>
   );
+}
+
+function clubLook(name: string, index: number): { shirt: string; pants: string; extra: FaceExtra } {
+  const women = /a$|e$|i$|maame|esi|efua|adjoa|akosua|ama|akua|abena|serwa/i.test(name);
+  const roll = (name.length + index) % 6;
+  if (roll === 0) return { shirt: "#f4efe6", pants: "#1a1a1a", extra: "chain" };
+  if (roll === 1 && women) return { shirt: "#6b1f3a", pants: "#6b1f3a", extra: "earrings" };
+  if (roll === 2) return { shirt: "#c9a227", pants: "#143028", extra: "print" };
+  if (roll === 3) return { shirt: "#101820", pants: "#1c1917", extra: "glasses" };
+  if (roll === 4) return { shirt: women ? "#4a1942" : "#243056", pants: women ? "#4a1942" : "#141820", extra: women ? "earrings" : "beard" };
+  return { shirt: "", pants: women ? "#2a241c" : "#1c1917", extra: "none" };
 }
 
 function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number } }) {
@@ -869,6 +904,9 @@ function PersonTag({
   shirt,
   hair = "Bob",
   pants = "#1c1917",
+  extra = "none",
+  beat = 0,
+  size = "h-20",
   walk,
   pose = "idle",
   face = 1,
@@ -887,8 +925,11 @@ function PersonTag({
   shirt: string;
   hair?: string;
   pants?: string;
+  extra?: FaceExtra;
+  beat?: number;
+  size?: string;
   walk?: number;
-  pose?: "idle" | "walk" | "act" | "sit";
+  pose?: BodyPose;
   face?: 1 | -1;
   dance?: boolean;
   glide?: boolean | "live";
@@ -900,7 +941,9 @@ function PersonTag({
 }) {
   const body = (
     <>
-      {quiet ? null : (
+      {quiet ? (
+        <span className="mb-0.5 max-w-[4.6rem] truncate text-[9px] font-medium text-white/75 drop-shadow">{name}</span>
+      ) : (
         <span className="relative mb-1 flex flex-col items-center">
           {bubble ? <span className="mb-1 max-w-[9rem] truncate rounded-full bg-[#121212] px-2.5 py-0.5 text-[10px] font-semibold text-white shadow">{bubble}</span> : null}
           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm ${tone === "pink" ? "bg-[#ec4899]" : "bg-[#3b82f6]"}`}>{name}</span>
@@ -908,7 +951,7 @@ function PersonTag({
       )}
       <span className="relative">
         {mark ? <span className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full border-2 border-[#FCD116] shadow-[0_0_10px_rgba(252,209,22,.8)]" aria-hidden /> : null}
-        <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "act" : pose} face={face} className={`h-20 w-fit ${dance ? "venue-dance" : ""}`} />
+        <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "dance" : pose} extra={extra} beat={beat} face={face} className={`${size} w-fit ${dance || pose === "dance" ? "venue-dance" : ""}`} />
         {online ? <span className="absolute bottom-2 right-0 h-3 w-3 rounded-full border-2 border-white bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
       </span>
     </>
@@ -1035,7 +1078,8 @@ function payVerb(verb: Verb, offer: Offer): Verb {
 function staffFor(spot: Spot) {
   const shore = BEACHES.has(spot.id);
   const club = isNightlife(spot.id, CLUB_IDS);
-  const air = spot.id === "kotoka";
+  const air = spot.id === "kotoka" || spot.id === "kumasi-airport";
+  if (!shore && !club && !air) return staffOf(spot);
   return [
     {
       role: air ? "Check-in" : shore ? "Beach usher" : club ? "Bouncer" : "Manager",
@@ -1220,7 +1264,12 @@ function spotFlavor(spot: Spot) {
 }
 
 function sceneKind(spot: Spot): Kind {
-  if (spot.id === "kotoka") return "airport";
+  const room = roomOf(spot);
+  if (room === "boutique" || room === "shop" || room === "salon") return "shop";
+  if (room === "court" || room === "police" || room === "bank" || room === "office" || room === "school") return "court";
+  if (room === "market") return "market";
+  if (room === "clinic") return "clinic";
+  if (spot.id === "kotoka" || room === "airport") return "airport";
   if (HOTELS.has(spot.id)) return "hotel";
   if (isNightlife(spot.id, CLUB_IDS)) return "club";
   if (BEACHES.has(spot.id)) return "shore";
@@ -1249,7 +1298,7 @@ function youSay(talk: TalkKind, place: string) {
 }
 
 function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
-  const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables";
+  const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables" || kind === "shop" || kind === "court" || kind === "clinic" || kind === "market";
   const floor =
     spot.id === "golf" || kind === "garden"
       ? "#3a5224"
@@ -1264,8 +1313,8 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
               : night
                 ? "#2a2e36"
                 : "#cfc6b4";
-  const wall = night || kind === "airport" || kind === "club" ? "#2a2634" : "#f2ebe0";
-  const wallSide = night || kind === "airport" || kind === "club" ? "#1a1824" : "#ddd4c6";
+  const wall = kind === "club" ? "#4c3b52" : night || kind === "airport" ? "#2a2634" : "#f2ebe0";
+  const wallSide = kind === "club" ? "#3a2c44" : night || kind === "airport" ? "#1a1824" : "#ddd4c6";
   const items = [...furniture(kind, night, spot.id), ...setDress(kind, night, spot.id)];
   const title = spot.name.toUpperCase();
   const lights = lightPools(kind, spot.id, night);
@@ -1337,6 +1386,7 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
           <>
             <FaceSign axis="x" x={-72} y={40} z={-53} length={96} tall={12} text={spot.name.toUpperCase().slice(0, 16)} fill="#1a0610" ink="#FCD116" />
             <FaceSign axis="z" x={-109} y={34} z={36} length={22} tall={9} text="BAR" fill="#12080c" ink="#ff4d9a" />
+            <FaceSign axis="z" x={-109} y={22} z={18} length={18} tall={7} text="MENU" fill="#1a1020" ink="#f4efe6" />
             <FaceSign axis="x" x={62} y={26} z={4} length={26} tall={8} text="VIP" fill="#1a1020" ink="#FCD116" />
             <FaceSign axis="z" x={-109} y={28} z={86} length={16} tall={8} text="WC" fill="#2a2420" ink="#f4efe6" />
             <FaceSign axis="x" x={78} y={16} z={90} length={22} tall={8} text="EXIT" fill="#3a1218" ink="#f4efe6" />
@@ -1353,8 +1403,14 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
           <span key={i} className="venue-mote" style={{ left: `${8 + ((i * 17) % 84)}%`, animationDelay: `${(i % 6) * 0.7}s`, animationDuration: `${5 + (i % 4)}s` }} />
         ))}
       </div>
-      {kind === "club" || party ? <div className="venue-beam pointer-events-none absolute inset-0" aria-hidden /> : null}
-      <div className="venue-vignette pointer-events-none absolute inset-0" aria-hidden />
+      {kind === "club" || party ? (
+        <>
+          <div className="venue-beam pointer-events-none absolute inset-0" aria-hidden />
+          <div className="venue-beam pointer-events-none absolute inset-0 opacity-70 [animation-delay:-2.4s]" aria-hidden />
+        </>
+      ) : null}
+      <div className={`venue-vignette pointer-events-none absolute inset-0 ${kind === "club" ? "venue-vignette-club" : ""}`} aria-hidden />
+      {kind === "club" ? <div className="venue-grain pointer-events-none absolute inset-0" aria-hidden /> : null}
     </div>
   );
 }
@@ -1431,6 +1487,9 @@ function FloorWear({ kind, night }: { kind: Kind; night: boolean }) {
           { x: 40, z: 20, rx: 14, ry: 6, fill: "#12080e", o: 0.3 },
           { x: -70, z: 50, rx: 10, ry: 4, fill: "#2a1810", o: 0.25 },
           { x: -4, z: 56, rx: 36, ry: 12, fill: "#ff4d9a", o: 0.08 },
+          { x: 18, z: 50, rx: 3, ry: 1.2, fill: "#f4efe6", o: 0.35 },
+          { x: -16, z: 62, rx: 2, ry: 1, fill: "#FCD116", o: 0.4 },
+          { x: 6, z: 40, rx: 2.4, ry: 1, fill: "#ff4d9a", o: 0.35 },
         ]
       : kind === "shore"
         ? [
@@ -1471,6 +1530,8 @@ function ClubGlow({ party }: { party?: boolean }) {
       <rect x={strip[0] - 40} y={strip[1]} width="80" height="3" fill="#ff2d95" opacity="0.75" rx="1.5" />
       <rect x={strip2[0] - 28} y={strip2[1]} width="56" height="3" fill="#22d3ee" opacity="0.7" rx="1.5" />
       <ellipse cx={strip[0]} cy={strip[1] + 55} rx="70" ry="22" fill="#7c5cff" opacity="0.12" />
+      <circle cx={strip[0] + 10} cy={strip[1] - 28} r="7" fill="#f4f7ff" opacity="0.55" />
+      <circle cx={strip[0] + 10} cy={strip[1] - 28} r="3" fill="#FCD116" opacity="0.8" />
     </g>
   );
 }
@@ -1495,6 +1556,9 @@ function setDress(kind: Kind, night: boolean, spotId: string): Block[] {
       { x: 30, y: 0.4, z: 48, w: 4, h: 0.4, d: 2, color: "#f4efe6" },
       { x: -8, y: 0.2, z: 6, w: 36, h: 0.6, d: 1.4, color: "#0a080c" },
       { x: 36, y: 0.2, z: 10, w: 1.4, h: 0.6, d: 24, color: "#0a080c" },
+      { x: -40, y: 0.3, z: -20, w: 28, h: 0.4, d: 0.8, color: "#111" },
+      { x: 8, y: 0.3, z: -18, w: 22, h: 0.4, d: 0.8, color: "#111" },
+      { x: -2, y: 48, z: 8, w: 3, h: 3, d: 3, color: "#e8eef8" },
       { x: -48, y: 0, z: -44, w: 10, h: 18, d: 8, color: "#0c0a0e" },
       { x: 28, y: 0, z: -44, w: 10, h: 20, d: 8, color: "#0c0a0e" },
       { x: 72, y: 0, z: 70, w: 10, h: 8, d: 8, color: "#2a1c14" },
@@ -1563,6 +1627,39 @@ function setDress(kind: Kind, night: boolean, spotId: string): Block[] {
 }
 
 function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
+  if (kind === "shop") {
+    return [
+      { x: -70, y: 0, z: 20, w: 28, h: 16, d: 6, color: "#1c1917" },
+      { x: -20, y: 0, z: 24, w: 22, h: 14, d: 6, color: "#5c3a2e" },
+      { x: 30, y: 0, z: 20, w: 8, h: 18, d: 6, color: "#d5dde3" },
+      { x: 70, y: 0, z: 36, w: 16, h: 12, d: 10, color: "#f4efe6" },
+      { x: 78, y: 12, z: 40, w: 10, h: 2, d: 6, color: "#121212" },
+      { x: -90, y: 0, z: 55, w: 3, h: 16, d: 14, color: "#CE1126" },
+    ];
+  }
+  if (kind === "court") {
+    return [
+      { x: 0, y: 0, z: -10, w: 40, h: 8, d: 14, color: "#5c3a2e" },
+      { x: -40, y: 0, z: 30, w: 16, h: 6, d: 10, color: "#1c1917" },
+      { x: 40, y: 0, z: 30, w: 16, h: 6, d: 10, color: "#1c1917" },
+      { x: 0, y: 0, z: 55, w: 50, h: 4, d: 12, color: "#8a623c" },
+    ];
+  }
+  if (kind === "market") {
+    return [
+      { x: -60, y: 0, z: 20, w: 22, h: 10, d: 14, color: "#c4563a" },
+      { x: -10, y: 0, z: 28, w: 18, h: 8, d: 12, color: "#FCD116" },
+      { x: 40, y: 0, z: 22, w: 20, h: 9, d: 14, color: "#006B3F" },
+      { x: 10, y: 10, z: 8, w: 70, h: 1, d: 8, color: "#e7d3b0" },
+    ];
+  }
+  if (kind === "clinic") {
+    return [
+      { x: -40, y: 0, z: 30, w: 28, h: 6, d: 12, color: "#f7f7f7" },
+      { x: 40, y: 0, z: 24, w: 16, h: 10, d: 8, color: "#d5e7f2" },
+      { x: 70, y: 0, z: 50, w: 10, h: 8, d: 8, color: "#CE1126" },
+    ];
+  }
   if (spotId === "golf") {
     return [
       // Clubhouse bar
@@ -1615,15 +1712,36 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
   }
   if (kind === "club") {
     return [
+      // DJ booth, decks, mixer, laptop, light rig
       { x: -28, y: 0, z: -46, w: 56, h: 8, d: 22, color: "#120e14" },
-      { x: -8, y: 8, z: -42, w: 22, h: 10, d: 12, color: "#0e0c12" },
-      { x: -4, y: 18, z: -40, w: 14, h: 2, d: 8, color: "#2a2430" },
-      { x: -108, y: 0, z: 8, w: 14, h: 16, d: 48, color: night ? "#14100e" : "#2e2218" },
+      { x: -22, y: 8, z: -40, w: 8, h: 2, d: 8, color: "#0a0a0c" },
+      { x: 2, y: 8, z: -40, w: 8, h: 2, d: 8, color: "#0a0a0c" },
+      { x: -20, y: 10, z: -38, w: 5, h: 1, d: 5, color: "#222" },
+      { x: 4, y: 10, z: -38, w: 5, h: 1, d: 5, color: "#222" },
+      { x: -8, y: 8, z: -38, w: 8, h: 3, d: 6, color: "#16141a" },
+      { x: -6, y: 11, z: -36, w: 5, h: 4, d: 1, color: "#7ee0ff" },
+      { x: -20, y: 46, z: -36, w: 36, h: 2, d: 4, color: "#121014" },
+      { x: -16, y: 44, z: -34, w: 3, h: 3, d: 3, color: "#ff2d95" },
+      { x: -4, y: 44, z: -34, w: 3, h: 3, d: 3, color: "#7c5cff" },
+      { x: 6, y: 44, z: -34, w: 3, h: 3, d: 3, color: "#22d3ee" },
+      // Speakers: subs on the floor, tops on stands
+      { x: -56, y: 0, z: -40, w: 8, h: 10, d: 8, color: "#0c0c10" },
+      { x: -55, y: 10, z: -39, w: 6, h: 8, d: 6, color: "#18181c" },
+      { x: 26, y: 0, z: -40, w: 8, h: 10, d: 8, color: "#0c0c10" },
+      { x: 27, y: 10, z: -39, w: 6, h: 8, d: 6, color: "#18181c" },
+      // Bar counter, back shelves, stools
+      { x: -108, y: 0, z: 8, w: 14, h: 16, d: 48, color: night ? "#2a221c" : "#3a2e24" },
       { x: -106, y: 16, z: 12, w: 10, h: 2, d: 40, color: "#c9a227" },
-      { x: -104, y: 18, z: 16, w: 2, h: 8, d: 2, color: "#1a3a32" },
-      { x: -104, y: 18, z: 24, w: 2, h: 6, d: 2, color: "#6b2030" },
-      { x: -104, y: 18, z: 32, w: 2, h: 9, d: 2, color: "#c9a227" },
-      { x: -104, y: 18, z: 40, w: 2, h: 5, d: 2, color: "#e8e0d4" },
+      { x: -112, y: 22, z: 10, w: 4, h: 16, d: 36, color: "#1a1418" },
+      { x: -110, y: 28, z: 14, w: 2, h: 6, d: 2, color: "#1a3a32" },
+      { x: -110, y: 30, z: 20, w: 2, h: 5, d: 2, color: "#6b2030" },
+      { x: -110, y: 26, z: 26, w: 2, h: 8, d: 2, color: "#c9a227" },
+      { x: -110, y: 32, z: 32, w: 2, h: 4, d: 2, color: "#e8e0d4" },
+      { x: -110, y: 28, z: 38, w: 2, h: 7, d: 2, color: "#22d3ee" },
+      { x: -94, y: 0, z: 16, w: 5, h: 11, d: 5, color: "#2a241c" },
+      { x: -94, y: 0, z: 28, w: 5, h: 11, d: 5, color: "#2a241c" },
+      { x: -94, y: 0, z: 40, w: 5, h: 11, d: 5, color: "#2a241c" },
+      // VIP sofas, rope, bottle table
       { x: 56, y: 0, z: 6, w: 40, h: 5, d: 34, color: "#1c1020" },
       { x: 58, y: 5, z: 8, w: 18, h: 6, d: 12, color: "#4a1528" },
       { x: 58, y: 11, z: 8, w: 18, h: 8, d: 3, color: "#6b1f3a" },
@@ -1635,16 +1753,34 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
       { x: 66, y: 5, z: 28, w: 14, h: 6, d: 10, color: "#2a1810" },
       { x: 68, y: 11, z: 30, w: 3, h: 7, d: 3, color: "#c9a227" },
       { x: 74, y: 11, z: 32, w: 2, h: 4, d: 2, color: "#e8e0d4" },
+      // Wall lounge
+      { x: -78, y: 0, z: -18, w: 24, h: 6, d: 10, color: "#2a1830" },
+      { x: -78, y: 6, z: -18, w: 24, h: 8, d: 3, color: "#4a2040" },
+      // Standing tables
       { x: -48, y: 0, z: 30, w: 16, h: 8, d: 12, color: "#1c1410" },
       { x: -46, y: 8, z: 32, w: 12, h: 1.5, d: 8, color: "#3a2a20" },
+      { x: -44, y: 9.5, z: 34, w: 2, h: 3, d: 2, color: "#d7f4ff" },
       { x: 4, y: 0, z: 34, w: 16, h: 8, d: 12, color: "#1c1410" },
       { x: 6, y: 8, z: 36, w: 12, h: 1.5, d: 8, color: "#3a2a20" },
-      { x: -22, y: 0.4, z: 46, w: 44, h: 1, d: 28, color: "#10080e" },
+      { x: 8, y: 9.5, z: 38, w: 2, h: 4, d: 2, color: "#c9a227" },
+      // Dance floor
+      { x: -22, y: 0.4, z: 46, w: 44, h: 1, d: 28, color: "#1a1020" },
       { x: -20, y: 1.2, z: 46, w: 40, h: 0.4, d: 1, color: "#FCD116" },
+      { x: -20, y: 1.2, z: 58, w: 40, h: 0.4, d: 1, color: "#7c5cff" },
       { x: -20, y: 1.2, z: 72, w: 40, h: 0.4, d: 1, color: "#ff2d95" },
+      // Coat check and photo booth by the door
+      { x: -36, y: 0, z: 84, w: 16, h: 14, d: 8, color: "#3a322c" },
+      { x: -32, y: 14, z: 86, w: 8, h: 2, d: 4, color: "#c9a227" },
+      { x: 36, y: 0, z: 78, w: 14, h: 22, d: 10, color: "#1a1020" },
+      { x: 38, y: 8, z: 80, w: 8, h: 8, d: 1.2, color: "#ff4d9a" },
+      // Door posts
       { x: -112, y: 0, z: 74, w: 4, h: 24, d: 14, color: "#3a322c" },
       { x: 70, y: 0, z: 82, w: 3, h: 18, d: 3, color: "#c9a227" },
       { x: 92, y: 0, z: 82, w: 3, h: 18, d: 3, color: "#c9a227" },
+      // Wall panels and a mirror
+      { x: -70, y: 24, z: -54, w: 22, h: 18, d: 1, color: "#5c4058" },
+      { x: 20, y: 26, z: -54, w: 18, h: 16, d: 1, color: "#2e3448" },
+      { x: 100, y: 18, z: 20, w: 1.2, h: 16, d: 14, color: "#9bb0c8" },
     ];
   }
   if (kind === "shore") {

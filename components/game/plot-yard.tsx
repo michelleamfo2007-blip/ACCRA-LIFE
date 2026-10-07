@@ -15,12 +15,12 @@ function slotFor(id: string, taken: Set<number>) {
   return 0;
 }
 
-function House({ stage }: { stage: number }) {
+function House({ stage, wallColor, roofColor, busy }: { stage: number; wallColor?: string; roofColor?: string; busy?: boolean }) {
   if (stage <= 0) {
     return <span className="block h-7 w-9 rounded-sm bg-[#e6d3a4]" />;
   }
-  const wall = stage >= 4 ? "#f3efe6" : "#8d9492";
-  const roof = stage >= 5 ? "#6fbf86" : stage === 4 ? "#d9d2c2" : "#8d5a32";
+  const wall = stage >= 4 ? wallColor || "#f3efe6" : "#8d9492";
+  const roof = stage >= 3 ? roofColor || (stage >= 5 ? "#6fbf86" : "#8d5a32") : "#8d5a32";
   const height = stage === 1 ? "h-2" : stage === 2 ? "h-5" : "h-7";
   return (
     <span className="relative block h-11 w-10">
@@ -33,6 +33,7 @@ function House({ stage }: { stage: number }) {
         />
       ) : null}
       {stage >= 2 && stage < 5 ? <span className="absolute bottom-1 left-2 h-2 w-1.5 rounded-[1px] bg-[#5c6563]" /> : null}
+      {busy ? <span className="absolute -right-1 bottom-0 text-[10px]">👷</span> : null}
     </span>
   );
 }
@@ -69,7 +70,7 @@ export function PlotYard({
   return (
     <div className="-mx-4 bg-[#d5dec6] px-3 pb-3 pt-2">
       <p className="text-center text-[11px] font-bold tracking-[0.14em] text-[#3d4a38]">
-        {land.label.toUpperCase()} PLOTS · {cedis(land.price)} A PLOT
+        {land.label.toUpperCase()} · {land.size} · {cedis(land.price)} · {land.rule.toUpperCase()}
       </p>
       <div className="mt-2 flex gap-1 overflow-x-auto">
         {LAND.map((item) => (
@@ -102,7 +103,7 @@ export function PlotYard({
               }}
               className={`relative grid h-[4.6rem] place-items-center rounded-md bg-[#e7eee2] disabled:opacity-100 ${own && picked === own.id ? "ring-2 ring-[#121212]" : ""} ${sale ? "ring-1 ring-[#c4b48a]" : ""}`}
             >
-              <House stage={stage} />
+              <House stage={stage} wallColor={own?.plan?.wallColor} roofColor={own?.plan?.roofColor} busy={left > 0} />
               {own ? <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-[#3DDC6A] shadow" /> : null}
               {own && left > 0 ? <span className="absolute bottom-0.5 text-[10px] font-bold text-[#121212]">{left}s</span> : null}
               {sale ? <span className="absolute bottom-0.5 text-[9px] font-bold text-[#6b5420]">{full ? "Full" : cedis(land.price)}</span> : null}

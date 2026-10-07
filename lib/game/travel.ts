@@ -1,8 +1,8 @@
-import { canBoard, flightWait, boardingWaitLabel } from "@/lib/game/flights";
+import { canBoard, flightWait, boardingWaitLabel, ownedJet, jetFuel } from "@/lib/game/flights";
 import { townOf, type TownId } from "@/lib/game/towns";
 import { carFuelBlock, cedis, farRide, RIDES, type Life, type Ride } from "@/lib/game/world";
 
-export type TravelMode = "trotro" | "taxi" | "car" | "flight";
+export type TravelMode = "trotro" | "taxi" | "car" | "flight" | "jet";
 
 export type TravelQuote = {
   townId: TownId;
@@ -20,6 +20,13 @@ export function travelModes(from: TownId, to: TownId, hasCar: boolean): TravelMo
   const modes: TravelMode[] = ["trotro", "taxi"];
   if (hasCar) modes.push("car");
   if (air) modes.push("flight");
+  return modes;
+}
+
+export function travelModesFor(life: Life, from: TownId, to: TownId): TravelMode[] {
+  const modes = travelModes(from, to, Boolean(life.car));
+  const air = (from === "accra" && to === "kumasi") || (from === "kumasi" && to === "accra");
+  if (air && ownedJet(life)) modes.push("jet");
   return modes;
 }
 
@@ -43,6 +50,24 @@ export function quoteTravel(life: Life, townId: TownId, mode: TravelMode): Trave
       label: `Step into ${to.name}`,
       placeId: to.gate === "home" ? "home" : to.gate,
       ride: { id: "trek", label: "Step in", cost: 0, minutes: 0 },
+    };
+  }
+  if (mode === "jet") {
+    const jet = ownedJet(life);
+    if (!jet) return fail("Buy a private jet and park it in the yard first.");
+    const routeId = from.id === "accra" ? "accra-kumasi" : "kumasi-accra";
+    const fuel = jetFuel(life);
+    const wait = flightWait(life);
+    if (wait > 0) return fail(`The jet is turning around. Next hop in ${boardingWaitLabel(wait)}.`);
+    if (life.cash < fuel) return fail(`Fuel is ${cedis(fuel)}.`);
+    if (life.needs.energy < 15) return fail("Too tired to fly. Rest first.");
+    return {
+      townId,
+      mode,
+      label: `${jet === "heavy-jet" ? "Heavy jet" : "Your jet"} to ${to.name}`,
+      placeId: to.arrival,
+      ride: { id: "taxi", label: "Your jet", cost: fuel, minutes: 40 },
+      routeId,
     };
   }
   if (mode === "flight") {
