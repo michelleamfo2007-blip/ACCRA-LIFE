@@ -76,6 +76,7 @@ import {
   gemSpotId,
   giftCash,
   layPiece,
+  widenRoom,
   receiveCash,
   goTo,
   carFuelBlock,
@@ -1216,6 +1217,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
           onVisit={(username) => void visitHost(username)}
           onUpgrade={() => setTab("buy")}
+          onWiden={() => apply(widenRoom(life))}
           startArrange={arrangeHome}
           onArrangeSeen={() => setArrangeHome(false)}
         />

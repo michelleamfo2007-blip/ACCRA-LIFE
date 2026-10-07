@@ -75,6 +75,10 @@ export type Life = {
   dumsor: boolean;
   gemDay: number;
   furniture?: Placed[];
+  /** Built-in pieces (bed, stove, and the rest) after you move them. */
+  layout?: Placed[];
+  /** How many times the room has been paid to grow. 0, 1, or 2. */
+  span?: number;
   stored?: string[];
   floor?: string;
   transfers?: PurseNote[];
@@ -174,6 +178,42 @@ export type Placed = {
   z: number;
   rot: number;
 };
+
+export const FIXTURES = [
+  { id: "fix-bed", name: "Bed", x: 2.15, z: -2.35, color: "#6e5344" },
+  { id: "fix-sofa", name: "Sofa", x: -1.55, z: -0.15, color: "#2f8f6b" },
+  { id: "fix-fridge", name: "Fridge", x: 4.55, z: 1.7, color: "#f4f7fa" },
+  { id: "fix-stove", name: "Stove", x: 4.4, z: 3.05, color: "#c4552a" },
+  { id: "fix-toilet", name: "Toilet", x: -4.7, z: 3.3, color: "#f7f7f7" },
+  { id: "fix-shower", name: "Shower", x: -5.15, z: 1.9, color: "#d5e4f2" },
+  { id: "fix-radio", name: "Radio", x: 0.35, z: 1.35, color: "#c4894f" },
+] as const;
+
+export const WIDEN_COST = [800, 2000] as const;
+
+export function fixtureAt(life: Life, id: string): Placed {
+  const base = FIXTURES.find((item) => item.id === id);
+  const moved = (life.layout ?? []).find((piece) => piece.id === id);
+  if (moved) return moved;
+  return { id, x: base?.x ?? 0, z: base?.z ?? 0, rot: 0 };
+}
+
+export function roomReach(span = 0) {
+  const step = Math.min(2, Math.max(0, span));
+  const extra = step * 1.15;
+  return {
+    minX: -4.6 - extra,
+    maxX: 4.6 + extra,
+    minZ: -3.4 - extra * 0.7,
+    maxZ: 3.6 + extra * 0.7,
+    placeMinX: -4.2 - extra,
+    placeMaxX: 4.2 + extra,
+    placeMinZ: -3.2 - extra * 0.7,
+    placeMaxZ: 3.4 + extra * 0.7,
+    halfW: 6 + step * 1.2,
+    halfD: 4.5 + step * 0.9,
+  };
+}
 
 export type Verb = {
   id: string;
@@ -1179,6 +1219,7 @@ function clone(life: Life): Life {
     relations: life.relations.map((person) => ({ ...person })),
     guests: (life.guests ?? []).map((guest) => ({ ...guest })),
     furniture: (life.furniture ?? []).map((piece) => ({ ...piece })),
+    layout: (life.layout ?? []).map((piece) => ({ ...piece })),
     stored: [...(life.stored ?? [])],
     transfers: (life.transfers ?? []).map((note) => ({ ...note })),
     seenTransfers: [...(life.seenTransfers ?? [])],
@@ -1775,10 +1816,28 @@ export function buyItem(life: Life, itemId: string): StepResult {
   return { life: next, notes: [item.kind === "floor" ? `${item.name} is down.` : `Bought ${item.name}.`] };
 }
 
+export function widenRoom(life: Life): StepResult {
+  const span = life.span ?? 0;
+  if (span >= WIDEN_COST.length) return { life, notes: [], error: "The walls are as far out as they can go." };
+  const cost = WIDEN_COST[span];
+  if (life.cash < cost) return { life, notes: [], error: `The mason wants ${cedis(cost)}.` };
+  const next = clone(life);
+  next.cash -= cost;
+  next.span = span + 1;
+  pushLog(next, "You paid to push the walls out.");
+  return { life: next, notes: ["The room is bigger. Shift the bed, the stove, whatever you like."] };
+}
+
 export function layPiece(life: Life, id: string, x: number, z: number, rot: number): StepResult {
+  const piece = { id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, rot: ((rot % 4) + 4) % 4 };
+  if (id.startsWith("fix-")) {
+    if (!FIXTURES.some((item) => item.id === id)) return { life, notes: [], error: "That is not in this room." };
+    const next = clone(life);
+    next.layout = [...(next.layout ?? []).filter((item) => item.id !== id), piece];
+    return { life: next, notes: [] };
+  }
   if (!life.inventory.includes(id)) return { life, notes: [], error: "That is not yours." };
   const next = clone(life);
-  const piece = { id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, rot: ((rot % 4) + 4) % 4 };
   next.furniture = [...(next.furniture ?? []).filter((item) => item.id !== id), piece];
   next.stored = (next.stored ?? []).filter((item) => item !== id);
   return { life: next, notes: [] };

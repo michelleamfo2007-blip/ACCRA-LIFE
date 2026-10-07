@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { Figure } from "@/components/game/low-poly-human";
-import { homeLook, moodOf, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
+import { FIXTURES, fixtureAt, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
 export function Apartment({
   life,
@@ -18,8 +18,11 @@ export function Apartment({
   onGo,
   onWalk,
   pieces = [],
+  fixtures,
+  span = 0,
   picked = null,
   placing = false,
+  focus = null,
   guests = [],
   onPick,
   onDrag,
@@ -35,14 +38,20 @@ export function Apartment({
   onGo: (id: string) => void;
   onWalk?: (x: number, z: number) => void;
   pieces?: Placed[];
+  fixtures?: Placed[];
+  span?: number;
   picked?: string | null;
   placing?: boolean;
+  focus?: { x: number; z: number } | null;
   guests?: { name: string; doing?: string }[];
   onPick?: (id: string) => void;
   onDrag?: (x: number, z: number) => void;
 }) {
   const look = homeLook(life.homeId);
   const grade = look.grade;
+  const room = roomReach(span);
+  const built = fixtures ?? FIXTURES.map((item) => fixtureAt(life, item.id));
+  const bedSpot = built.find((piece) => piece.id === "fix-bed") ?? fixtureAt(life, "fix-bed");
   return (
     <Canvas
       camera={{ position: [18, 24, 20], fov: 38 }}
@@ -51,7 +60,7 @@ export function Apartment({
       resize={{ scroll: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
-      <CameraRig frozen={placing} follow={pos} />
+      <CameraRig frozen={placing} follow={placing && focus ? focus : pos} lift={placing ? 0.85 : 0} />
       <color attach="background" args={[dark ? "#10131a" : look.sky]} />
       <ambientLight intensity={dark ? 0.22 : grade === "low" ? 0.42 : grade === "high" ? 1.05 : grade === "hall" ? 0.72 : 0.82} />
       <directionalLight position={[6, 16, 8]} intensity={dark ? 0.15 : grade === "low" ? 0.45 : grade === "high" ? 1.15 : 0.95} />
@@ -59,22 +68,36 @@ export function Apartment({
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
       </mesh>
-      <Floor grade={grade} floorId={life.floor} />
-      <Walls grade={grade} />
+      <Floor grade={grade} floorId={life.floor} span={span} />
+      <Walls grade={grade} span={span} />
       {grade === "hall" ? <StripLight /> : null}
       {grade === "high" ? <Cooler /> : null}
       {!dark && grade !== "low" && grade !== "hall" ? <Sconces /> : null}
       {grade === "low" ? <Bulb /> : null}
-      <Door color={look.door} onGo={onGo} />
-      <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
-      <Sofa color={sofaColor ?? look.sofa} onGo={onGo} />
-      <Fridge onGo={onGo} />
-      <Stove onGo={onGo} />
-      <Toilet onGo={onGo} />
-      <Shower onGo={onGo} />
-      <Radio onGo={onGo} />
-      {placing && onDrag ? <PlacePad onDrag={onDrag} /> : null}
-      {!placing && onWalk ? <WalkPad onWalk={onWalk} /> : null}
+      <Door color={look.door} x={-room.halfW + 0.1} onGo={onGo} />
+      <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
+        <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-sofa")} active={picked === "fix-sofa"}>
+        <Sofa color={sofaColor ?? look.sofa} onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-fridge")} active={picked === "fix-fridge"}>
+        <Fridge onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-stove")} active={picked === "fix-stove"}>
+        <Stove onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-toilet")} active={picked === "fix-toilet"}>
+        <Toilet onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-shower")} active={picked === "fix-shower"}>
+        <Shower onGo={onGo} />
+      </FixtureSpot>
+      <FixtureSpot piece={spotOf(built, "fix-radio")} active={picked === "fix-radio"}>
+        <Radio onGo={onGo} />
+      </FixtureSpot>
+      {placing && onDrag ? <PlacePad onDrag={onDrag} span={span} /> : null}
+      {!placing && onWalk ? <WalkPad onWalk={onWalk} span={span} /> : null}
       {pieces.map((piece) => {
         const item = SHOP.find((entry) => entry.id === piece.id);
         if (!item || item.consume || item.kind === "bed") return null;
@@ -90,9 +113,9 @@ export function Apartment({
             }}
           >
             {active ? (
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-                <planeGeometry args={[1.25, 1.25]} />
-                <meshBasicMaterial color="#8fd18a" transparent opacity={0.9} />
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+                <ringGeometry args={[0.72, 0.92, 28]} />
+                <meshBasicMaterial color="#3DDC6A" transparent opacity={0.95} />
               </mesh>
             ) : null}
             <Prop item={item} />
@@ -100,7 +123,7 @@ export function Apartment({
         );
       })}
       {pose === "sleep" ? (
-        <group position={[2.15, 0, -2.35]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+        <group position={[bedSpot.x, 0, bedSpot.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
           <group position={[0, 0.47, 0.74]} rotation={[-Math.PI / 2, 0, 0]} scale={0.9}>
             <Figure
               skin={life.look.skin}
@@ -167,15 +190,20 @@ export function Apartment({
   );
 }
 
-function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z: number } }) {
+function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x: number; z: number }; lift?: number }) {
   const { camera, gl, size } = useThree();
   const pan = useRef({ x: 0, z: 0 });
   const zoom = useRef(1);
   const soft = useRef({ x: follow.x, z: follow.z });
   const frozenRef = useRef(frozen);
   const followRef = useRef(follow);
+  const liftRef = useRef(lift);
   frozenRef.current = frozen;
   followRef.current = follow;
+  liftRef.current = lift;
+  useEffect(() => {
+    if (frozen) zoom.current = 0.46;
+  }, [frozen]);
   useEffect(() => {
     const el = gl.domElement;
     const pointers = new Map<number, { x: number; y: number }>();
@@ -243,14 +271,15 @@ function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z
     };
   }, [gl, size.width]);
   useFrame((_, dt) => {
+    if (frozenRef.current) zoom.current = Math.min(zoom.current, 0.46);
     soft.current.x += (followRef.current.x - soft.current.x) * Math.min(1, dt * 4.5);
     soft.current.z += (followRef.current.z - soft.current.z) * Math.min(1, dt * 4.5);
     const aspect = size.width / Math.max(1, size.height);
     const phone = aspect < 0.85;
-    const distance = (phone ? 11.8 : aspect < 1.15 ? 18 : 20) * zoom.current;
+    const distance = (phone ? 11.8 : aspect < 1.15 ? 18 : 20) * zoom.current * (frozenRef.current ? 2.4 : 1);
     const lookX = soft.current.x + pan.current.x;
     const lookY = 0;
-    const lookZ = soft.current.z + pan.current.z;
+    const lookZ = soft.current.z + pan.current.z + (phone ? liftRef.current : liftRef.current * 0.45);
     const lens = camera as PerspectiveCamera;
     lens.position.set(lookX + distance * (phone ? 0.36 : 0.42), lookY + distance * (phone ? 0.88 : 0.72), lookZ + distance * (phone ? 0.42 : 0.5));
     lens.fov = phone ? 38 : 30;
@@ -260,7 +289,7 @@ function CameraRig({ frozen, follow }: { frozen: boolean; follow: { x: number; z
   return null;
 }
 
-function WalkPad({ onWalk }: { onWalk: (x: number, z: number) => void }) {
+function WalkPad({ onWalk, span = 0 }: { onWalk: (x: number, z: number) => void; span?: number }) {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
@@ -270,7 +299,7 @@ function WalkPad({ onWalk }: { onWalk: (x: number, z: number) => void }) {
         onWalk(event.point.x, event.point.z);
       }}
     >
-      <planeGeometry args={[10.5, 7.6]} />
+      <planeGeometry args={[roomReach(span).halfW * 2 - 1.2, roomReach(span).halfD * 2 - 1.2]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
     </mesh>
   );
@@ -280,7 +309,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function PlacePad({ onDrag }: { onDrag: (x: number, z: number) => void }) {
+function PlacePad({ onDrag, span = 0 }: { onDrag: (x: number, z: number) => void; span?: number }) {
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
@@ -295,7 +324,7 @@ function PlacePad({ onDrag }: { onDrag: (x: number, z: number) => void }) {
         onDrag(event.point.x, event.point.z);
       }}
     >
-      <planeGeometry args={[10.5, 7.6]} />
+      <planeGeometry args={[roomReach(span).halfW * 2 - 1.2, roomReach(span).halfD * 2 - 1.2]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
     </mesh>
   );
@@ -535,31 +564,58 @@ function Prop({ item }: { item: ShopItem }) {
   return <Box color={color} position={[0, 0.28, 0]} size={[0.48, 0.48, 0.48]} />;
 }
 
-function Floor({ grade, floorId }: { grade: HomeGrade; floorId?: string }) {
+function spotOf(pieces: Placed[], id: string) {
+  return pieces.find((piece) => piece.id === id) ?? fixtureAt({ layout: pieces } as Life, id);
+}
+
+function FixtureSpot({ piece, active, children }: { piece: Placed; active?: boolean; children: ReactNode }) {
+  const base = FIXTURES.find((item) => item.id === piece.id) ?? { x: 0, z: 0 };
+  return (
+    <group position={[piece.x, 0, piece.z]} rotation={[0, (piece.rot * Math.PI) / 2, 0]}>
+      {active ? (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+          <ringGeometry args={[0.85, 1.08, 28]} />
+          <meshBasicMaterial color="#3DDC6A" transparent opacity={0.95} />
+        </mesh>
+      ) : null}
+      <group position={[-base.x, 0, -base.z]}>{children}</group>
+    </group>
+  );
+}
+
+function Floor({ grade, floorId, span = 0 }: { grade: HomeGrade; floorId?: string; span?: number }) {
   const bought = SHOP.find((item) => item.id === floorId && item.kind === "floor");
   const look = homeLook(grade === "low" ? "jamestown" : grade === "hall" ? "legon-hall" : grade === "high" ? "east-legon" : "adabraka");
   const tileA = bought?.color ?? look.tileA;
   const tileB = bought?.accent ?? look.tileB;
   const map = useMemo(() => tiles(tileA, tileB), [tileA, tileB]);
+  const room = roomReach(span);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-      <planeGeometry args={[12, 9]} />
+      <planeGeometry args={[room.halfW * 2, room.halfD * 2]} />
       <meshLambertMaterial map={map} />
     </mesh>
   );
 }
 
-function Walls({ grade }: { grade: HomeGrade }) {
+function Walls({ grade, span = 0 }: { grade: HomeGrade; span?: number }) {
   const look = homeLook(grade === "low" ? "jamestown" : grade === "hall" ? "legon-hall" : grade === "high" ? "east-legon" : "adabraka");
+  const room = roomReach(span);
   const h = 1.7;
   const y = h / 2;
+  const halfW = room.halfW;
+  const halfD = room.halfD;
+  const backLen = -0.55 - -halfD;
+  const backCenter = (-halfD + -0.55) / 2;
+  const frontLen = halfD - 0.85;
+  const frontCenter = (0.85 + halfD) / 2;
   return (
     <group>
-      <Box color={look.wall} position={[0, y, -4.5]} size={[12.2, h, 0.18]} />
-      <Box color={look.wall} position={[0, y, 4.5]} size={[12.2, h, 0.18]} />
-      <Box color={look.side} position={[6, y, 0]} size={[0.18, h, 9.16]} />
-      <Box color={look.side} position={[-6, y, -2.35]} size={[0.18, h, 4.1]} />
-      <Box color={look.side} position={[-6, y, 2.7]} size={[0.18, h, 3.4]} />
+      <Box color={look.wall} position={[0, y, -halfD]} size={[halfW * 2 + 0.2, h, 0.18]} />
+      <Box color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} />
+      <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} />
+      <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} />
+      <Box color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} />
       <Box color={look.wall} position={[3.4, y, -1.35]} size={[3.2, h, 0.16]} />
       <Box color={look.side} position={[-3.15, y, 2.85]} size={[0.16, h, 3.1]} />
       <Box color={look.wall} position={[-4.6, y, 1.25]} size={[2.6, h, 0.16]} />
@@ -599,9 +655,9 @@ function Light({ at }: { at: [number, number, number] }) {
   );
 }
 
-function Door({ color, onGo }: { color: string; onGo: (id: string) => void }) {
+function Door({ color, x, onGo }: { color: string; x: number; onGo: (id: string) => void }) {
   return (
-    <mesh position={[-5.9, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
+    <mesh position={[x, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
       <boxGeometry args={[0.08, 1.7, 0.8]} />
       <meshLambertMaterial color={color} flatShading />
     </mesh>

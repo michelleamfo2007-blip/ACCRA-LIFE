@@ -6,24 +6,33 @@ import { HomeDesk } from "@/components/game/home-desk";
 import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
 import { activeGuests, doorGuests } from "@/lib/game/home-life";
-import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed, type Verb } from "@/lib/game/world";
+import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
 
-const SPOTS = {
-  door: { x: -4.7, z: 0.15, action: "map" },
-  bed: { x: 1.15, z: -1.85, action: "sleep" },
-  /** On the sofa seat (Sofa mesh is at -1.55, -0.15). */
-  chair: { x: -1.55, z: 0.02, action: "gist" },
-  radio: { x: 0.35, z: 0.7, action: "radio" },
-  cooler: { x: 3.7, z: 1.7, action: "cooler" },
-  stove: { x: 3.5, z: 2.6, action: "cook" },
-  toilet: { x: -3.9, z: 2.7, action: "toilet" },
-  shower: { x: -4.6, z: 1.85, action: "shower" },
-  roamA: { x: -0.2, z: 1.2, action: null },
-  roamB: { x: 0.8, z: 0.2, action: null },
-  roamC: { x: -1.1, z: 1.6, action: null },
-};
+function spotsFor(life: Life) {
+  const bed = fixtureAt(life, "fix-bed");
+  const sofa = fixtureAt(life, "fix-sofa");
+  const radio = fixtureAt(life, "fix-radio");
+  const fridge = fixtureAt(life, "fix-fridge");
+  const stove = fixtureAt(life, "fix-stove");
+  const toilet = fixtureAt(life, "fix-toilet");
+  const shower = fixtureAt(life, "fix-shower");
+  const box = roomReach(life.span ?? 0);
+  return {
+    door: { x: -box.halfW + 0.3, z: 0.15, action: "map" },
+    bed: { x: bed.x, z: bed.z + 0.45, action: "sleep" },
+    chair: { x: sofa.x, z: sofa.z + 0.17, action: "gist" },
+    radio: { x: radio.x, z: radio.z - 0.65, action: "radio" },
+    cooler: { x: fridge.x - 0.85, z: fridge.z, action: "cooler" },
+    stove: { x: stove.x - 0.9, z: stove.z - 0.45, action: "cook" },
+    toilet: { x: toilet.x + 0.8, z: toilet.z - 0.6, action: "toilet" },
+    shower: { x: shower.x + 0.55, z: shower.z - 0.05, action: "shower" },
+    roamA: { x: -0.2, z: 1.2, action: null },
+    roamB: { x: 0.8, z: 0.2, action: null },
+    roamC: { x: -1.1, z: 1.6, action: null },
+  };
+}
 
 type Pose = "idle" | "walk" | "act" | "sleep" | "sit";
 
@@ -53,6 +62,7 @@ export function RoomView({
   friends = [],
   invites = [],
   onUpgrade,
+  onWiden,
   startArrange = false,
   onArrangeSeen,
 }: {
@@ -76,6 +86,7 @@ export function RoomView({
   friends?: { username: string; name: string }[];
   invites?: { from: string; at: string }[];
   onUpgrade?: () => void;
+  onWiden?: () => void;
   startArrange?: boolean;
   onArrangeSeen?: () => void;
 }) {
@@ -145,12 +156,12 @@ export function RoomView({
       card.verbs.find((item) => /lounge|sit|rest|gist/i.test(`${item.id} ${item.label}`)) ??
       card.verbs[0];
     if (!verb) return;
-    runAt(SPOTS.chair, verb, false);
+    runAt(spots.chair, verb, false);
   }
 
   function pickVerb(verb: Verb) {
     if (fixture) {
-      const spot = SPOTS[fixture];
+      const spot = spots[fixture];
       setFixture(null);
       runAt(spot, verb, fixture === "bed");
       return;
@@ -158,7 +169,7 @@ export function RoomView({
     const piece = (life.furniture ?? []).find((item) => item.id === picked);
     setPicked(null);
     if (!piece) return;
-    runAt({ x: clampRoom(piece.x + (piece.x > 0 ? -0.7 : 0.7), -4.6, 4.6), z: clampRoom(piece.z + 0.55, -3.4, 3.6) }, verb, false);
+    runAt({ x: clampRoom(piece.x + (piece.x > 0 ? -0.7 : 0.7), box.minX, box.maxX), z: clampRoom(piece.z + 0.55, box.minZ, box.maxZ) }, verb, false);
   }
 
   function walkTo(target: { x: number; z: number }, action: string | null, arrive?: () => void) {
@@ -212,8 +223,8 @@ export function RoomView({
     const id = window.setInterval(() => {
       if (busy.current || seated.current) return;
       if (localStorage.getItem("accralife-freewill") === "0") return;
-      const roam = ["roamA", "roamB", "roamC"][Math.floor(Math.random() * 3)] as keyof typeof SPOTS;
-      walkTo(SPOTS[roam], null);
+      const roam = ["roamA", "roamB", "roamC"][Math.floor(Math.random() * 3)] as keyof ReturnType<typeof spotsFor>;
+      walkTo(spots[roam], null);
     }, 8000);
     return () => {
       window.clearInterval(id);
@@ -223,7 +234,7 @@ export function RoomView({
 
   useEffect(() => {
     if (!errand) return;
-    const spot = SPOTS[errand.spot as keyof typeof SPOTS];
+    const spot = spots[errand.spot as keyof ReturnType<typeof spotsFor>];
     if (spot) walkTo(spot, spot.action);
   }, [errand?.n]);
 
@@ -245,7 +256,7 @@ export function RoomView({
   }, [draft]);
 
   function nudge(x: number, z: number) {
-    setDraft((current) => (current ? { ...current, x: clampRoom(current.x + x, -4.2, 4.2), z: clampRoom(current.z + z, -3.2, 3.4) } : current));
+    setDraft((current) => (current ? { ...current, x: clampRoom(current.x + x, box.placeMinX, box.placeMaxX), z: clampRoom(current.z + z, box.placeMinZ, box.placeMaxZ) } : current));
   }
 
   function commitDraft() {
@@ -257,6 +268,8 @@ export function RoomView({
 
   const owns = (id: string) => life.inventory.includes(id);
   const look = homeLook(life.homeId);
+  const spots = spotsFor(life);
+  const box = roomReach(life.span ?? 0);
   const sofaColor = owns("gold") ? "#8b1e3f" : owns("leather") ? "#1c1c1c" : owns("family") ? "#c4844a" : look.sofa;
   const guests = [...doorGuests(life), ...activeGuests(life)];
 
@@ -274,11 +287,11 @@ export function RoomView({
         onAsk={onAsk}
         onWalk={(x, z) => {
           if (draft || !canInterrupt()) return;
-          walkTo({ x: clampRoom(x, -4.6, 4.6), z: clampRoom(z, -3.4, 3.6) }, null);
+          walkTo({ x: clampRoom(x, box.minX, box.maxX), z: clampRoom(z, box.minZ, box.maxZ) }, null);
         }}
         onGo={(id) => {
           if (id === "door") {
-            walkTo(SPOTS.door, "map");
+            walkTo(spots.door, "map");
             return;
           }
           if (draft || (!canInterrupt() && id !== "chair")) return;
@@ -290,14 +303,17 @@ export function RoomView({
           setFixture(id as FixtureId);
         }}
         pieces={shownPieces(life, draft)}
+        fixtures={shownFixtures(life, draft)}
+        span={life.span ?? 0}
         picked={draft?.id ?? picked}
         placing={Boolean(draft)}
+        focus={draft ? { x: draft.x, z: draft.z } : null}
         onPick={(id) => {
           setDraft(null);
           setFixture(null);
           setPicked(id);
         }}
-        onDrag={(x, z) => setDraft((current) => (current ? { ...current, x: clampRoom(x, -4.2, 4.2), z: clampRoom(z, -3.2, 3.4) } : current))}
+        onDrag={(x, z) => setDraft((current) => (current ? { ...current, x: clampRoom(x, box.placeMinX, box.placeMaxX), z: clampRoom(z, box.placeMinZ, box.placeMaxZ) } : current))}
       />
       {pose === "sleep" ? (
         <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#3b6cff] shadow-lg">
@@ -336,6 +352,7 @@ export function RoomView({
           life={life}
           onClose={() => setArrange(false)}
           onBuy={() => onUpgrade?.()}
+          onWiden={() => onWiden?.()}
           onPick={(piece) => {
             setPicked(null);
             setFixture(null);
@@ -373,7 +390,7 @@ export function RoomView({
               label="Up"
               onClick={() => {
                 if (!canInterrupt()) return;
-                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z - 0.85, -3.4, 3.6) };
+                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z - 0.85, box.minZ, box.maxZ) };
                 walkTo(next, null);
               }}
             >
@@ -384,7 +401,7 @@ export function RoomView({
               label="Left"
               onClick={() => {
                 if (!canInterrupt()) return;
-                const next = { x: clampRoom(posRef.current.x - 0.85, -4.6, 4.6), z: posRef.current.z };
+                const next = { x: clampRoom(posRef.current.x - 0.85, box.minX, box.maxX), z: posRef.current.z };
                 walkTo(next, null);
               }}
             >
@@ -395,7 +412,7 @@ export function RoomView({
               label="Right"
               onClick={() => {
                 if (!canInterrupt()) return;
-                const next = { x: clampRoom(posRef.current.x + 0.85, -4.6, 4.6), z: posRef.current.z };
+                const next = { x: clampRoom(posRef.current.x + 0.85, box.minX, box.maxX), z: posRef.current.z };
                 walkTo(next, null);
               }}
             >
@@ -406,7 +423,7 @@ export function RoomView({
               label="Down"
               onClick={() => {
                 if (!canInterrupt()) return;
-                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z + 0.85, -3.4, 3.6) };
+                const next = { x: posRef.current.x, z: clampRoom(posRef.current.z + 0.85, box.minZ, box.maxZ) };
                 walkTo(next, null);
               }}
             >
@@ -458,27 +475,58 @@ export function RoomView({
   );
 }
 
+function shownFixtures(life: Life, draft: Placed | null) {
+  return FIXTURES.map((item) => (draft?.id === item.id ? draft : fixtureAt(life, item.id)));
+}
+
 function ArrangeTray({
   life,
   onClose,
   onBuy,
+  onWiden,
   onPick,
 }: {
   life: Life;
   onClose: () => void;
   onBuy: () => void;
+  onWiden: () => void;
   onPick: (piece: Placed) => void;
 }) {
   const pieces = SHOP.filter((item) => life.inventory.includes(item.id) && !item.consume && item.kind !== "floor" && item.kind !== "bed");
+  const span = life.span ?? 0;
+  const widen = span < WIDEN_COST.length ? WIDEN_COST[span] : null;
   return (
-    <div className="absolute inset-x-3 bottom-[max(4.8rem,env(safe-area-inset-bottom))] z-40 max-h-[42vh] overflow-auto rounded-[24px] bg-white p-3 shadow-[0_16px_50px_rgba(22,32,60,.22)]">
+    <div className="absolute inset-x-3 bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] z-40 max-h-[38vh] overflow-auto rounded-[24px] bg-white p-3 shadow-[0_16px_50px_rgba(22,32,60,.22)]">
       <div className="flex items-center justify-between gap-2">
         <p className="font-semibold">Arrange the inside</p>
         <button type="button" onClick={onClose} className="text-xs font-semibold text-[#5c6b82]">
           Done
         </button>
       </div>
-      <p className="mt-1 text-xs text-[#5c6b82]">Tap a piece, drag it on the floor, then Place. Turn it with the blue button.</p>
+      <p className="mt-1 text-xs text-[#5c6b82]">The bed, stove, and the rest move too. Tap one, drag it, then Place.</p>
+      {widen != null ? (
+        <button type="button" onClick={onWiden} className="mt-3 w-full rounded-full bg-[#006B3F] py-2.5 text-sm font-bold text-white">
+          Push the walls out · {cedis(widen)}
+        </button>
+      ) : (
+        <p className="mt-3 text-xs font-semibold text-[#006B3F]">The room is as wide as it gets.</p>
+      )}
+      <div className="mt-3 space-y-2">
+        {FIXTURES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onPick(fixtureAt(life, item.id))}
+            className="flex w-full items-center gap-3 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-left"
+          >
+            <span className="h-8 w-8 rounded-lg border border-black/5" style={{ background: item.color }} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{item.name}</span>
+              <span className="block text-[11px] text-[#5c6b82]">Already here · move it</span>
+            </span>
+          </button>
+        ))}
+      </div>
       {pieces.length === 0 ? (
         <button type="button" onClick={onBuy} className="mt-3 w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
           Buy furniture
@@ -555,46 +603,45 @@ function PlaceCard({
   onCancel: () => void;
 }) {
   const item = SHOP.find((entry) => entry.id === id);
-  if (!item) return null;
+  const fixture = FIXTURES.find((entry) => entry.id === id);
+  const name = item?.name ?? fixture?.name;
+  if (!name) return null;
   return (
-    <div className="absolute inset-x-2 bottom-[max(4.6rem,env(safe-area-inset-bottom))] z-40 mx-auto w-[min(100%,28rem)] rounded-[24px] bg-white p-4 shadow-[0_16px_50px_rgba(22,32,60,.22)] sm:inset-x-auto">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold">{item.name}</p>
-          <p className="text-xs text-[#5c6b82]">Drag or arrow keys move · R rotates · Enter places · Esc cancels</p>
+    <div className="absolute inset-x-2 bottom-[max(5.4rem,calc(env(safe-area-inset-bottom)+4.6rem))] z-40 mx-auto w-[min(100%,24rem)] rounded-2xl bg-white/95 p-2 shadow-[0_12px_40px_rgba(22,32,60,.22)] backdrop-blur sm:inset-x-auto sm:bottom-24">
+      <div className="flex items-center gap-2">
+        <div className="grid shrink-0 grid-cols-3 gap-0.5">
+          <span />
+          <Pad onClick={() => onNudge(0, -0.35)}>↑</Pad>
+          <span />
+          <Pad onClick={() => onNudge(-0.35, 0)}>←</Pad>
+          <button type="button" aria-label="Rotate" onClick={onRotate} className="grid h-8 w-8 place-items-center rounded-full bg-[#3b6cff] text-sm text-white">
+            ↻
+          </button>
+          <Pad onClick={() => onNudge(0.35, 0)}>→</Pad>
+          <span />
+          <Pad onClick={() => onNudge(0, 0.35)}>↓</Pad>
+          <span />
         </div>
-        <p className="shrink-0 font-bold">{cedis(item.price)}</p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{name}</p>
+          <p className="truncate text-[11px] text-[#5c6b82]">Arrows or drag the floor. The green ring is the piece.</p>
+          <div className="mt-1.5 flex gap-1.5">
+            <button type="button" onClick={onPlace} className="flex-1 rounded-full bg-[#006B3F] py-2 text-sm font-bold text-white">
+              Place
+            </button>
+            <button type="button" onClick={onCancel} className="flex-1 rounded-full bg-[#f4f7fb] py-2 text-sm font-bold">
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="mt-3 flex items-center gap-3">
-          <div className="grid grid-cols-3 gap-1">
-            <span />
-            <Pad onClick={() => onNudge(0, -0.35)}>↑</Pad>
-            <span />
-            <Pad onClick={() => onNudge(-0.35, 0)}>←</Pad>
-            <button type="button" aria-label="Rotate" onClick={onRotate} className="grid h-10 w-10 place-items-center rounded-full bg-[#3b6cff] text-lg text-white">
-              ↻
-            </button>
-            <Pad onClick={() => onNudge(0.35, 0)}>→</Pad>
-            <span />
-            <Pad onClick={() => onNudge(0, 0.35)}>↓</Pad>
-            <span />
-          </div>
-          <div className="min-w-0 flex-1 space-y-2">
-            <button type="button" onClick={onPlace} className="w-full rounded-full bg-[#006B3F] py-3 text-sm font-bold text-white">
-              ✓ Place
-            </button>
-            <button type="button" onClick={onCancel} className="w-full rounded-full bg-[#f4f7fb] py-3 text-sm font-bold">
-              × Cancel
-            </button>
-          </div>
-        </div>
     </div>
   );
 }
 
 function Pad({ children, onClick }: { children: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="grid h-10 w-10 place-items-center rounded-full bg-[#f4f7fb] text-sm font-bold">
+    <button type="button" onClick={onClick} className="grid h-8 w-8 place-items-center rounded-full bg-[#f4f7fb] text-sm font-bold">
       {children}
     </button>
   );
