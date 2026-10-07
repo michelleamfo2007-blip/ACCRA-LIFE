@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type PerspectiveCamera } from "three";
+import { CanvasTexture, ExtrudeGeometry, RepeatWrapping, Shape, SphereGeometry, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { Figure } from "@/components/game/low-poly-human";
 import { FIXTURES, fixtureAt, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
@@ -335,44 +335,42 @@ function Prop({ item }: { item: ShopItem }) {
   if (item.kind === "chair") {
     return (
       <group>
-        <Box color={color} position={[0, 0.28, 0]} size={[0.55, 0.12, 0.55]} />
-        <Box color={color} position={[0, 0.5, -0.22]} size={[0.55, 0.38, 0.1]} />
-        <Box color="#6b4428" position={[-0.2, 0.14, -0.18]} size={[0.06, 0.28, 0.06]} />
-        <Box color="#6b4428" position={[0.2, 0.14, -0.18]} size={[0.06, 0.28, 0.06]} />
-        <Box color="#6b4428" position={[-0.2, 0.14, 0.18]} size={[0.06, 0.28, 0.06]} />
-        <Box color="#6b4428" position={[0.2, 0.14, 0.18]} size={[0.06, 0.28, 0.06]} />
+        <mesh position={[0, 0.34, 0.02]}>
+          <cylinderGeometry args={[0.2, 0.22, 0.08, 18]} />
+          <meshStandardMaterial color={color} roughness={0.55} />
+        </mesh>
+        <Cushion color={color} position={[0, 0.58, -0.18]} size={[0.4, 0.32, 0.1]} />
+        <Pole color="#4a3424" position={[-0.16, 0.16, -0.14]} height={0.3} />
+        <Pole color="#4a3424" position={[0.16, 0.16, -0.14]} height={0.3} />
+        <Pole color="#4a3424" position={[-0.16, 0.16, 0.16]} height={0.3} />
+        <Pole color="#4a3424" position={[0.16, 0.16, 0.16]} height={0.3} />
       </group>
     );
   }
   if (item.kind === "sofa") {
-    return (
-      <group>
-        <Box color={color} position={[0, 0.28, 0.04]} size={[1.55, 0.26, 0.58]} />
-        <Box color={color} position={[0, 0.52, -0.22]} size={[1.55, 0.38, 0.14]} />
-        <Box color={color} position={[-0.72, 0.42, 0.04]} size={[0.12, 0.32, 0.58]} />
-        <Box color={color} position={[0.72, 0.42, 0.04]} size={[0.12, 0.32, 0.58]} />
-      </group>
-    );
+    return <Lounge color={color} wide={item.size.startsWith("3") ? 1.9 : 1.55} />;
   }
   if (item.kind === "table") {
     return (
       <group>
-        <Box color={color} position={[0, 0.42, 0]} size={[1.15, 0.08, 0.7]} />
-        <Box color="#8a623c" position={[-0.46, 0.2, -0.26]} size={[0.06, 0.4, 0.06]} />
-        <Box color="#8a623c" position={[0.46, 0.2, -0.26]} size={[0.06, 0.4, 0.06]} />
-        <Box color="#8a623c" position={[-0.46, 0.2, 0.26]} size={[0.06, 0.4, 0.06]} />
-        <Box color="#8a623c" position={[0.46, 0.2, 0.26]} size={[0.06, 0.4, 0.06]} />
-        <Box color="#9aa7b2" position={[0.12, 0.5, 0]} size={[0.34, 0.04, 0.24]} />
+        <Cushion color={color} position={[0, 0.46, 0]} size={[1.2, 0.08, 0.72]} />
+        <Pole color="#6b4428" position={[-0.46, 0.22, -0.26]} height={0.42} />
+        <Pole color="#6b4428" position={[0.46, 0.22, -0.26]} height={0.42} />
+        <Pole color="#6b4428" position={[-0.46, 0.22, 0.26]} height={0.42} />
+        <Pole color="#6b4428" position={[0.46, 0.22, 0.26]} height={0.42} />
       </group>
     );
   }
   if (item.kind === "fan") {
     return (
       <group>
-        <Box color="#9aa3ad" position={[0, 0.55, 0]} size={[0.06, 1.05, 0.06]} />
-        <Box color={color} position={[0, 1.05, 0.08]} size={[0.42, 0.42, 0.08]} />
+        <Pole color="#9aa3ad" position={[0, 0.55, 0]} height={1.05} radius={0.03} />
+        <mesh position={[0, 1.08, 0.08]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.06, 16]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
         <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.22, 12]} />
+          <cylinderGeometry args={[0.18, 0.2, 0.04, 16]} />
           <meshLambertMaterial color="#c5ced6" />
         </mesh>
       </group>
@@ -384,25 +382,24 @@ function Prop({ item }: { item: ShopItem }) {
   if (item.kind === "lamp") {
     return (
       <group>
-        <Box color="#d7dde4" position={[0, 0.35, 0]} size={[0.08, 0.7, 0.08]} />
+        <Pole color="#d7dde4" position={[0, 0.38, 0]} height={0.7} radius={0.035} />
         <mesh position={[0, 0.78, 0]}>
-          <sphereGeometry args={[0.16, 10, 8]} />
-          <meshBasicMaterial color={color} />
+          <sphereGeometry args={[0.16, 16, 12]} />
+          <meshLambertMaterial color={color} emissive={color} emissiveIntensity={0.35} />
+        </mesh>
+        <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.12, 0.14, 0.04, 12]} />
+          <meshLambertMaterial color="#c5ced6" />
         </mesh>
       </group>
     );
   }
   if (item.kind === "fridge") {
     const tall = item.id === "double-fridge";
-    return <Box color={color} position={[0, tall ? 0.7 : 0.32, 0]} size={tall ? [0.62, 1.35, 0.5] : [0.7, 0.55, 0.5]} />;
+    return <Icebox tall={tall} color={color} />;
   }
   if (item.kind === "stove") {
-    return (
-      <group>
-        <Box color={item.accent ?? "#cbbba6"} position={[0, 0.28, 0]} size={[0.62, 0.5, 0.5]} />
-        <Box color={color} position={[0, 0.56, 0]} size={[0.5, 0.06, 0.4]} />
-      </group>
-    );
+    return <Cooker />;
   }
   if (item.kind === "sink") {
     return (
@@ -425,12 +422,7 @@ function Prop({ item }: { item: ShopItem }) {
   }
   if (item.kind === "tv") {
     const wide = item.size.startsWith("2");
-    return (
-      <group>
-        <Box color="#cbbba6" position={[0, 0.22, 0]} size={[wide ? 1.35 : 0.7, 0.22, 0.28]} />
-        <Box color={color} position={[0, 0.62, 0]} size={[wide ? 1.4 : 0.72, 0.55, 0.06]} />
-      </group>
-    );
+    return <Screen wide={wide} color={color} />;
   }
   if (item.kind === "desk") {
     return (
@@ -462,10 +454,22 @@ function Prop({ item }: { item: ShopItem }) {
   if (item.kind === "plant") {
     return (
       <group>
-        <Box color="#cbbba6" position={[0, 0.16, 0]} size={[0.22, 0.28, 0.22]} />
-        <Box color={color} position={[0, 0.5, 0]} size={[0.08, 0.4, 0.08]} />
-        <Box color={color} position={[-0.1, 0.62, 0]} size={[0.16, 0.28, 0.06]} />
-        <Box color={color} position={[0.1, 0.66, 0]} size={[0.16, 0.32, 0.06]} />
+        <mesh position={[0, 0.14, 0]}>
+          <cylinderGeometry args={[0.12, 0.1, 0.22, 12]} />
+          <meshLambertMaterial color="#c4a46a" />
+        </mesh>
+        <mesh position={[0, 0.42, 0]}>
+          <sphereGeometry args={[0.2, 12, 10]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
+        <mesh position={[-0.12, 0.58, 0.04]}>
+          <sphereGeometry args={[0.12, 10, 8]} />
+          <meshLambertMaterial color={item.accent ?? "#1f8a70"} />
+        </mesh>
+        <mesh position={[0.14, 0.56, -0.02]}>
+          <sphereGeometry args={[0.11, 10, 8]} />
+          <meshLambertMaterial color={color} />
+        </mesh>
       </group>
     );
   }
@@ -522,7 +526,13 @@ function Prop({ item }: { item: ShopItem }) {
     );
   }
   if (item.kind === "painting") {
-    return <Box color={color} position={[0, 0.7, 0]} size={[0.7, 0.55, 0.06]} />;
+    return (
+      <group position={[0, 0.72, 0]}>
+        <Box color="#f4efe6" position={[0, 0, 0]} size={[0.78, 0.62, 0.04]} />
+        <Box color={color} position={[0, 0, 0.03]} size={[0.62, 0.46, 0.02]} />
+        <Box color={item.accent ?? "#FCD116"} position={[-0.08, -0.04, 0.045]} size={[0.22, 0.16, 0.01]} />
+      </group>
+    );
   }
   if (item.kind === "jet") {
     const heavy = item.id === "heavy-jet";
@@ -561,7 +571,7 @@ function Prop({ item }: { item: ShopItem }) {
       </group>
     );
   }
-  return <Box color={color} position={[0, 0.28, 0]} size={[0.48, 0.48, 0.48]} />;
+  return <Cushion color={color} position={[0, 0.28, 0]} size={[0.46, 0.36, 0.46]} />;
 }
 
 function spotOf(pieces: Placed[], id: string) {
@@ -657,36 +667,40 @@ function Light({ at }: { at: [number, number, number] }) {
 
 function Door({ color, x, onGo }: { color: string; x: number; onGo: (id: string) => void }) {
   return (
-    <mesh position={[x, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
-      <boxGeometry args={[0.08, 1.7, 0.8]} />
-      <meshLambertMaterial color={color} flatShading />
-    </mesh>
+    <group position={[x, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
+      <mesh>
+        <boxGeometry args={[0.08, 1.7, 0.82]} />
+        <meshStandardMaterial color={color} roughness={0.7} />
+      </mesh>
+      <mesh position={[0.05, 0.12, 0]}>
+        <boxGeometry args={[0.02, 1.15, 0.5]} />
+        <meshStandardMaterial color="#f4efe6" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.07, 0, 0.22]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.08, 10]} />
+        <meshStandardMaterial color="#c4a46a" metalness={0.4} roughness={0.35} />
+      </mesh>
+    </group>
   );
 }
 
 function Bed({ color, grade, wide, onGo }: { color: string; grade: HomeGrade; wide?: boolean; onGo: (id: string) => void }) {
   const frame = grade === "hall" ? "#8b9094" : grade === "low" ? "#5c4030" : grade === "high" ? "#c4a46a" : "#6b4428";
   const sheet = grade === "low" ? "#d9cbb6" : grade === "high" ? "#fffdf8" : "#f7f4ef";
-  const span = wide ? 2.45 : 1.85;
-  const linen = wide ? 2.15 : 1.62;
+  const span = wide ? 2.2 : 1.7;
+  const linen = wide ? 1.95 : 1.48;
   return (
     <group position={[2.15, 0, -2.35]} onClick={(event) => { event.stopPropagation(); onGo("bed"); }}>
-      <Box color={frame} position={[0, 0.16, 0]} size={[span, 0.22, 2.15]} />
-      <Box color={frame} position={[0, 0.42, -0.95]} size={[span, 0.55, 0.1]} />
-      <Box color={sheet} position={[0, 0.32, 0.06]} size={[linen, 0.12, 1.8]} />
-      <Box color={color} position={[0, 0.38, 0.28]} size={[linen, 0.08, 1.25]} />
-      {grade === "low" ? null : (
-        <>
-          <Box color={grade === "high" ? "#fff" : "#f4efe6"} position={[-0.38, 0.46, -0.62]} size={[0.52, 0.12, 0.34]} />
-          <Box color="#fff" position={[0.38, 0.46, -0.62]} size={[0.52, 0.12, 0.34]} />
-        </>
-      )}
-      {grade === "hall" ? (
-        <>
-          <Box color="#8b9094" position={[0, 1.05, 0]} size={[1.9, 0.06, 2.2]} />
-          <Box color="#3d5c78" position={[0, 1.16, 0.2]} size={[1.7, 0.08, 1.7]} />
-        </>
-      ) : null}
+      <Pole color={frame} position={[-span * 0.38, 0.12, -0.82]} height={0.22} radius={0.045} />
+      <Pole color={frame} position={[span * 0.38, 0.12, -0.82]} height={0.22} radius={0.045} />
+      <Pole color={frame} position={[-span * 0.38, 0.12, 0.82]} height={0.22} radius={0.045} />
+      <Pole color={frame} position={[span * 0.38, 0.12, 0.82]} height={0.22} radius={0.045} />
+      <Cushion color={frame} position={[0, 0.28, 0]} size={[span, 0.1, 2.05]} />
+      <Cushion color={sheet} position={[0, 0.4, 0.08]} size={[linen, 0.22, 1.72]} />
+      <Cushion color={color} position={[0, 0.46, 0.42]} size={[linen * 0.92, 0.12, 1.05]} />
+      <Cushion color={frame} position={[0, 0.72, -0.96]} size={[span, 0.62, 0.1]} />
+      <Puff color={grade === "high" ? "#fff" : "#f4efe6"} position={[-0.32, 0.52, -0.55]} size={[0.42, 0.12, 0.26]} />
+      <Puff color="#fff" position={[0.32, 0.52, -0.55]} size={[0.42, 0.12, 0.26]} />
     </group>
   );
 }
@@ -694,10 +708,7 @@ function Bed({ color, grade, wide, onGo }: { color: string; grade: HomeGrade; wi
 function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
   return (
     <group position={[-1.55, 0, -0.15]} onClick={(event) => { event.stopPropagation(); onGo("chair"); }}>
-      <Box color={color} position={[0, 0.26, 0.06]} size={[1.7, 0.28, 0.62]} />
-      <Box color={color} position={[0, 0.5, -0.22]} size={[1.7, 0.42, 0.16]} />
-      <Box color={color} position={[-0.78, 0.4, 0.06]} size={[0.14, 0.36, 0.62]} />
-      <Box color={color} position={[0.78, 0.4, 0.06]} size={[0.14, 0.36, 0.62]} />
+      <Lounge color={color} wide={1.7} />
     </group>
   );
 }
@@ -705,9 +716,7 @@ function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
 function Fridge({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[4.55, 0, 1.7]} onClick={(event) => { event.stopPropagation(); onGo("cooler"); }}>
-      <Box color="#f4f7fa" position={[0, 0.78, 0]} size={[0.72, 1.55, 0.64]} />
-      <Box color="#c5d0da" position={[0, 1.05, 0.33]} size={[0.64, 0.03, 0.02]} />
-      <Box color="#9aa7b2" position={[0.28, 0.85, 0.33]} size={[0.04, 0.28, 0.04]} />
+      <Icebox tall color="#f4f7fa" />
     </group>
   );
 }
@@ -715,12 +724,7 @@ function Fridge({ onGo }: { onGo: (id: string) => void }) {
 function Stove({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[4.4, 0, 3.05]} onClick={(event) => { event.stopPropagation(); onGo("stove"); }}>
-      <Box color="#f3f3f3" position={[0, 0.4, 0]} size={[0.78, 0.8, 0.6]} />
-      <Box color="#1c1c1c" position={[0, 0.82, 0]} size={[0.7, 0.04, 0.52]} />
-      <mesh position={[0.05, 0.96, 0]}>
-        <cylinderGeometry args={[0.12, 0.14, 0.16, 8]} />
-        <meshLambertMaterial color="#c4552a" />
-      </mesh>
+      <Cooker />
     </group>
   );
 }
@@ -728,8 +732,15 @@ function Stove({ onGo }: { onGo: (id: string) => void }) {
 function Toilet({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[-4.7, 0, 3.3]} onClick={(event) => { event.stopPropagation(); onGo("toilet"); }}>
-      <Box color="#f7f7f7" position={[0, 0.38, -0.12]} size={[0.36, 0.7, 0.18]} />
-      <Box color="#f4f7f8" position={[0, 0.28, 0.12]} size={[0.4, 0.28, 0.32]} />
+      <mesh position={[0, 0.22, 0.08]}>
+        <sphereGeometry args={[0.2, 16, 12]} />
+        <meshLambertMaterial color="#f7f7f7" />
+      </mesh>
+      <mesh position={[0, 0.28, 0.08]} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.16, 0.035, 8, 16]} />
+        <meshLambertMaterial color="#e7eef2" />
+      </mesh>
+      <Cushion color="#f4f7f8" position={[0, 0.48, -0.16]} size={[0.34, 0.42, 0.14]} />
     </group>
   );
 }
@@ -737,8 +748,18 @@ function Toilet({ onGo }: { onGo: (id: string) => void }) {
 function Shower({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[-5.15, 0, 1.9]} onClick={(event) => { event.stopPropagation(); onGo("shower"); }}>
-      <Box color="#e7eef3" position={[0, 0.06, 0]} size={[0.7, 0.08, 0.7]} />
-      <Box color="#d5e4f2" position={[0, 0.55, -0.28]} size={[0.7, 0.9, 0.06]} />
+      <mesh position={[0, 0.04, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.38, 0.4, 0.06, 16]} />
+        <meshLambertMaterial color="#e7eef3" />
+      </mesh>
+      <mesh position={[0, 0.7, -0.32]}>
+        <boxGeometry args={[0.72, 1.15, 0.04]} />
+        <meshLambertMaterial color="#d5e4f2" transparent opacity={0.45} />
+      </mesh>
+      <mesh position={[0, 1.22, -0.2]}>
+        <sphereGeometry args={[0.06, 10, 8]} />
+        <meshLambertMaterial color="#c5d0da" />
+      </mesh>
     </group>
   );
 }
@@ -746,7 +767,15 @@ function Shower({ onGo }: { onGo: (id: string) => void }) {
 function Radio({ onGo }: { onGo: (id: string) => void }) {
   return (
     <group position={[0.35, 0, 1.35]} onClick={(event) => { event.stopPropagation(); onGo("radio"); }}>
-      <Box color="#c4894f" position={[0, 0.22, 0]} size={[0.42, 0.44, 0.32]} />
+      <Cushion color="#c4894f" position={[0, 0.24, 0]} size={[0.46, 0.36, 0.32]} />
+      <mesh position={[-0.08, 0.26, 0.16]}>
+        <circleGeometry args={[0.07, 12]} />
+        <meshLambertMaterial color="#1c2430" />
+      </mesh>
+      <mesh position={[0.1, 0.26, 0.16]}>
+        <circleGeometry args={[0.07, 12]} />
+        <meshLambertMaterial color="#1c2430" />
+      </mesh>
       <Box color="#2c3338" position={[0, 0.5, 0]} size={[0.3, 0.16, 0.18]} />
     </group>
   );
@@ -785,6 +814,131 @@ function Rug() {
       <planeGeometry args={[2.4, 1.5]} />
       <meshLambertMaterial color="#c4a46a" />
     </mesh>
+  );
+}
+
+function roundedRect(width: number, depth: number, radius: number) {
+  const shape = new Shape();
+  const x = -width / 2;
+  const y = -depth / 2;
+  const r = Math.max(0.02, Math.min(radius, width / 2 - 0.01, depth / 2 - 0.01));
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + width - r, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + r);
+  shape.lineTo(x + width, y + depth - r);
+  shape.quadraticCurveTo(x + width, y + depth, x + width - r, y + depth);
+  shape.lineTo(x + r, y + depth);
+  shape.quadraticCurveTo(x, y + depth, x, y + depth - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
+  return shape;
+}
+
+function Cushion({ color, position, size }: { color: string; position: [number, number, number]; size: [number, number, number] }) {
+  const geometry = useMemo(() => {
+    const bevel = Math.min(0.04, size[1] * 0.3);
+    const geo = new ExtrudeGeometry(roundedRect(size[0], size[2], Math.min(0.12, size[0] * 0.18, size[2] * 0.18)), {
+      depth: Math.max(size[1] - bevel * 2, 0.02),
+      bevelEnabled: true,
+      bevelThickness: bevel,
+      bevelSize: bevel * 0.7,
+      bevelSegments: 2,
+      curveSegments: 8,
+    });
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, -size[1] / 2, 0);
+    geo.computeVertexNormals();
+    return geo;
+  }, [size[0], size[1], size[2]]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh position={position} geometry={geometry}>
+      <meshStandardMaterial color={color} roughness={0.62} metalness={0.03} />
+    </mesh>
+  );
+}
+
+function Puff({ color, position, size }: { color: string; position: [number, number, number]; size: [number, number, number] }) {
+  const geometry = useMemo(() => {
+    const geo = new SphereGeometry(0.5, 18, 12);
+    geo.scale(size[0], Math.max(size[1], 0.05), size[2]);
+    geo.computeVertexNormals();
+    return geo;
+  }, [size[0], size[1], size[2]]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh position={position} geometry={geometry}>
+      <meshStandardMaterial color={color} roughness={0.7} />
+    </mesh>
+  );
+}
+
+function Pole({ color, position, height = 0.28, radius = 0.035 }: { color: string; position: [number, number, number]; height?: number; radius?: number }) {
+  return (
+    <mesh position={position}>
+      <cylinderGeometry args={[radius, radius * 0.8, height, 8]} />
+      <meshLambertMaterial color={color} />
+    </mesh>
+  );
+}
+
+function Lounge({ color, wide }: { color: string; wide: number }) {
+  const wood = "#6b4428";
+  return (
+    <group>
+      <Pole color={wood} position={[-wide * 0.4, 0.09, 0.22]} height={0.16} radius={0.04} />
+      <Pole color={wood} position={[wide * 0.4, 0.09, 0.22]} height={0.16} radius={0.04} />
+      <Pole color={wood} position={[-wide * 0.4, 0.09, -0.22]} height={0.16} radius={0.04} />
+      <Pole color={wood} position={[wide * 0.4, 0.09, -0.22]} height={0.16} radius={0.04} />
+      <Cushion color={wood} position={[0, 0.18, 0]} size={[wide * 0.96, 0.06, 0.72]} />
+      <Cushion color={color} position={[0, 0.3, 0.08]} size={[wide * 0.82, 0.14, 0.46]} />
+      <Cushion color={color} position={[0, 0.56, -0.26]} size={[wide * 0.84, 0.42, 0.12]} />
+      <Cushion color={color} position={[-wide * 0.44, 0.42, 0.06]} size={[0.12, 0.26, 0.48]} />
+      <Cushion color={color} position={[wide * 0.44, 0.42, 0.06]} size={[0.12, 0.26, 0.48]} />
+      <Puff color="#f6f1e8" position={[-wide * 0.18, 0.44, 0.04]} size={[0.24, 0.12, 0.18]} />
+      <Puff color="#f6f1e8" position={[wide * 0.18, 0.44, 0.04]} size={[0.24, 0.12, 0.18]} />
+    </group>
+  );
+}
+
+function Icebox({ tall, color }: { tall?: boolean; color: string }) {
+  const h = tall ? 1.45 : 0.7;
+  const front = 0.32;
+  return (
+    <group>
+      <Cushion color={color} position={[0, h / 2 + 0.04, 0]} size={[0.68, h, 0.58]} />
+      <Box color="#9aa8b4" position={[0, tall ? 1.02 : 0.46, front]} size={[0.52, 0.02, 0.02]} />
+      <mesh position={[0.24, tall ? 0.72 : 0.34, front]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, tall ? 0.36 : 0.18, 8]} />
+        <meshStandardMaterial color="#6d7b88" metalness={0.35} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+function Cooker() {
+  return (
+    <group>
+      <Cushion color="#f4f4f4" position={[0, 0.36, 0]} size={[0.78, 0.62, 0.58]} />
+      <Box color="#1c1c1c" position={[0, 0.7, 0]} size={[0.66, 0.04, 0.48]} />
+      {[[-0.16, -0.1], [0.16, -0.1], [-0.16, 0.12], [0.16, 0.12]].map(([x, z]) => (
+        <mesh key={`${x}${z}`} position={[x, 0.73, z]} rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.07, 0.012, 6, 12]} />
+          <meshLambertMaterial color="#3a3f46" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Screen({ wide, color }: { wide: boolean; color: string }) {
+  const w = wide ? 1.35 : 0.72;
+  return (
+    <group>
+      <Cushion color="#cbbba6" position={[0, 0.2, 0]} size={[w * 0.7, 0.16, 0.32]} />
+      <Box color="#16181c" position={[0, 0.58, 0]} size={[w, 0.52, 0.05]} />
+      <Box color={color} position={[0, 0.58, 0.03]} size={[w * 0.9, 0.42, 0.01]} />
+    </group>
   );
 }
 
