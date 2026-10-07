@@ -1648,7 +1648,7 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   }
   // Traffic / rain / harmattan hits mood after the ride.
   const hour = hourOf(timed.life.minutes);
-  const hit = weatherStress(weatherAt(), hour);
+  const hit = weatherStress(weatherAt(new Date(), timed.life.town), hour);
   timed.life.needs.fun = clampNeed(timed.life.needs.fun + hit.fun);
   timed.life.needs.energy = clampNeed(timed.life.needs.energy + hit.energy);
   timed.life.needs.hygiene = clampNeed(timed.life.needs.hygiene + hit.hygiene);

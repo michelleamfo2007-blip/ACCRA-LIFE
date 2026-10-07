@@ -998,7 +998,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const quest = questFor(life);
   const crowd = useCityCrowd();
   const place = placeId ? spotById(placeId) : null;
-  const city = now == null ? QUIET_CITY : cityNow(new Date(now));
+  const city = now == null ? QUIET_CITY : cityNow(new Date(now), life.town);
   const car = carRide(life);
   const sick = sickness(life);
   const guide = guideNext(life);

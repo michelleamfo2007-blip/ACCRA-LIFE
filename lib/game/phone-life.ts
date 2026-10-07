@@ -37,7 +37,7 @@ export function weatherBrief(sky: Weather, hour: number) {
   if (sky.flood) bits.push("Circle is flooding. Okada parked.");
   else if (sky.rain) bits.push("Carry an umbrella. Fares go up.");
   if (sky.harmattan) bits.push("Harmattan — dust and dry lips");
-  bits.push(`${season.emoji} ${season.label}`);
+  if (sky.rain || sky.harmattan || season.id === "detty") bits.push(`${season.emoji} ${season.label}`);
   return bits.join(" · ");
 }
 

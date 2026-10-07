@@ -246,7 +246,7 @@ export function askOver(life: Life, name: string, purpose: InvitePurpose = "gist
   const hour = hourOf(life.minutes);
   const day = Math.floor(life.minutes / 1440);
   const roll = hash(`${name}:${day}:${purpose}`);
-  const sky = weatherAt();
+  const sky = weatherAt(new Date(), life.town);
   let decline = "";
   if ((hour >= 23 || hour < 6) && score < 70) decline = "It's late. I'll pass tomorrow.";
   else if (hour >= 8 && hour < 17 && score < 45 && roll > 0.4) decline = "I dey work. I can't today, sorry.";

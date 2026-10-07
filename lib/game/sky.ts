@@ -39,43 +39,48 @@ function seed(text: string) {
   return (hash >>> 0) / 4294967295;
 }
 
-export function weatherAt(at = new Date()): Weather {
+function skyTown(town?: string) {
+  return (town ?? "").toLowerCase().includes("kumasi") ? "Kumasi" : "Accra";
+}
+
+function hourLabel(hour: number) {
+  const face = ((hour + 11) % 12) + 1;
+  return `${face}${hour >= 12 ? "pm" : "am"}`;
+}
+
+export function weatherAt(at = new Date(), town = "Accra"): Weather {
+  const place = skyTown(town);
   const month = at.getUTCMonth();
   const hour = at.getUTCHours();
-  const key = `${at.getUTCFullYear()}-${month}-${at.getUTCDate()}`;
+  const key = `${at.getUTCFullYear()}-${month}-${at.getUTCDate()}-${place}`;
   const season = seasonOf(at);
   const major = month >= 3 && month <= 6;
   const minor = month === 8 || month === 9;
   const harmattan = season.id === "harmattan";
-  const chance = major ? 0.45 : minor ? 0.3 : harmattan ? 0.02 : 0.06;
-  if (seed(`rain-${key}`) >= chance) {
+  const clear = harmattan ? "Harmattan haze. Dusty and cool." : season.id === "detty" ? "Hot Detty night air." : `Clear over ${place}.`;
+  const quiet = { rain: false, flood: false, harmattan, season: season.id, label: clear };
+  const chance = major ? 0.4 : minor ? 0.28 : harmattan ? 0.02 : 0.06;
+  if (seed(`rain-${key}`) >= chance) return quiet;
+  const start = (major ? 13 : 15) + Math.floor(seed(`start-${key}`) * (major ? 5 : 4));
+  const length = major ? 2 + Math.floor(seed(`length-${key}`) * 2) : 1;
+  const end = start + length;
+  if (hour >= start && hour < end) {
+    const flood = major && seed(`flood-${key}`) < 0.28;
     return {
-      rain: false,
-      flood: false,
+      rain: true,
+      flood,
       harmattan,
       season: season.id,
-      label: harmattan ? "Harmattan haze. Dusty and cool." : season.id === "detty" ? "Hot Detty night air." : "Dry and bright",
+      label: flood
+        ? place === "Accra"
+          ? "Heavy rain. Roads around Circle are flooding."
+          : `Heavy rain in ${place}. The gutters are full.`
+        : `A shower in ${place}. Umbrellas up.`,
     };
   }
-  const start = 12 + Math.floor(seed(`start-${key}`) * 7);
-  const length = 2 + Math.floor(seed(`length-${key}`) * 4);
-  if (hour < start || hour >= start + length) {
-    return {
-      rain: false,
-      flood: false,
-      harmattan,
-      season: season.id,
-      label: `Rain due around ${start > 12 ? start - 12 : start}${start >= 12 ? "pm" : "am"}`,
-    };
-  }
-  const flood = major && seed(`flood-${key}`) < 0.35;
-  return {
-    rain: true,
-    flood,
-    harmattan,
-    season: season.id,
-    label: flood ? "Heavy rain. Roads around Circle are flooding." : "Rain in Accra. Umbrellas up.",
-  };
+  if (hour >= start - 2 && hour < start) return { ...quiet, label: `A shower may pass ${place} around ${hourLabel(start)}.` };
+  if (hour >= end && hour < end + 2) return { ...quiet, label: `The shower passed. ${place} is bright again.` };
+  return quiet;
 }
 
 /** Combine Accra rush hour with rain/flood for travel time. */

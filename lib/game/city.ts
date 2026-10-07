@@ -277,16 +277,16 @@ export function matchVerb(game: Match): Verb {
   });
 }
 
-export function cityNow(at = new Date()): City {
+export function cityNow(at = new Date(), town?: string): City {
   const events = calendar(at);
   const weekly = weeklyNow(at);
   if (weekly) {
     const [first, ...rest] = weekly.event.verbs;
     events.unshift({ id: weekly.key, title: weekly.event.title, emoji: weekly.event.emoji, detail: `${weekly.event.detail} Check in for a reward.`, spots: [weekly.event.spot], verb: first, more: rest });
   }
-  const sky = weatherAt(at);
+  const sky = weatherAt(at, town);
   const game = match(at);
-  let headline = "A normal Accra day. The city is moving.";
+  let headline = "The city is moving.";
   if (game?.live) headline = `⚽ ${game.title} is on now`;
   else if (game?.over) headline = `⚽ Full time: ${game.home} ${game.score[0]}–${game.score[1]} ${game.away}`;
   else if (game) headline = `⚽ ${game.title} at ${game.startHour > 12 ? game.startHour - 12 : game.startHour}pm`;

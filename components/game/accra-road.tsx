@@ -740,7 +740,7 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
     addMesh(root, trackGeo(bins, stripGeometry(sign * 7.25, -0.22, sign * 7.25, 0.2)), curbMat, shadows);
     addMesh(root, trackGeo(bins, stripGeometry(sign * 7.25, 0.2, sign * 7.6, 0.2)), curbMat, shadows);
     addMesh(root, trackGeo(bins, stripGeometry(sign * 7.6, 0.2, sign * 10.5, 0.2, 4)), walkMat, shadows);
-    addMesh(root, trackGeo(bins, stripGeometry(sign * 10.5, 0.02, sign * 18, 0.02, 12)), dirtMat, shadows);
+    addMesh(root, trackGeo(bins, stripGeometry(sign * 10.5, 0.02, sign * 26, 0.02, 12)), dirtMat, shadows);
   };
   side(1);
   side(-1);
@@ -850,7 +850,7 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
   for (let d = 20; d < ROAD_LENGTH && b < 40; d += 16) {
     if (LIGHTS.some((light) => Math.abs(light - d) < 10)) continue;
     frameAt(d, frame);
-    const sideLat = b % 2 === 0 ? 15.5 : -15.5;
+    const sideLat = b % 2 === 0 ? 19.6 : -19.6;
     const h = 6 + (b % 5) * 4.5;
     dummy.position.set(frame.x + frame.rx * sideLat, h / 2, frame.z + frame.rz * sideLat);
     dummy.scale.set(7, h, 8);
