@@ -70,6 +70,9 @@ const BEATS: Record<string, Beat[]> = {
     { slots: ["afternoon", "evening"], heat: "packed", emoji: "🏖️", line: "Drums on the sand. Horses. A grill every few steps.", verbs: [verb({ id: "hap-beach-drums", label: "Dance to the drums", detail: "The circle opens. Somebody pulls you in.", minutes: 50, cost: 10, effects: { fun: 30, social: 18, energy: -10, hygiene: -8 }, tag: "party", emoji: "🥁" }), verb({ id: "hap-beach-swim", label: "Swim and dry off", detail: "Salt water, then the sun does the rest.", minutes: 40, cost: 0, effects: { fun: 22, energy: -6, hygiene: -6 }, emoji: "🌊" })] },
     { slots: ["morning"], heat: "quiet", emoji: "🌅", line: "Soft light. Joggers. The sea before the speakers wake up.", verbs: [verb({ id: "hap-beach-dawn", label: "Morning shoreline walk", detail: "Just you, the tide, and Accra waking up.", minutes: 35, effects: { fun: 16, energy: 10 }, emoji: "🌅" })] },
   ],
+  enzo: [
+    { slots: ["evening", "night"], heat: "packed", emoji: "🪩", line: "The door is late and the floor is already full.", verbs: [verb({ id: "hap-enzo-floor", label: "Stay for the drop", detail: "One song. Then the one after it.", minutes: 70, cost: 40, effects: { fun: 30, social: 16, energy: -12 }, tag: "party", emoji: "🪩" })] },
+  ],
   knust: [
     { slots: ["morning", "afternoon"], heat: "busy", emoji: "🎓", line: "Lectures letting out. The paths under the trees are full.", verbs: [verb({ id: "hap-knust-campus", label: "Cross the campus", detail: "You follow the students and end up somewhere green.", minutes: 40, effects: { fun: 12, social: 8, energy: -4 }, emoji: "🌳" })] },
     { slots: ["evening"], heat: "quiet", emoji: "📚", line: "The library lights are still on. Campus is thinning.", verbs: [verb({ id: "hap-knust-read", label: "Read till close", detail: "One chapter. Then the walk back to the gate.", minutes: 50, effects: { fun: 8, energy: -4 }, emoji: "📚" })] },

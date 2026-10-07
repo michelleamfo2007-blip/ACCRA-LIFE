@@ -186,6 +186,11 @@ export const TOWNS: Town[] = [
       { id: "kotoka", name: "Kotoka Airport", kind: "transport", neighborhood: "Airport Residential", hours: "Always", cost: "Fare on the board", blurb: "Domestic gate for Kumasi. Passion Airways boards here.", x: 180, y: 520 },
       { id: "legon", name: "University of Ghana", kind: "work", neighborhood: "Legon", hours: "8:00 – 17:00", cost: "Free to walk", blurb: "The hill, the tower, and students crossing the road.", x: 1200, y: 180 },
       { id: "botanical", name: "Legon Botanical", kind: "landmark", neighborhood: "Legon", hours: "8:00 – 17:00", cost: "From ₵10", blurb: "Trees and a quiet path above the city.", x: 1400, y: 200 },
+      { id: "enzo", name: "Enzo Club", kind: "nightlife", neighborhood: "East Legon", hours: "20:00 – late", cost: "From ₵36", blurb: "A late door and a dark floor.", x: 1588, y: 248 },
+      { id: "aura-cafe", name: "Aura Cafe", kind: "food", neighborhood: "East Legon", hours: "8:00 – 21:00", cost: "From ₵22", blurb: "Coffee and a slow table.", x: 1660, y: 220 },
+      { id: "kfc", name: "KFC", kind: "food", neighborhood: "Osu", hours: "10:00 – 22:00", cost: "From ₵28", blurb: "Streetwise on Oxford Street.", x: 560, y: 500 },
+      { id: "flicks-licks", name: "Flicks and Licks", kind: "food", neighborhood: "East Legon", hours: "11:00 – 22:00", cost: "From ₵26", blurb: "Waffles and ice cream.", x: 1588, y: 500 },
+      { id: "frozen-cabana", name: "Frozen Cabana", kind: "food", neighborhood: "East Legon", hours: "12:00 – 22:00", cost: "From ₵18", blurb: "A cold cup in the shade.", x: 1720, y: 500 },
     ],
     people: [],
     events: [
