@@ -140,12 +140,12 @@ export type Team = { name: string; color: string; players: Footballer[]; morale:
 export type Pet = { id: string; kind: string; name: string; fedAt: number; boughtAt: number; lastYield: number; lastPlay?: number };
 export type Community = { faith?: "church" | "mosque" | null; standing: number; lastService?: number; givenDay?: { day: number; amount: number }; projects: string[]; chief?: { stool: string; since: number } | null; lastCourt?: number };
 
-export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number };
+export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
 export type Song = { id: string; title: string; at: number; quality: number; paid: number; video?: boolean };
 export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number; lastShow?: number; shows?: number };
 export type Schooling = { certs: string[]; course?: string | null; done?: number; lastClass?: number };
-export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number };
+export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number; color?: string; condition?: number; broken?: boolean };
 export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
 export type SickKind = "malaria" | "flu" | "tummy" | "burnout";
 export type Health = { sick?: { kind: SickKind; since: number } | null; nhisUntil?: number; day?: number };
@@ -813,6 +813,20 @@ export const SPOTS: Spot[] = [
     ],
   },
   {
+    id: "fitting",
+    name: "Fitting shop",
+    emoji: "🔧",
+    x: 540,
+    y: 980,
+    group: "work",
+    blurb: "Abossey Okai. Oil on the floor, a radio on the workbench, and three fitters who know every knock a car can make.",
+    actions: [
+      eat({ id: "fix-kojo", label: "Kojo gets it running", detail: "The apprentice. He will make it start. It will not be perfect.", minutes: 15, cost: 80, effects: { fun: 4 } }),
+      eat({ id: "fix-esi", label: "Esi does the full job", detail: "She listens to the engine before she picks up a spanner.", minutes: 20, cost: 180, effects: { fun: 8 } }),
+      eat({ id: "fix-kwame", label: "Kwame, the master", detail: "The car leaves quieter than the day you bought it.", minutes: 25, cost: 320, effects: { fun: 12, social: 4 }, social: true }),
+    ],
+  },
+  {
     id: "bojo",
     name: "Bojo Beach",
     emoji: "⛵",
@@ -1461,6 +1475,7 @@ export function collectStamp(life: Life, placeId: string, notes: string[]) {
 
 export function carFuelBlock(life: Life, fuel: number) {
   if (!life.car) return "You do not have a car yet.";
+  if (life.car.broken || (life.car.condition ?? 100) <= 0) return "The car is spoilt. Take a trotro to the fitting shop at Abossey Okai.";
   if (life.car.fuel < fuel) return fuel > FUEL_PER_TRIP ? `A trip that far needs ${fuel} litres. Fill up in the Garage app.` : "The tank is nearly empty. Fill up in the Garage app.";
   return null;
 }
@@ -1484,7 +1499,11 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   timed.notes.unshift(`${heading} to ${spotById(placeId).name}${fare}${noteExtra}`);
   collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
-    timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel };
+    const wear = 6 + Math.floor(fuel / 2);
+    const condition = Math.max(0, (timed.life.car.condition ?? 100) - wear);
+    timed.life.car = { ...timed.life.car, fuel: timed.life.car.fuel - fuel, condition, broken: condition <= 0 };
+    if (condition <= 0) timed.notes.push("The car is spoilt. It will not start again until a fitter sees it.");
+    else if (condition < 30) timed.notes.push("The engine is knocking. The fitting shop is at Abossey Okai.");
     if (Math.random() < 0.15) {
       if (timed.life.car.insuredUntil > timed.life.minutes) timed.notes.push("Police checkpoint. Papers in order, waved through.");
       else {

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
 import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, nextMusicMove, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
-import { CROPS, LAND, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, collectRent, cropOf, farmSize, goToCourt, harvestBed, landOf, payGuards, plantCrop, plotsOf, rentDue, sellPlot, stageCost, waterBeds } from "@/lib/game/estate";
+import { CROPS, MAX_PLOTS, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, collectRent, cropOf, farmSize, goToCourt, harvestBed, landOf, payGuards, plantCrop, plotsOf, rentDue, sellPlot, stageCost, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
-import { CARS, INSURANCE, buyCar, carOf, driveHail, fillCost, fillUp, hailWait, insureCar, sellCar, tradeIn } from "@/lib/game/garage";
+import { CARS, CAR_PAINTS, INSURANCE, RESPRAY, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, insureCar, repaintCar, sellCar, tradeIn } from "@/lib/game/garage";
 import { CLINIC_FEE, CLINIC_NHIS, MEDS_FEE, NHIS_FEE, buyNhis, hasNhis, restSick, seeClinic, selfMedicate, sickness } from "@/lib/game/health";
 import { MAX_ORDERS, STYLES, TAILOR_COLORS, collectOrder, orderStyle, styleOf, wearFit } from "@/lib/game/tailor";
+import { moveHome } from "@/lib/game/ladder";
+import { PlotYard } from "@/components/game/plot-yard";
 import { cedis, type Life, type StepResult } from "@/lib/game/world";
 
 type Apply = (result: StepResult) => void;
@@ -65,16 +67,37 @@ export function Bar({ value, color = "#006B3F" }: { value: number; color?: strin
   );
 }
 
-export function LandApp({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: Apply }) {
+export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBack: () => void; onApply: Apply; onArrange?: () => void }) {
   const plots = plotsOf(life);
   const [selling, setSelling] = useState<string | null>(null);
+  const [area, setArea] = useState(plots[0]?.area ?? "kasoa");
+  const [picked, setPicked] = useState<string | null>(plots.find((plot) => plot.area === (plots[0]?.area ?? "kasoa"))?.id ?? null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+  const here = plots.filter((plot) => plot.area === area);
   return (
     <Screen title="Land and houses" life={life} color="#6b4423" onBack={onBack}>
-      {plots.length ? <Label>YOUR PLOTS · {plots.length}/{MAX_PLOTS}</Label> : null}
-      {plots.map((plot) => {
+      <PlotYard
+        area={area}
+        plots={plots}
+        full={plots.length >= MAX_PLOTS}
+        now={now}
+        picked={picked}
+        onArea={(id) => {
+          setArea(id);
+          setPicked(plots.find((plot) => plot.area === id)?.id ?? null);
+        }}
+        onPick={setPicked}
+        onBuy={(id) => onApply(buyLand(life, id))}
+      />
+      {here.length ? null : <p className="text-sm text-[#5c6b82]">No plot here yet. Tap a sand pad on the yard.</p>}
+      {here.map((plot) => {
         const land = landOf(plot.area);
         const finished = plot.stage >= STAGES.length - 1;
-        const left = buildWait(life, plot);
+        const left = buildWait(plot, now);
         const due = rentDue(life, plot);
         return (
           <Card key={plot.id} tone={plot.guard === "waiting" ? "warn" : finished ? "good" : undefined}>
@@ -84,7 +107,7 @@ export function LandApp({ life, onBack, onApply }: { life: Life; onBack: () => v
                 <span className="block font-semibold">{land.label}</span>
                 <span className="block text-xs text-[#5c6b82]">
                   {STAGES[plot.stage]}
-                  {left > 0 && !finished ? ` · builders back in ${wait(left)}` : ""}
+                  {left > 0 && !finished ? ` · ${left}s` : ""}
                 </span>
               </span>
             </div>
@@ -117,11 +140,21 @@ export function LandApp({ life, onBack, onApply }: { life: Life; onBack: () => v
                     Find tenants ₵50
                   </Btn>
                 </div>
+                {life.homeId === "own-house" ? (
+                  <p className="text-sm font-semibold text-[#006B3F]">You live in the house you built. No Saturday rent.</p>
+                ) : (
+                  <Btn kind="dark" onClick={() => onApply(moveHome(life, "own-house"))}>
+                    Move into this house · ₵60
+                  </Btn>
+                )}
+                <Btn kind="green" onClick={() => onArrange?.()}>
+                  Arrange the inside
+                </Btn>
               </div>
             ) : (
               <div className="mt-3">
                 <Btn kind="dark" disabled={left > 0} onClick={() => onApply(buildNext(life, plot.id))}>
-                  {left > 0 ? `Building… ${wait(left)}` : `Start ${STAGES[plot.stage + 1].toLowerCase()} · ${cedis(stageCost(plot))}`}
+                  {left > 0 ? `Building… ${left}s` : `Start ${STAGES[plot.stage + 1].toLowerCase()} · ${cedis(stageCost(plot))}`}
                 </Btn>
               </div>
             )}
@@ -144,23 +177,6 @@ export function LandApp({ life, onBack, onApply }: { life: Life; onBack: () => v
           </Card>
         );
       })}
-      <Label>LAND FOR SALE</Label>
-      <p className="-mt-1 text-xs text-[#5c6b82]">Buy a plot, build in five stages, then let the rooms. Tenants pay daily rent, held for up to two weeks. Some plots come with land guards.</p>
-      {LAND.map((land) => (
-        <div key={land.id} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#f3e6d4] text-xl">📍</span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{land.label}</span>
-            <span className="block text-xs text-[#5c6b82]">{land.blurb}</span>
-            <span className="block text-xs font-semibold text-[#006B3F]">
-              {land.rooms} rooms · up to {cedis(land.rooms * land.rent)} a day
-            </span>
-          </span>
-          <Btn kind="dark" disabled={life.cash < land.price || plots.length >= MAX_PLOTS} onClick={() => onApply(buyLand(life, land.id))}>
-            {cedis(land.price)}
-          </Btn>
-        </div>
-      ))}
     </Screen>
   );
 }
@@ -476,6 +492,28 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
           </div>
           <p className="mt-2 text-xs text-[#5c6b82]">Fuel {Math.round(life.car.fuel)}%</p>
           <Bar value={life.car.fuel / 100} color={life.car.fuel < 20 ? "#CE1126" : "#f0b429"} />
+          <p className={`mt-2 text-xs ${carSpoilt(life) ? "font-semibold text-[#CE1126]" : "text-[#5c6b82]"}`}>
+            {carSpoilt(life) ? "Spoilt. Kojo, Esi and Kwame are at the fitting shop on the map." : `Condition ${carCondition(life)}%${carCondition(life) < 35 ? " · it is knocking" : ""}`}
+          </p>
+          <Bar value={carCondition(life) / 100} color={carSpoilt(life) || carCondition(life) < 35 ? "#CE1126" : "#006B3F"} />
+          <p className="mt-3 text-xs font-semibold text-[#5c6b82]">Colour · respray {cedis(RESPRAY)}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CAR_PAINTS.map((paint) => {
+              const on = carPaint(life) === paint.hex;
+              return (
+                <button
+                  key={paint.id}
+                  type="button"
+                  aria-label={paint.label}
+                  title={paint.label}
+                  disabled={carSpoilt(life)}
+                  onClick={() => onApply(repaintCar(life, paint.hex))}
+                  className={`h-8 w-8 rounded-full border-2 disabled:opacity-40 ${on ? "border-[#121212]" : "border-white"} shadow-sm`}
+                  style={{ background: paint.hex }}
+                />
+              );
+            })}
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Btn kind="gold" disabled={fillCost(life) < 1} onClick={() => onApply(fillUp(life))}>
               Fill up {cedis(fillCost(life))}
@@ -496,7 +534,7 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
               </Btn>
             )}
           </div>
-          <p className="mt-2 text-xs text-[#5c6b82]">On the map, Drive is ready. You take this car yourself. No fare, just fuel.</p>
+          <p className="mt-2 text-xs text-[#5c6b82]">On the map, Drive is ready while the car is sound. No fare, just fuel. A spoilt car goes to the fitting shop.</p>
         </Card>
       ) : null}
       <Label>ABOSSEY OKAI CAR LOT</Label>

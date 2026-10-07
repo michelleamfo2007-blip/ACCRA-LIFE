@@ -47,7 +47,7 @@ export function HomeApp({ life, onBack, onApply, onLand }: { life: Life; onBack:
               {here ? (
                 <p className="text-xs font-semibold text-[#006B3F]">You live here</p>
               ) : (
-                <Btn kind="dark" disabled={wait > 0 || life.cash < cost} onClick={() => onApply(moveHome(life, home.id))}>
+                <Btn kind="dark" disabled={(home.id !== "own-house" && wait > 0) || life.cash < cost} onClick={() => onApply(moveHome(life, home.id))}>
                   Move · {cedis(cost)}
                 </Btn>
               )}

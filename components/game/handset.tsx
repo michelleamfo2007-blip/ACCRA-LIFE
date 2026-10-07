@@ -130,6 +130,7 @@ export function Handset({
   sky,
   onGo,
   onFly,
+  onArrange,
   openTo,
 }: {
   openTo?: string | null;
@@ -138,6 +139,7 @@ export function Handset({
   sky: Weather;
   onGo: (spot: string) => void;
   onFly: (routeId: string, cabin: string) => void;
+  onArrange?: () => void;
   friends: { username: string; name: string }[];
   life: Life;
   username: string;
@@ -466,7 +468,7 @@ export function Handset({
               {app === "radio" ? <NoteScreen title="Radio" onBack={() => setApp("home")} lines={["Joy FM is on.", "Highlife, a gospel hour, and whoever just walked into the studio."]} /> : null}
               {app === "news" ? <NoteScreen title="City desk" onBack={() => setApp("home")} lines={life.inbox.length ? life.inbox : ["Accra is moving. Your phone will hear about it."]} /> : null}
               {app === "games" ? <GamesApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
-              {app === "land" ? <LandApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "land" ? <LandApp life={life} onBack={() => setApp("home")} onApply={onSocial} onArrange={onArrange} /> : null}
               {app === "house" ? <HomeApp life={life} onBack={() => setApp("home")} onApply={onSocial} onLand={() => setApp("land")} /> : null}
               {app === "turf" ? <TurfApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onApply={onSocial} onNet={onNet} /> : null}
               {app === "invite" ? <InviteApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} onNet={onNet} /> : null}

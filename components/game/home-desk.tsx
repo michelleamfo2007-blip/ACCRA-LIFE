@@ -29,6 +29,7 @@ export function HomeDesk({
   onInvite,
   onVisit,
   onBuyHint,
+  onArrange,
 }: {
   life: Life;
   cloud: boolean;
@@ -42,6 +43,7 @@ export function HomeDesk({
   onInvite: (username: string) => void;
   onVisit: (username: string) => void;
   onBuyHint?: () => void;
+  onArrange?: () => void;
 }) {
   const guests = activeGuests(life);
   const coming = enRouteGuests(life);
@@ -133,6 +135,11 @@ export function HomeDesk({
           >
             🚪 Invite over
           </button>
+          {onArrange ? (
+            <button type="button" onClick={onArrange} className="rounded-full bg-[#121212] px-3 py-1.5 text-[11px] font-bold text-white">
+              Arrange inside
+            </button>
+          ) : null}
           {onBuyHint ? (
             <button type="button" onClick={onBuyHint} className="rounded-full bg-[#fff4c2] px-3 py-1.5 text-[11px] font-bold text-[#7a3b0c]">
               Upgrade home

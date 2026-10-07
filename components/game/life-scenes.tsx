@@ -157,7 +157,7 @@ export function StreetRide({
   return (
     <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0a1020]" : "bg-[#7eb8e0]"}`}>
       {camera === "chase" ? (
-        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} sky={sky} carId={life.car?.id} />
+        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} sky={sky} carId={life.car?.id} paint={life.car?.color} />
       ) : null}
       {sky?.rain ? <div className={`rain-layer pointer-events-none absolute inset-0 z-[5] ${sky.flood ? "rain-heavy" : ""}`} aria-hidden /> : null}
       {sky?.harmattan && !sky.rain ? <div className="harmattan-layer pointer-events-none absolute inset-0 z-[5]" aria-hidden /> : null}
@@ -387,7 +387,7 @@ function Vehicle({
     );
   }
   if (ride === "car") {
-    const paint = carOf(life.car?.id)?.paint ?? "#2f3a4a";
+    const paint = life.car?.color || carOf(life.car?.id)?.paint || "#2f3a4a";
     return (
       <div className={`cab ${night ? "ride-lit" : ""}`} style={{ background: paint }}>
         <span className="cab-glass">{rider}</span>

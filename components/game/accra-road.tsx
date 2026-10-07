@@ -710,7 +710,7 @@ function heroLat(ride: RideId) {
   return LANES[PLAYER_LANE].lat;
 }
 
-function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boolean, carId?: string | null): World {
+function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boolean, carId?: string | null, paint?: string | null): World {
   const bins: Bins = { geo: new Set(), mat: new Set(), tex: new Set() };
   const root = new Group();
   root.name = "accra-road";
@@ -933,7 +933,7 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
   let hero: Actor | null = null;
   let spot: SpotLight | null = null;
   if (kind) {
-    const color = owned ? owned.paint : kind === "taxi" ? "#f0c014" : kind === "trotro" ? "#f7f4ef" : kind === "coach" ? "#f4efe6" : "#2a3344";
+    const color = paint || (owned ? owned.paint : kind === "taxi" ? "#f0c014" : kind === "trotro" ? "#f7f4ef" : kind === "coach" ? "#f4efe6" : "#2a3344");
     hero = makeVehicle(bins, kind, color, shadows, slogan, rubber, glass, steel, shadowMat);
     hero.lane = PLAYER_LANE;
     hero.dir = 1;
@@ -1351,6 +1351,7 @@ export function AccraRoad({
   look,
   sky,
   carId,
+  paint,
 }: {
   ride: RideId;
   night: boolean;
@@ -1360,6 +1361,7 @@ export function AccraRoad({
   look: Look;
   sky?: RoadSky;
   carId?: string | null;
+  paint?: string | null;
 }) {
   const budget = useBudget();
   const reduce = useReduce();
@@ -1381,14 +1383,14 @@ export function AccraRoad({
   skyRef.current = sky;
 
   useLayoutEffect(() => {
-    const world = buildWorld(budget, ride, slogan, !mobile, carId);
+    const world = buildWorld(budget, ride, slogan, !mobile, carId, paint);
     worldRef.current = world;
     setGen((n) => n + 1);
     return () => {
       world.dispose();
       if (worldRef.current === world) worldRef.current = null;
     };
-  }, [budget, ride, slogan, mobile, carId]);
+  }, [budget, ride, slogan, mobile, carId, paint]);
 
   const start = blankFrame();
   frameAt(PLAYER_START, start);

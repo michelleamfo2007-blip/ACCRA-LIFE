@@ -22,7 +22,7 @@ import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
 import { TradeSheet } from "@/components/game/trade-sheet";
 import { buyGood, sellGood } from "@/lib/game/trade";
 import { syncBadges } from "@/lib/game/badges";
-import { carRide } from "@/lib/game/garage";
+import { carRide, carSpoilt, repairCar } from "@/lib/game/garage";
 import { sickness } from "@/lib/game/health";
 import { dressedFor } from "@/lib/game/tailor";
 import { CODE_LABEL, EVENT_INFO, type HostHome, type LifeEvent, type Match } from "@/lib/game/net";
@@ -944,6 +944,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const [ping, setPing] = useState<InboxPing | null>(null);
   const playerEvents = usePlayerEvents(Boolean(account.cloud));
   const [phoneApp, setPhoneApp] = useState<string | null>(null);
+  const [arrangeHome, setArrangeHome] = useState(false);
   const [tourStep, setTourStep] = useState<TourId>("welcome");
   useAlertPings(life, flash);
   useTurnPings(account.username, Boolean(account.cloud), flash);
@@ -978,9 +979,9 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
-    if (life?.car) setRideId("car");
+    if (life?.car && !carSpoilt(life)) setRideId("car");
     else setRideId((current) => (current === "car" ? "trotro" : current));
-  }, [life?.car?.id]);
+  }, [life?.car?.id, life?.car?.broken, life?.car?.condition]);
   if (!life) return null;
   const mood = moodOf(life.needs);
   const quest = questFor(life);
@@ -995,7 +996,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   const showGuide = Boolean(guide && (guide.done(life) || guide.title !== quest.title));
   const extraHints = [showGem, showCity, life.dumsor, showGuide, Boolean(sick)].filter(Boolean).length;
   const phoneHint = hintsOpen ? "" : "hidden sm:block";
-  const homeRide = farRide(car && (life.car?.fuel ?? 0) >= 6 ? car : rideIn(RIDES[1], city.weather), life.where, "home");
+  const homeRide = farRide(car && (life.car?.fuel ?? 0) >= 6 && !carSpoilt(life) ? car : rideIn(RIDES[1], city.weather), life.where, "home");
   const touring = !life.tour && !trip && !flight && !shiftId && !payday;
   const tourCard = TOUR.find((item) => item.id === tourStep) ?? TOUR[0];
 
@@ -1210,6 +1211,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
           onVisit={(username) => void visitHost(username)}
           onUpgrade={() => setTab("buy")}
+          startArrange={arrangeHome}
+          onArrangeSeen={() => setArrangeHome(false)}
         />
       ) : tab === "home" ? (
         <VenueFloor
@@ -1613,6 +1616,14 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setPlaceId(null);
           }}
           onAct={(verb) => {
+            if (verb.id.startsWith("fix-")) {
+              if (life.where !== place.id) {
+                flash("Get to the fitting shop first. A trotro will do if the car will not start.");
+                return;
+              }
+              apply(repairCar(life, verb.id.slice(4)));
+              return;
+            }
             if (life.where !== place.id) {
               flash("Pick a ride, then go.");
               return;
@@ -1642,9 +1653,13 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           life={life}
           place={trip.name}
           ride={trip.ride}
-          onBack={() => setTrip(null)}
+          onBack={() => {
+            setTrip(null);
+            setArrangeHome(false);
+          }}
           onMap={() => {
             setTrip(null);
+            setArrangeHome(false);
             setTab("map");
           }}
           sky={city.weather}
@@ -1654,9 +1669,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             const result = goTo(life, going.placeId, going.ride);
             if (result.error) {
               flash(result.error);
+              setArrangeHome(false);
               return;
             }
             apply(result);
+            if (going.placeId !== "home") setArrangeHome(false);
             setTab("home");
           }}
         />
@@ -1861,6 +1878,20 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setFlight({ routeId, cabin: cabin as Cabin });
             setTab("home");
             setPhoneApp(null);
+          }}
+          onArrange={() => {
+            if (life.homeId !== "own-house") {
+              flash("Move into the house first. Then you arrange the rooms.");
+              return;
+            }
+            setPhoneApp(null);
+            if (life.where !== "home") {
+              setArrangeHome(true);
+              setTrip({ name: "Home", placeId: "home", ride: homeRide });
+              return;
+            }
+            setTab("home");
+            setArrangeHome(true);
           }}
           onVisit={(host) => void visitHost(host)}
           friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}

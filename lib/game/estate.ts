@@ -11,7 +11,7 @@ export const LAND = [
 
 export const STAGES = ["Bare plot", "Foundation", "Blocks and walls", "Roofing", "Plaster and paint", "Finished house"];
 const STAGE_COST = [0.3, 0.45, 0.3, 0.25, 0.2];
-export const STAGE_HOURS = 12;
+export const STAGE_SECONDS = 8;
 export const MAX_PLOTS = 3;
 const RENT_DAYS_CAP = 14;
 
@@ -26,9 +26,11 @@ export function stageCost(plot: Plot) {
   return Math.round(landOf(plot.area).price * STAGE_COST[plot.stage]);
 }
 
-export function buildWait(life: Life, plot: Plot) {
-  if (plot.stage === 0) return 0;
-  return Math.max(0, STAGE_HOURS * 60 - (life.minutes - plot.stageAt));
+/** Seconds left before the next stage can start. Wall clock, so a stage is a few seconds. */
+export function buildWait(plot: Plot, now = Date.now()) {
+  if (plot.stage <= 0 || plot.stage >= STAGES.length - 1) return 0;
+  if (!plot.readyAt) return 0;
+  return Math.max(0, Math.ceil((plot.readyAt - now) / 1000));
 }
 
 function settleGuard(life: Life, plot: Plot): Plot {
@@ -90,12 +92,19 @@ export function buildNext(life: Life, plotId: string): StepResult {
   if (!plot) return { life, notes: [], error: "That plot is gone." };
   if (plot.guard) return { life, notes: [], error: plot.guard === "court" ? "Wait for the court to clear the land guards." : "Deal with the land guards first." };
   if (plot.stage >= STAGES.length - 1) return { life, notes: [], error: "The house is finished." };
-  const wait = buildWait(life, plot);
-  if (wait > 0) return { life, notes: [], error: `The builders are still on ${STAGES[plot.stage].toLowerCase()}. Back in ${Math.ceil(wait / 60)}h.` };
+  const wait = buildWait(plot);
+  if (wait > 0) return { life, notes: [], error: `The builders are still on ${STAGES[plot.stage].toLowerCase()}. ${wait}s left.` };
   const cost = stageCost(plot);
   if (life.cash < cost) return { life, notes: [], error: `${STAGES[plot.stage + 1]} costs ${cedis(cost)}.` };
   const done = plot.stage + 1 === STAGES.length - 1;
-  const next = withPlot(life, plotId, (item) => ({ ...item, stage: item.stage + 1, stageAt: life.minutes, spent: item.spent + cost, lastRent: life.minutes }));
+  const next = withPlot(life, plotId, (item) => ({
+    ...item,
+    stage: item.stage + 1,
+    stageAt: life.minutes,
+    readyAt: done ? undefined : Date.now() + STAGE_SECONDS * 1000,
+    spent: item.spent + cost,
+    lastRent: life.minutes,
+  }));
   next.cash -= cost;
   const line = done ? `Your house in ${landOf(plot.area).label} is finished. Find tenants.` : `Builders started ${STAGES[plot.stage + 1].toLowerCase()} in ${landOf(plot.area).label}.`;
   logLine(next, line);

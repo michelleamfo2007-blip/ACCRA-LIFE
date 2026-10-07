@@ -53,6 +53,8 @@ export function RoomView({
   friends = [],
   invites = [],
   onUpgrade,
+  startArrange = false,
+  onArrangeSeen,
 }: {
   life: Life;
   onAct: (id: string) => void;
@@ -74,6 +76,8 @@ export function RoomView({
   friends?: { username: string; name: string }[];
   invites?: { from: string; at: string }[];
   onUpgrade?: () => void;
+  startArrange?: boolean;
+  onArrangeSeen?: () => void;
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
   const dark = life.dumsor && !hasCurrent(life.inventory);
@@ -91,6 +95,7 @@ export function RoomView({
   const [picked, setPicked] = useState<string | null>(null);
   const [fixture, setFixture] = useState<FixtureId | null>(null);
   const [draft, setDraft] = useState<Placed | null>(null);
+  const [arrange, setArrange] = useState(false);
 
   function canInterrupt() {
     return !busy.current || seated.current;
@@ -101,6 +106,12 @@ export function RoomView({
     onRunRef.current = onRun;
     onMapRef.current = onMap;
   }, [onAct, onRun, onMap]);
+
+  useEffect(() => {
+    if (!startArrange) return;
+    setArrange(true);
+    onArrangeSeen?.();
+  }, [startArrange, onArrangeSeen]);
 
   function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean) {
     walkTo(target, null, () => {
@@ -303,7 +314,7 @@ export function RoomView({
           😴 Sleepover · breakfast gist in the morning
         </div>
       ) : null}
-      {!draft && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInvite && onVisit ? (
+      {!draft && !arrange && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInvite && onVisit ? (
         <HomeDesk
           life={life}
           cloud={cloud}
@@ -317,6 +328,20 @@ export function RoomView({
           onInvite={onInvite}
           onVisit={onVisit}
           onBuyHint={onUpgrade}
+          onArrange={() => setArrange(true)}
+        />
+      ) : null}
+      {arrange && !draft ? (
+        <ArrangeTray
+          life={life}
+          onClose={() => setArrange(false)}
+          onBuy={() => onUpgrade?.()}
+          onPick={(piece) => {
+            setPicked(null);
+            setFixture(null);
+            setDraft(piece);
+            setArrange(false);
+          }}
         />
       ) : null}
       {!draft && !fixture && !picked ? (
@@ -429,6 +454,60 @@ export function RoomView({
         onPlace={commitDraft}
         onCancel={() => setDraft(null)}
       />
+    </div>
+  );
+}
+
+function ArrangeTray({
+  life,
+  onClose,
+  onBuy,
+  onPick,
+}: {
+  life: Life;
+  onClose: () => void;
+  onBuy: () => void;
+  onPick: (piece: Placed) => void;
+}) {
+  const pieces = SHOP.filter((item) => life.inventory.includes(item.id) && !item.consume && item.kind !== "floor" && item.kind !== "bed");
+  return (
+    <div className="absolute inset-x-3 bottom-[max(4.8rem,env(safe-area-inset-bottom))] z-40 max-h-[42vh] overflow-auto rounded-[24px] bg-white p-3 shadow-[0_16px_50px_rgba(22,32,60,.22)]">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold">Arrange the inside</p>
+        <button type="button" onClick={onClose} className="text-xs font-semibold text-[#5c6b82]">
+          Done
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-[#5c6b82]">Tap a piece, drag it on the floor, then Place. Turn it with the blue button.</p>
+      {pieces.length === 0 ? (
+        <button type="button" onClick={onBuy} className="mt-3 w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
+          Buy furniture
+        </button>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {pieces.map((item) => {
+            const down = (life.furniture ?? []).find((piece) => piece.id === item.id);
+            const parked = (life.stored ?? []).includes(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onPick(down ?? { id: item.id, x: 0.2, z: 0.6, rot: 0 })}
+                className="flex w-full items-center gap-3 rounded-2xl bg-[#f4f7fb] px-3 py-2 text-left"
+              >
+                <span className="h-8 w-8 rounded-lg" style={{ background: item.color }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{item.name}</span>
+                  <span className="block text-[11px] text-[#5c6b82]">{down ? "In the room · move it" : parked ? "Stored · put it down" : "Put it down"}</span>
+                </span>
+              </button>
+            );
+          })}
+          <button type="button" onClick={onBuy} className="w-full rounded-full bg-[#fff4c2] py-2.5 text-xs font-bold text-[#7a3b0c]">
+            Buy more
+          </button>
+        </div>
+      )}
     </div>
   );
 }

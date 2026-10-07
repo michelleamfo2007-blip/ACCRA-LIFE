@@ -1,5 +1,5 @@
 import { BIG_HOMES, HOMES, JOBS, JOB_RANKS, RANK_CAREER, RANK_SHIFTS, cedis, cloneLife, homeById, logLine, passTime, rankOf, spotById, type Home, type Life, type StepResult } from "@/lib/game/world";
-import { STAGES } from "@/lib/game/estate";
+import { STAGES, landOf } from "@/lib/game/estate";
 
 export const ASK_GAP = 1440;
 export const MOVE_GAP = 4320;
@@ -62,6 +62,18 @@ export function moveHome(life: Life, homeId: string): StepResult {
   const home = movingHomes(life).find((item) => item.id === homeId);
   if (!home) return { life, notes: [], error: homeId === "own-house" ? "Finish building a house on your land first." : "That place is not available." };
   if (home.id === life.homeId) return { life, notes: [], error: "You already live there." };
+  if (home.id === "own-house") {
+    if (life.cash < MOVER_FEE) return { life, notes: [], error: `The movers want ${cedis(MOVER_FEE)}.` };
+    const timed = passTime(cloneLife(life), 2).life;
+    timed.cash -= MOVER_FEE;
+    timed.homeId = home.id;
+    timed.movedAt = timed.minutes;
+    const plot = (life.plots ?? []).find((item) => item.stage >= STAGES.length - 1);
+    const area = plot ? landOf(plot.area).label : "your plot";
+    const line = `You moved into the house you built in ${area}. No more Saturday rent.`;
+    logLine(timed, line);
+    return { life: timed, notes: [line] };
+  }
   const wait = moveWait(life);
   if (wait > 0) return { life, notes: [], error: `You just moved. Unpack first. Ready in ${Math.ceil(wait / 60)}h.` };
   const cost = moveCost(life, home.id);
