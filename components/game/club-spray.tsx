@@ -22,79 +22,20 @@ type Note = {
   drift: number;
 };
 type Pop = { id: string; text: string; x: number };
+type Bit = { id: string; emoji: string; x: number; ms: number; born: number };
 
-/** Face colours people recognise on Ghana notes. Original drawing, not a copied bank design. */
-const FACES: { min: number; paper: string; ink: string }[] = [
-  { min: 100, paper: "#0e6a66", ink: "#f6f1e4" },
-  { min: 50, paper: "#8a4518", ink: "#f8f1e6" },
-  { min: 20, paper: "#1a4c8c", ink: "#f4f7fb" },
-  { min: 10, paper: "#5a3488", ink: "#f7f3fb" },
-  { min: 5, paper: "#146b45", ink: "#f3faf6" },
-  { min: 0, paper: "#a61f2b", ink: "#fff6f4" },
-];
+const FUN = ["✨", "🍾", "👑", "🎉", "🎶", "⭐", "💃", "🔥", "🥂", "💫"];
 
-function faceOf(value: number, gold: boolean) {
-  if (gold) return { paper: "#d7b15a", ink: "#2c220c" };
-  return FACES.find((face) => value >= face.min) ?? FACES[FACES.length - 1];
-}
-
-function serialOf(id: string) {
-  let n = 0;
-  for (let i = 0; i < id.length; i += 1) n = (n * 33 + id.charCodeAt(i)) >>> 0;
-  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  return `${letters[n % 24]}${letters[(n >> 5) % 24]} ${100000 + (n % 900000)}`;
-}
-
-function CediNote({ value, gold, serial }: { value: number; gold: boolean; serial: string }) {
-  const face = faceOf(value, gold);
-  const label = String(value);
-  const gid = serial.replace(/\s/g, "");
+function CediNote({ gold }: { gold: boolean }) {
   return (
-    <svg
-      viewBox="0 0 168 74"
-      className="block h-[1.35rem] w-[3.05rem] drop-shadow-[0_2px_3px_rgba(0,0,0,0.45)]"
-      aria-hidden="true"
-    >
-      <defs>
-        <pattern id={`grain-${gid}`} width="4" height="4" patternUnits="userSpaceOnUse">
-          <path d="M0 4 L4 0" stroke={face.ink} strokeOpacity="0.13" strokeWidth="0.4" />
-        </pattern>
-      </defs>
-      <rect width="168" height="74" rx="4" fill={face.paper} />
-      <rect width="168" height="74" rx="4" fill={`url(#grain-${gid})`} />
-      <rect x="3" y="3" width="162" height="68" rx="2" fill="none" stroke={face.ink} strokeOpacity="0.55" strokeWidth="1.2" />
-      <rect x="6" y="6" width="156" height="62" rx="1.5" fill="none" stroke={face.ink} strokeOpacity="0.28" strokeWidth="0.6" />
-      <rect x="0" y="0" width="5" height="74" fill="#CE1126" />
-      <rect x="0" y="24" width="5" height="26" fill="#FCD116" />
-      <rect x="0" y="50" width="5" height="24" fill="#006B3F" />
-      <text x="14" y="16" fill={face.ink} fontSize="7" fontFamily="ui-sans-serif, system-ui" fontWeight="700" letterSpacing="1.6">
-        GHANA
-      </text>
-      <text x="14" y="46" fill={face.ink} fontSize={label.length > 2 ? 22 : 28} fontFamily="ui-serif, Georgia, serif" fontWeight="700">
-        {label}
-      </text>
-      <text x="14" y="58" fill={face.ink} fontSize="6" fontFamily="ui-sans-serif, system-ui" letterSpacing="1.4" opacity="0.85">
-        CEDIS
-      </text>
-      <text x="14" y="67" fill={face.ink} fontSize="5.5" fontFamily="ui-monospace, monospace" opacity="0.7">
-        {serial}
-      </text>
-      <circle cx="128" cy="37" r="18" fill="none" stroke={face.ink} strokeOpacity="0.45" />
-      <circle cx="128" cy="37" r="14" fill={face.ink} fillOpacity="0.12" stroke={face.ink} strokeOpacity="0.7" />
-      <text x="128" y="42" textAnchor="middle" fill={face.ink} fontSize="16">
-        ★
-      </text>
-      <text x="154" y="18" textAnchor="end" fill={face.ink} fontSize="11" fontFamily="ui-serif, Georgia, serif" fontWeight="700">
-        {label}
-      </text>
-      <text x="154" y="64" textAnchor="end" fill={face.ink} fontSize="8" fontFamily="ui-serif, Georgia, serif" opacity="0.8">
-        {label}
-      </text>
-    </svg>
+    <span className="relative block h-3.5 w-5" aria-hidden>
+      <span className={`absolute left-0.5 top-0.5 h-2.5 w-4 -rotate-6 rounded-[2px] ${gold ? "bg-[#c9a227]" : "bg-[#147a3d]"}`} />
+      <span className={`absolute left-0 top-0 grid h-3 w-[1.15rem] place-items-center rounded-[2px] text-[8px] font-black leading-none shadow-sm ${gold ? "bg-[#FCD116] text-[#3a2a08]" : "bg-[#3dce6e] text-[#083018]"}`}>
+        ₵
+      </span>
+    </span>
   );
 }
-
-const RICHER = ["Kwame", "Akosua", "Kojo", "Esi", "Nana"];
 
 function pick<T>(list: T[]) {
   return list[Math.floor(Math.random() * list.length)];
@@ -132,6 +73,7 @@ export function ClubSpray({
 }) {
   const [hype, setHype] = useState(18);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [bits, setBits] = useState<Bit[]>([]);
   const [pops, setPops] = useState<Pop[]>([]);
   const [line, setLine] = useState("Chale, who dey spray tonight?");
   const [banner, setBanner] = useState("");
@@ -140,9 +82,7 @@ export function ClubSpray({
   const lastTap = useRef(0);
   const combo = useRef({ n: 0, at: 0 });
   const taken = useRef(new Set<string>());
-  const hypeRef = useRef(hype);
   const momentRef = useRef(false);
-  hypeRef.current = hype;
   momentRef.current = moment;
   const left = spraysLeft(life);
 
@@ -166,32 +106,33 @@ export function ClubSpray({
   }, [hype, moment]);
 
   useEffect(() => {
-    const kick = window.setTimeout(() => {
-      rain(pick(RICHER), 80, false, false);
-    }, 2200);
     const id = window.setInterval(() => {
       if (document.hidden) return;
-      if (Math.random() > 0.7) return;
-      const who = pick(RICHER);
-      const cost = hypeRef.current > 70 ? 200 : 80;
-      rain(who, cost, false, momentRef.current);
-    }, 14000);
-    return () => {
-      window.clearTimeout(kick);
-      window.clearInterval(id);
-    };
+      const born = Date.now();
+      const bit: Bit = {
+        id: `fun-${born}`,
+        emoji: pick(FUN),
+        x: 8 + Math.random() * 84,
+        ms: 6400 + Math.floor(Math.random() * 2800),
+        born,
+      };
+      setBits((list) => [...list, bit].slice(-14));
+    }, 700);
+    return () => window.clearInterval(id);
   }, []);
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      setNotes((list) => list.filter((note) => Date.now() - note.born < note.ms));
+      const now = Date.now();
+      setNotes((list) => list.filter((note) => now - note.born < note.ms));
+      setBits((list) => list.filter((bit) => now - bit.born < bit.ms));
     }, 400);
     return () => window.clearInterval(id);
   }, []);
 
   function rain(who: string, cost: number, mine: boolean, gold: boolean) {
     const born = Date.now();
-    const bag = buildNotes(cost, gold);
+    const bag = buildNotes(cost, gold).slice(0, gold ? 10 : 7);
     const next = bag.map((value, index) => ({
       id: `${born}-${index}-${value}`,
       value: gold ? Math.round(value * 1.5) : value,
@@ -263,10 +204,14 @@ export function ClubSpray({
     <div className={`pointer-events-none absolute inset-0 z-[60] ${shake ? "club-shake" : ""}`}>
       <style>{`
         @keyframes club-note {
-          0% { top: 24%; transform: rotate(var(--tilt)); opacity: 1; }
-          40% { top: 32%; transform: rotate(calc(var(--tilt) * -0.55)); opacity: 1; }
-          75% { top: 46%; transform: rotate(calc(var(--tilt) * 0.35)); opacity: 1; }
-          100% { top: 72%; transform: rotate(calc(var(--tilt) * -0.2)); opacity: 0.05; }
+          0% { top: 28%; transform: translateX(0) rotate(var(--tilt)); opacity: 0; }
+          12% { opacity: 1; }
+          100% { top: 78%; transform: translateX(var(--drift)) rotate(calc(var(--tilt) * -0.4)); opacity: 0.15; }
+        }
+        @keyframes club-bit {
+          0% { top: 22%; transform: translateX(0) scale(0.85); opacity: 0; }
+          15% { opacity: 0.95; }
+          100% { top: 70%; transform: translateX(18px) scale(1); opacity: 0; }
         }
         @keyframes club-pop {
           0% { transform: translateY(0); opacity: 1; }
@@ -279,7 +224,7 @@ export function ClubSpray({
           75% { transform: translateX(3px); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .club-note-fall { animation: none !important; top: 42% !important; }
+          .club-note-fall, .club-bit { animation: none !important; top: 42% !important; }
           .club-shake { animation: none !important; }
         }
       `}</style>
@@ -309,8 +254,18 @@ export function ClubSpray({
             tap(note);
           }}
         >
-          <CediNote value={note.value} gold={note.gold} serial={serialOf(note.id)} />
+          <CediNote gold={note.gold} />
         </button>
+      ))}
+      {bits.map((bit) => (
+        <span
+          key={bit.id}
+          className="club-bit pointer-events-none absolute text-sm leading-none"
+          style={{ left: `${bit.x}%`, animation: `club-bit ${bit.ms}ms linear forwards` }}
+          aria-hidden
+        >
+          {bit.emoji}
+        </span>
       ))}
       {pops.map((pop) => (
         <span

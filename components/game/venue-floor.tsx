@@ -823,12 +823,14 @@ function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | 
       {show.step === "cheer" ? (
         <>
           <div className="club-cheer-burst absolute inset-0" />
-          {Array.from({ length: 8 }, (_, i) => (
+          {["✨", "🍾", "👑", "🎉", "🥂", "💫", "🎶", "⭐"].map((emoji, i) => (
             <span
-              key={i}
-              className="absolute h-2 w-4 rounded-sm bg-[#c9a227] shadow-[0_0_6px_rgba(252,209,22,.7)]"
-              style={{ left: `${show.left - 8 + (i % 4) * 5}%`, top: `${show.top - 18 - (i % 3) * 4}%`, transform: `rotate(${i * 18 - 40}deg)` }}
-            />
+              key={emoji}
+              className="absolute text-sm leading-none"
+              style={{ left: `${show.left - 10 + (i % 4) * 6}%`, top: `${show.top - 20 - (i % 3) * 5}%` }}
+            >
+              {emoji}
+            </span>
           ))}
         </>
       ) : null}
