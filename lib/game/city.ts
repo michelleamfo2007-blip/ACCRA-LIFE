@@ -95,6 +95,13 @@ function weekOfYear(at: Date) {
   return Math.floor((at.getTime() - start) / (7 * 86400000));
 }
 
+const EID: { y: number; m: number; d: number; id: string; title: string; detail: string }[] = [
+  { y: 2026, m: 2, d: 20, id: "eid-fitr", title: "Eid al-Fitr", detail: "The fast is over. New clothes, visits, and a long table of rice." },
+  { y: 2026, m: 4, d: 27, id: "eid-adha", title: "Eid al-Adha", detail: "Prayers at dawn, then meat shared through the house and the street." },
+  { y: 2027, m: 2, d: 10, id: "eid-fitr", title: "Eid al-Fitr", detail: "The fast is over. New clothes, visits, and a long table of rice." },
+  { y: 2027, m: 4, d: 17, id: "eid-adha", title: "Eid al-Adha", detail: "Prayers at dawn, then meat shared through the house and the street." },
+];
+
 function calendar(at: Date): CityEvent[] {
   const month = at.getUTCMonth();
   const day = at.getUTCDate();
@@ -195,6 +202,26 @@ function calendar(at: Date): CityEvent[] {
       detail: "Makola is full of fresh produce at holiday prices.",
       spots: ["makola", "osu-night-market"],
       verb: verb({ id: "ev-farmers", label: "Farmers' Day market run", detail: "Roasted corn, coconut and a bag of tomatoes for the week.", minutes: 45, cost: 8, effects: { hunger: 30, fun: 8 }, tag: "food", emoji: "🌽" }),
+    });
+  }
+  const eid = EID.find((feast) => feast.y === year && feast.m === month && feast.d === day);
+  if (eid) {
+    list.push({
+      id: eid.id,
+      title: eid.title,
+      emoji: "🌙",
+      detail: eid.detail,
+      spots: ["mosque", "makola"],
+      verb: verb({
+        id: `ev-${eid.id}`,
+        label: eid.id === "eid-adha" ? "Eid prayers, then visit the family" : "Eid prayers and a shared meal",
+        detail: "The mosque fills before sunrise. Afterwards somebody's house has rice and meat for anyone who passes.",
+        minutes: 120,
+        cost: 20,
+        effects: { fun: 22, social: 28, hunger: 28 },
+        tag: "church",
+        emoji: "🌙",
+      }),
     });
   }
   if (month === 11 && day >= 24 && day <= 26) {

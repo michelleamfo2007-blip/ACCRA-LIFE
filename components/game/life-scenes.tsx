@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IsoHuman } from "@/components/game/iso-human";
 import type { FlightPhase } from "@/components/game/flight-outside";
-import { accraHour, cedis, type Life, type Ride } from "@/lib/game/world";
+import type { Weather } from "@/lib/game/sky";
+import { accraHour, cedis, shiftNote, shiftPerformance, type Life, type Ride } from "@/lib/game/world";
 
 const FlightOutside = dynamic(() => import("@/components/game/flight-outside").then((mod) => mod.FlightOutside), { ssr: false });
 const AccraRoad = dynamic(() => import("@/components/game/accra-road").then((mod) => mod.AccraRoad), { ssr: false });
@@ -17,6 +18,16 @@ const LINES = [
   "Cantonments is quieter once you leave the main road.",
   "An okada filters between the bumpers and vanishes ahead.",
   "Almost there — you can smell the place before you see the gate.",
+];
+
+const RAIN_LINES = [
+  "Rain on the windscreen. The trotro ahead is crawling.",
+  "Puddles in the lane. A hawker still walks the bumpers with an umbrella.",
+  "The gutter is full. Everybody is late.",
+  "Wipers on. Brake lights all the way to the next light.",
+  "A taxi splashes the curb and keeps the fare high.",
+  "Circle looks flooded from here. You stay in the slow lane.",
+  "Almost there — the rain has not let up.",
 ];
 
 const ROAD_SIGNS = ["LIBERATION ROAD", "OXFORD STREET", "INDEPENDENCE AVE", "AIRPORT ROAD", "RING ROAD EAST", "SPINTEX ROAD", "GRAPHIC ROAD"];
@@ -75,6 +86,7 @@ export function StreetRide({
   life,
   place,
   ride,
+  sky,
   onArrive,
   onBack,
   onMap,
@@ -82,6 +94,7 @@ export function StreetRide({
   life: Life;
   place: string;
   ride: Ride;
+  sky?: Weather;
   onArrive: () => void;
   onBack: () => void;
   onMap?: () => void;
@@ -132,8 +145,10 @@ export function StreetRide({
   return (
     <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0a1020]" : "bg-[#7eb8e0]"}`}>
       {camera === "chase" ? (
-        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} />
+        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} sky={sky} />
       ) : null}
+      {sky?.rain ? <div className={`rain-layer pointer-events-none absolute inset-0 z-[5] ${sky.flood ? "rain-heavy" : ""}`} aria-hidden /> : null}
+      {sky?.harmattan && !sky.rain ? <div className="harmattan-layer pointer-events-none absolute inset-0 z-[5]" aria-hidden /> : null}
       {camera === "chase" ? null : (
       <div className={`street-world street-${camera} ${walking ? "street-on-foot" : `street-on-${ride.id}`} ${night ? "street-night" : ""} ${boarding ? "street-boarding" : ""}`}>
         <div className="street-sky" />
@@ -237,7 +252,7 @@ export function StreetRide({
           {ride.label} · {fare} · {left}m left
         </p>
         <p className="mt-1 text-[11px] leading-4 text-[#5c6b82]">
-          {boarding ? "Door open. Find your seat." : progress > 0.9 ? `${place} is just ahead.` : LINES[line]}
+          {boarding ? "Door open. Find your seat." : progress > 0.9 ? `${place} is just ahead.` : sky?.flood ? "The road is under water. Everyone is crawling." : sky?.rain ? RAIN_LINES[line] : sky?.harmattan ? "Harmattan haze. The city is a pale gold and the morning is cool." : LINES[line]}
         </p>
         <div className="mt-2.5 flex gap-2">
           {onMap ? (
@@ -410,7 +425,7 @@ export function ShiftFloor({
 }) {
   const [left, setLeft] = useState(8);
   const [view, setView] = useState<"desk" | "floor">("floor");
-  const performance = Math.min(96, 40 + Math.round(life.skills.career * 4));
+  const performance = shiftPerformance(life);
   const done = 8 - left;
   const doneRef = useRef(onDone);
   const finished = useRef(false);
@@ -443,6 +458,7 @@ export function ShiftFloor({
         <p className="text-xs text-white/70">{place}</p>
         <p className="mt-2 text-sm">No pay yet · stay {left}s</p>
         <p className="mt-1 text-xs text-white/75">Shift is {Math.round(minutes / 60) || 1} hrs on the clock · {performance}%</p>
+        <p className="mt-1 text-[11px] leading-4 text-white/70">{shiftNote(life)}</p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
           <div className="h-full rounded-full bg-[#006B3F]" style={{ width: `${performance}%` }} />
         </div>

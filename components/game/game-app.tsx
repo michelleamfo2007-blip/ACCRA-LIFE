@@ -82,6 +82,7 @@ import {
   claimTable,
   clearTable,
   moodOf,
+  shiftPerformance,
   payOffer,
   passTime,
   questFor,
@@ -1591,6 +1592,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
             setTrip(null);
             setTab("map");
           }}
+          sky={city.weather}
           onArrive={() => {
             const going = trip;
             setTrip(null);
@@ -1644,7 +1646,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               return;
             }
             apply(result);
-            setPayday({ earned: result.life.cash - before, performance: Math.min(96, 40 + life.skills.career * 4) });
+            setPayday({ earned: result.life.cash - before, performance: shiftPerformance(life) });
             setTab("home");
           }}
         />

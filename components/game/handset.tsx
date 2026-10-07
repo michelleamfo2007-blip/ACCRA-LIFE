@@ -35,6 +35,7 @@ import {
   hasCurrent,
   homeById,
   hourOf,
+  moodOf,
   invitePerson,
   rankOf,
   spareChange,
@@ -305,6 +306,7 @@ export function Handset({
                   stories={storyReady(life)}
                   guide={guideLeft(life).filter((step) => step.done(life)).length}
                   weather={weatherLine}
+                  mood={`${moodOf(life.needs).emoji} ${moodOf(life.needs).label}`}
                   clout={clout}
                   cloutTag={cloutLabel(clout)}
                   onOpen={setApp}
@@ -568,6 +570,7 @@ function HomeScreen({
   stories,
   guide,
   weather,
+  mood,
   clout,
   cloutTag,
   onOpen,
@@ -585,6 +588,7 @@ function HomeScreen({
   stories: number;
   guide: number;
   weather: string;
+  mood: string;
   clout: number;
   cloutTag: string;
   onOpen: (app: AppId) => void;
@@ -605,6 +609,7 @@ function HomeScreen({
           <p className="text-sm font-semibold">
             {clout} · {cloutTag}
           </p>
+          <p className="text-[11px] text-white/80">{mood}</p>
         </button>
         <button type="button" onClick={onPost} className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-[#121212]">
           Post

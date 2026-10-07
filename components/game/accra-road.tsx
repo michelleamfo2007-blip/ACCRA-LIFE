@@ -51,6 +51,7 @@ import {
 } from "three";
 
 type Kind = "taxi" | "trotro" | "private" | "suv" | "okada" | "keke" | "bus" | "truck" | "coach";
+export type RoadSky = { rain: boolean; flood: boolean; harmattan: boolean };
 type Phase = "go" | "slow" | "stop" | "cross";
 
 type Bins = { geo: Set<BufferGeometry>; mat: Set<Material>; tex: Set<Texture> };
@@ -98,6 +99,7 @@ type World = {
   time: number;
   nextPickup: number;
   pickup: Actor | null;
+  wet: Group;
   frame: Sample;
   dispose: () => void;
 };
@@ -462,7 +464,11 @@ function makePerson(bins: Bins, shirt: string, skin: string) {
   head.position.y = 1.38;
   const bowl = new Mesh(trackGeo(bins, new BoxGeometry(0.28, 0.08, 0.2)), trackMat(bins, new MeshStandardMaterial({ color: "#1f7a4d" })));
   bowl.position.set(0.22, 1.05, 0.12);
-  group.add(legL, legR, torso, head, bowl);
+  const brolly = new Mesh(trackGeo(bins, new CylinderGeometry(0.42, 0.46, 0.08, 8)), trackMat(bins, new MeshStandardMaterial({ color: "#121820", roughness: 0.7 })));
+  brolly.position.y = 1.62;
+  brolly.name = "brolly";
+  brolly.visible = false;
+  group.add(legL, legR, torso, head, bowl, brolly);
   return group;
 }
 
@@ -937,6 +943,29 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
     spot.target = target;
   }
 
+  const wet = new Group();
+  wet.name = "puddles";
+  const puddleMat = trackMat(bins, new MeshStandardMaterial({ color: "#7f97a8", roughness: 0.08, metalness: 0.45, transparent: true, opacity: 0.62, depthWrite: false }));
+  const puddleGeo = trackGeo(bins, new PlaneGeometry(2.4, 1.5));
+  for (const spot of [
+    { d: 54, lat: 2.1 },
+    { d: 88, lat: -1.4 },
+    { d: 124, lat: 3.2 },
+    { d: 168, lat: -2.2 },
+    { d: 214, lat: 1.6 },
+    { d: 258, lat: -3.1 },
+  ]) {
+    const pad = new Group();
+    const mesh = new Mesh(puddleGeo, puddleMat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.03;
+    pad.add(mesh);
+    place(pad, spot.d, spot.lat, 0.02, 1, frame);
+    wet.add(pad);
+  }
+  wet.visible = false;
+  root.add(wet);
+
   const people: Person[] = [];
   const shirts = ["#c45c9a", "#FCD116", "#006B3F", "#1d4e89", "#f4efe6"];
   const skins = ["#8d5a3b", "#6b3e2a", "#c48a62", "#4a2c22"];
@@ -963,6 +992,7 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
     time: 0,
     nextPickup: 6,
     pickup: null,
+    wet,
     frame,
     dispose: () => {
       bins.geo.forEach((geo) => geo.dispose());
@@ -970,6 +1000,30 @@ function buildWorld(budget: number, ride: RideId, slogan: string, shadows: boole
       bins.tex.forEach((tex) => tex.dispose());
     },
   };
+}
+
+function weatherPace(sky?: RoadSky) {
+  if (!sky) return 1;
+  if (sky.flood) return 0.46;
+  if (sky.rain) return 0.66;
+  if (sky.harmattan) return 0.92;
+  return 1;
+}
+
+function skyTone(night: boolean, sky?: RoadSky) {
+  if (sky?.harmattan && !sky.rain) {
+    return night
+      ? { bg: "#2a241c", fog: "#3a3228", near: 16, far: 72 }
+      : { bg: "#d8c7a4", fog: "#e4d2ae", near: 18, far: 80 };
+  }
+  if (sky?.rain) {
+    return night
+      ? { bg: "#0c121c", fog: "#1a2433", near: sky.flood ? 12 : 18, far: sky.flood ? 58 : 82 }
+      : { bg: "#6d8496", fog: "#8aa0b0", near: sky.flood ? 14 : 20, far: sky.flood ? 64 : 92 };
+  }
+  return night
+    ? { bg: "#12182c", fog: "#1c2638", near: 28, far: 120 }
+    : { bg: "#8ec6ea", fog: "#d5c6aa", near: 34, far: 128 };
 }
 
 function gapAhead(car: Actor, actors: Actor[]) {
@@ -1017,6 +1071,7 @@ function RoadSim({
   boardingRef,
   slowingRef,
   reduceRef,
+  skyRef,
   ride,
   sunRef,
 }: {
@@ -1026,6 +1081,7 @@ function RoadSim({
   boardingRef: { current: boolean };
   slowingRef: { current: boolean };
   reduceRef: { current: boolean };
+  skyRef: { current: RoadSky | undefined };
   ride: RideId;
   sunRef: { current: DirectionalLight | null };
 }) {
@@ -1038,6 +1094,9 @@ function RoadSim({
     if (!world) return;
     const step = reduceRef.current ? 0 : Math.min(0.05, dt);
     const night = nightRef.current;
+    const sky = skyRef.current;
+    const pace = weatherPace(sky);
+    world.wet.visible = Boolean(sky?.rain);
     world.time += step;
     const time = world.time;
     const frame = world.frame;
@@ -1057,10 +1116,11 @@ function RoadSim({
     const playerLane = LANES[PLAYER_LANE].lat;
     for (const car of world.actors) {
       if (!car.live) continue;
-      let limit = approachLimit(car.dist, car.dir, time, car.cruise);
+      let limit = approachLimit(car.dist, car.dir, time, car.cruise) * pace;
       if (time < car.hold) limit = 0;
       const ahead = gapAhead(car, world.actors);
-      const minGap = car.kind === "okada" || car.kind === "keke" ? 3.2 : 6.5;
+      const jam = sky?.flood ? 1.4 : sky?.rain ? 1.2 : 1;
+      const minGap = (car.kind === "okada" || car.kind === "keke" ? 3.2 : 6.5) * jam;
       if (ahead.clear < minGap) limit = 0;
       else if (ahead.clear < 16) limit = Math.min(limit, ahead.speed * (ahead.clear / 16));
       const rate = limit < car.speed ? 2.8 : 1.5;
@@ -1111,7 +1171,7 @@ function RoadSim({
     if (ride === "trek") target = 1.45;
     else if (boarding) target = 0;
     else if (slowingRef.current) target = ride === "train" ? 4 : 2.2;
-    else target = world.hero?.cruise ?? 11.6;
+    else target = (world.hero?.cruise ?? 11.6) * pace;
     if (ride !== "train" && ride !== "trek") {
       target = Math.min(target, approachLimit(world.playerDist, 1, time, target));
       let nearest = Infinity;
@@ -1176,14 +1236,14 @@ function RoadSim({
         const latHawker = MathUtils.clamp(LANES[stopped.lane].lat + wobble, -5.2, 5.2);
         place(person.group, stopped.dist + Math.sin(time * 0.8) * 1.2, latHawker, Math.abs(Math.sin(time * 6)) * 0.04, 1, frame);
       } else if (person.job === "cross") {
-        const index = LIGHTS.findIndex((_, i) => phaseAt(time, i) === "cross");
+        const index = sky?.flood ? -1 : LIGHTS.findIndex((_, i) => phaseAt(time, i) === "cross");
         person.group.visible = index >= 0;
         if (index >= 0) {
           const u = ((time * 0.22) + (person.group.id % 2) * 0.45) % 1;
           place(person.group, LIGHTS[index] + (person.group.id % 2) * 0.7, -5.6 + u * 11.2, Math.abs(Math.sin(time * 6)) * 0.04, 1, frame);
           person.group.rotation.y += Math.PI / 2;
         }
-      } else if (world.pickup && time < world.pickup.hold) {
+      } else if (world.pickup && time < world.pickup.hold && !sky?.flood) {
         person.group.visible = true;
         world.pickup.group.updateMatrixWorld(true);
         person.group.position.set(world.pickup.width * 0.5 + 0.45, 0, 0.3);
@@ -1191,6 +1251,8 @@ function RoadSim({
         person.group.position.y = 0;
         person.group.rotation.y = world.pickup.group.rotation.y;
       } else person.group.visible = false;
+      const brolly = person.group.getObjectByName("brolly");
+      if (brolly) brolly.visible = Boolean(sky?.rain) && person.group.visible;
     }
 
     frameAt(world.playerDist, frame);
@@ -1218,7 +1280,15 @@ function RoadSim({
       sun.position.set(frame.x + 18, night ? 18 : 26, frame.z + 12);
       sun.target.position.set(frame.x, 0, frame.z);
       if (!sun.target.parent) scene.add(sun.target);
-      sun.intensity = night ? 0.62 : 1.25;
+      const tone = skyTone(night, sky);
+      sun.intensity = night ? 0.62 : sky?.rain ? 0.55 : sky?.harmattan ? 0.85 : 1.25;
+      sun.color.set(sky?.harmattan && !sky.rain ? "#e7d3a4" : night ? "#9bb4d6" : "#fff5e8");
+      if (scene.background instanceof Color) scene.background.set(tone.bg);
+      if (scene.fog instanceof Fog) {
+        scene.fog.color.set(tone.fog);
+        scene.fog.near = tone.near;
+        scene.fog.far = tone.far;
+      }
     }
   });
 
@@ -1232,6 +1302,7 @@ export function AccraRoad({
   slowing,
   slogan,
   look,
+  sky,
 }: {
   ride: RideId;
   night: boolean;
@@ -1239,6 +1310,7 @@ export function AccraRoad({
   slowing: boolean;
   slogan: string;
   look: Look;
+  sky?: RoadSky;
 }) {
   const budget = useBudget();
   const reduce = useReduce();
@@ -1250,11 +1322,13 @@ export function AccraRoad({
   const boardingRef = useRef(boarding);
   const slowingRef = useRef(slowing);
   const reduceRef = useRef(reduce);
+  const skyRef = useRef(sky);
   const [gen, setGen] = useState(0);
   nightRef.current = night;
   boardingRef.current = boarding;
   slowingRef.current = slowing;
   reduceRef.current = reduce;
+  skyRef.current = sky;
 
   useLayoutEffect(() => {
     const world = buildWorld(budget, ride, slogan, !mobile);
@@ -1278,8 +1352,8 @@ export function AccraRoad({
         gl={{ antialias: !mobile, powerPreference: "high-performance", stencil: false }}
         style={{ width: "100%", height: "100%" }}
       >
-        <color attach="background" args={[night ? "#101624" : "#8ec6ea"]} />
-        <fog attach="fog" args={[night ? "#1c2638" : "#d5c6aa", night ? 28 : 34, night ? 120 : 128]} />
+        <color attach="background" args={[skyTone(night, sky).bg]} />
+        <fog attach="fog" args={[skyTone(night, sky).fog, skyTone(night, sky).near, skyTone(night, sky).far]} />
         <hemisphereLight args={[night ? "#243656" : "#d7ecff", night ? "#1a140e" : "#c4a36a", night ? 0.55 : 0.62]} />
         <ambientLight intensity={night ? 0.28 : 0.38} />
         <directionalLight
@@ -1319,23 +1393,25 @@ export function AccraRoad({
           boardingRef={boardingRef}
           slowingRef={slowingRef}
           reduceRef={reduceRef}
+          skyRef={skyRef}
           ride={ride}
           sunRef={sunRef}
         />
-        <Tone night={night} />
+        <Tone night={night} sky={sky} />
       </Canvas>
     </div>
   );
 }
 
-function Tone({ night }: { night: boolean }) {
+function Tone({ night, sky }: { night: boolean; sky?: RoadSky }) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   useLayoutEffect(() => {
+    const tone = skyTone(night, sky);
     gl.toneMapping = ACESFilmicToneMapping;
-    gl.toneMappingExposure = 1.05;
-    scene.background = new Color(night ? "#12182c" : "#8ec6ea");
-    scene.fog = new Fog(night ? "#1c2638" : "#d5c6aa", night ? 28 : 34, night ? 120 : 128);
-  }, [gl, scene, night]);
+    gl.toneMappingExposure = sky?.rain ? 0.92 : sky?.harmattan ? 0.98 : 1.05;
+    scene.background = new Color(tone.bg);
+    scene.fog = new Fog(tone.fog, tone.near, tone.far);
+  }, [gl, scene, night, sky?.rain, sky?.flood, sky?.harmattan]);
   return null;
 }

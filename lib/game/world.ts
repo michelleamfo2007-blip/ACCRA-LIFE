@@ -1108,6 +1108,32 @@ export function moodOf(needs: Needs) {
   return { emoji: "😩", label: "Drained" };
 }
 
+/** Food, rest, and mood change how a shift pays. Sickness is applied separately. */
+export function workMoodFactor(life: Life) {
+  const mood = moodOf(life.needs);
+  let factor = mood.label === "Happy" ? 1.12 : mood.label === "Okay" ? 1 : mood.label === "Stressed" ? 0.88 : 0.78;
+  if (life.needs.hunger < 30) factor *= 0.85;
+  else if (life.needs.hunger >= 70) factor *= 1.06;
+  if (life.needs.energy < 25) factor *= 0.82;
+  return factor;
+}
+
+export function shiftPerformance(life: Life) {
+  const base = Math.min(96, 40 + Math.round(life.skills.career * 4));
+  const sick = life.health?.sick ? 0.5 : 1;
+  return Math.max(12, Math.min(96, Math.round(base * workMoodFactor(life) * sick)));
+}
+
+export function shiftNote(life: Life) {
+  if (life.health?.sick) return "Working sick. The day is slow.";
+  if (life.needs.hunger < 30) return "You are hungry. The work is dragging.";
+  if (life.needs.energy < 25) return "You slept late. Everything feels heavy.";
+  const mood = moodOf(life.needs);
+  if (mood.label === "Happy") return "Good mood. The work moves.";
+  if (mood.label === "Stressed" || mood.label === "Drained") return `${mood.label}. The shift feels longer.`;
+  return "Steady shift.";
+}
+
 export function clampNeed(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -1495,7 +1521,7 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
     }
     if (after.traits.includes("hustler")) earn = Math.round(earn * 1.15);
     if (after.traits.includes("lazy")) earn = Math.round(earn * 0.85);
-    earn = Math.round(earn * jobBoost(after));
+    earn = Math.round(earn * jobBoost(after) * workMoodFactor(after));
   }
   if (earn > 0 && after.health?.sick) {
     earn = Math.round(earn * 0.5);
