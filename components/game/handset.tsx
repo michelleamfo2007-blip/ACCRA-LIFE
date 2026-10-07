@@ -14,6 +14,7 @@ import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
 import { guideLeft } from "@/lib/game/guide";
 import { askPromotion, nextRank } from "@/lib/game/ladder";
+import { askOver } from "@/lib/game/home-life";
 import { callPerson, cloutLabel, cloutOf, postClout, textPerson, weatherBrief, type CallKind } from "@/lib/game/phone-life";
 import { storyReady } from "@/lib/game/story";
 import { parseGroupThread, type SocialView } from "@/lib/game/net";
@@ -421,7 +422,7 @@ export function Handset({
                       });
                       return;
                     }
-                    const result = kind === "invite" ? invitePerson(life, name) : kind === "visit" ? visitPerson(life, name) : treatPerson(life, name);
+                    const result = kind === "invite" ? askOver(life, name, "gist") : kind === "visit" ? visitPerson(life, name) : treatPerson(life, name);
                     if (result.error) pushChat(thread, { who: "them", text: result.error, time });
                     else {
                       onSocial(result);
@@ -813,6 +814,9 @@ function CallsScreen({ life, onBack, onApply }: { life: Life; onBack: () => void
                   {kind.label}
                 </button>
               ))}
+              <button type="button" onClick={() => onApply(callPerson(life, person.name, "come-home", "eat"))} className="rounded-full bg-[#006B3F] px-3 py-1.5 text-[11px] font-bold text-white">
+                Come eat
+              </button>
               <button type="button" onClick={() => onApply(textPerson(life, person.name, "hi"))} className="rounded-full bg-[#25d366] px-3 py-1.5 text-[11px] font-bold text-white">
                 Text
               </button>

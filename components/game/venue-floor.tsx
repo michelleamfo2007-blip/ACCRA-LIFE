@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { ClubSpray } from "@/components/game/club-spray";
 import { IsoHuman } from "@/components/game/iso-human";
+import type { SprayId } from "@/lib/game/club-spray";
 import { CLUB_IDS, EATERY_IDS } from "@/lib/game/accra-spots";
 import { ActionDeck } from "@/components/game/action-deck";
 import {
@@ -16,7 +18,7 @@ import {
   type Bottle,
   type ClubNpc,
 } from "@/lib/game/club-night";
-import { accraHour, cedis, spotById, type Life, type Look, type Offer, type Spot, type Verb } from "@/lib/game/world";
+import { accraHour, cedis, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
 
@@ -56,8 +58,10 @@ export function VenueFloor({
   onInviteTable,
   onClaimTable,
   onClearTable,
+  onPurse,
   friends = [],
   lively = false,
+  sprayName = "",
   children,
 }: {
   life: Life;
@@ -73,11 +77,13 @@ export function VenueFloor({
   onInviteTable?: (username: string, seatId: string) => void;
   onClaimTable?: (seatId: string) => void;
   onClearTable?: () => void;
+  onPurse?: (action: { kind: "spray"; id: SprayId } | { kind: "catch"; value: number }) => StepResult;
   friends?: { username: string; name: string }[];
   focus?: string | null;
   extra?: Verb[];
   homeFare?: number;
   lively?: boolean;
+  sprayName?: string;
 }) {
   const spot = spotById(life.where);
   const night = accraHour() >= 19 || accraHour() < 5;
@@ -348,6 +354,7 @@ export function VenueFloor({
             : "radial-gradient(circle at 50% 30%, #d7e7c4 0%, #b7c99a 68%)",
       }}
     >
+      {nightLife && onPurse ? <ClubSpray life={life} name={sprayName || me || "You"} onPurse={onPurse} /> : null}
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div
           ref={stage}

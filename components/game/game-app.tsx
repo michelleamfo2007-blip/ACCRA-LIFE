@@ -16,6 +16,7 @@ import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { hangoverActive, leaveClubNight, sessionOf } from "@/lib/game/club-night";
+import { catchCash, sprayCash } from "@/lib/game/club-spray";
 import { postClout } from "@/lib/game/phone-life";
 import { happeningsAt, happeningVerbs, heatLabel } from "@/lib/game/happenings";
 import { TradeSheet } from "@/components/game/trade-sheet";
@@ -35,11 +36,16 @@ import type { Cabin } from "@/lib/game/flights";
 import { TOUR, finishTour, skipTour, type TourId } from "@/lib/game/tour";
 import {
   cookAtHome,
+  doorGuests,
+  enRouteGuests,
   hangWithGuest,
   maybeKnock,
+  minutesAway,
   offerSleepover,
+  openDoor,
   receiveGuest,
   sendGuestHome,
+  settleGuests,
   tickGuests,
 } from "@/lib/game/home-life";
 
@@ -295,9 +301,11 @@ export function GameApp() {
         if (delta >= 1) {
           const timed = passTime(life, Math.min(delta, 180));
           if (delta > 180) timed.life.minutes = now;
-          if (timed.notes.length) timed.life.inbox = [...timed.notes, ...timed.life.inbox].slice(0, 20);
-          life = timed.life;
+          const settled = settleGuests(timed.life);
+          if (timed.notes.length) settled.life.inbox = [...timed.notes, ...settled.life.inbox].slice(0, 20);
+          life = settled.life;
           commitLife(account.username, life);
+          if (settled.notes[0]) setToast(settled.notes[0]);
         }
       }
       if (account.cloud) {
@@ -991,9 +999,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       flash(result.error);
       return;
     }
-    let nextLife = tickGuests(result.life);
+    const settled = settleGuests(result.life);
+    if (settled.notes.length) result = { ...result, notes: [...settled.notes, ...result.notes] };
+    let nextLife = settled.life;
     // Offline-only: scripted neighbours. Online homes invite real Accra Life players.
-    if (!account.cloud && nextLife.where === "home" && !(nextLife.guests ?? []).length && Math.random() < 0.18) {
+    if (!account.cloud && nextLife.where === "home" && !(nextLife.guests ?? []).some((guest) => guest.doing !== "leave" && guest.doing !== "dine") && Math.random() < 0.18) {
       const knock = maybeKnock(nextLife);
       nextLife = knock.life;
       if (knock.note) result = { ...result, notes: [knock.note, ...result.notes] };
@@ -1174,6 +1184,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onHang={(name, kind) => apply(hangWithGuest(life, name, kind))}
           onSleepover={(name) => apply(offerSleepover(life, name))}
           onSendHome={(name) => apply(sendGuestHome(life, name))}
+          onOpenDoor={(name) => apply(openDoor(life, name))}
           cloud={Boolean(account.cloud)}
           friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
           invites={inbox.social?.invites ?? []}
@@ -1201,6 +1212,19 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           life={life}
           people={herePeople}
           me={account.username}
+          sprayName={account.name}
+          onPurse={(action) => {
+            const snap = parseRaw(getRaw());
+            const current = snap.accounts.find((item) => item.username === account.username)?.life ?? life;
+            const result = action.kind === "spray" ? sprayCash(current, action.id, account.name) : catchCash(current, action.value);
+            if (result.error) {
+              if (action.kind === "spray") flash(result.error);
+              return result;
+            }
+            commitLife(account.username, result.life);
+            if (action.kind === "spray" && result.notes[0]) flash(result.notes[0]);
+            return result;
+          }}
           onMove={shareSpot}
           onTrade={() => setTradeOpen(true)}
           friends={inbox.threads.filter((thread) => thread.id.startsWith("user:")).map((thread) => ({ username: thread.username, name: thread.name }))}
@@ -1291,6 +1315,25 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               {cedis(life.cash)} +
             </button>
           </div>
+          {enRouteGuests(life)[0] || doorGuests(life)[0] ? (
+            <button
+              type="button"
+              className="absolute left-1/2 top-[max(3.4rem,calc(env(safe-area-inset-top)+2.8rem))] z-30 max-w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 rounded-full bg-[#121212] px-4 py-2 text-center text-[11px] font-semibold text-white shadow-lg"
+              onClick={() => {
+                const knocking = doorGuests(life)[0];
+                if (knocking && life.where === "home") {
+                  apply(openDoor(life, knocking.name));
+                  setTab("home");
+                  return;
+                }
+                setTab(life.where === "home" ? "home" : "map");
+              }}
+            >
+              {doorGuests(life)[0]
+                ? `${doorGuests(life)[0].name} is at your door.${life.where === "home" ? " Tap to open." : " Head home."}`
+                : `${enRouteGuests(life)[0].name} · ${enRouteGuests(life)[0].ride} from ${enRouteGuests(life)[0].from} · ${minutesAway(life, enRouteGuests(life)[0])}m`}
+            </button>
+          ) : null}
           <div className={`absolute left-2 z-20 max-w-[min(11.5rem,calc(100%-5.5rem))] space-y-2 sm:left-3 sm:max-w-[min(13rem,calc(100%-5.5rem))] ${tab === "map" ? "top-[max(7.4rem,calc(env(safe-area-inset-top)+6.6rem))]" : "top-[max(4.4rem,calc(env(safe-area-inset-top)+3.8rem))]"}`}>
             <button
               type="button"

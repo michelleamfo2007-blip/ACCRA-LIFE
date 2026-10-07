@@ -507,15 +507,21 @@ export function Payday({ earned, performance, onClose }: { earned: number; perfo
 type FlightCam = "outside" | "cabin" | "seat";
 
 const FLIGHT_BEATS = [
-  { at: 0, phase: "boarding", line: "Boarding at the gate: find your seat, bags in the overhead bins." },
-  { at: 0.12, phase: "taxi", line: "Pushback. Cabins secure. Taxiing to runway 03." },
-  { at: 0.22, phase: "climb", line: "Climbing out over Accra…" },
-  { at: 0.4, phase: "cruise", line: "Cruising at 35,000 ft. Soft drink or malt?" },
-  { at: 0.55, phase: "cruise", line: "The man beside you is humming highlife under his breath." },
-  { at: 0.7, phase: "cruise", line: "Clouds over the Ashanti hills. Almost there." },
-  { at: 0.85, phase: "descent", line: "Seatbelts on. Descending into the Garden City." },
-  { at: 0.94, phase: "land", line: "Touchdown. Welcome." },
+  { at: 0, phase: "boarding", line: "Boarding. Find your seat and stow the bag." },
+  { at: 0.12, phase: "taxi", line: "Doors closed. Taxiing to the runway." },
+  { at: 0.22, phase: "climb", line: "Climbing out over the city." },
+  { at: 0.4, phase: "cruise", line: "Cruising. Come — have your meal." },
+  { at: 0.55, phase: "cruise", line: "The man beside you is reading the wrong newspaper out loud." },
+  { at: 0.7, phase: "cruise", line: "Soft drink or malt. Clouds under the wing." },
+  { at: 0.85, phase: "descent", line: "Seatbelts on. We're starting our descent." },
+  { at: 0.94, phase: "land", line: "Touchdown." },
 ] as const;
+
+function iata(name: string) {
+  if (/kumasi/i.test(name)) return "KMS";
+  if (/kotoka|accra/i.test(name)) return "ACC";
+  return name.slice(0, 3).toUpperCase();
+}
 
 export function FlightRide({
   from,
@@ -566,10 +572,12 @@ export function FlightRide({
 
   const beat = [...FLIGHT_BEATS].reverse().find((item) => gone >= item.at) ?? FLIGHT_BEATS[0];
   const left = Math.max(0, Math.ceil(minutes * (1 - gone)));
-  const code = from.slice(0, 3).toUpperCase();
-  const dest = to.slice(0, 3).toUpperCase();
+  const code = iata(from);
+  const dest = iata(to);
   const phase = beat.phase as FlightPhase;
   const air = phase === "climb" || phase === "cruise" || phase === "descent";
+  const night = accraHour() >= 18 || accraHour() < 6;
+  const spoken = phase === "land" ? `Touchdown. Welcome to ${to.split(" ")[0]}.` : beat.line;
 
   useEffect(() => {
     if (air && !lockedAir.current) {
@@ -580,47 +588,38 @@ export function FlightRide({
 
   return (
     <div className="absolute inset-0 z-50 overflow-hidden bg-[#9ec8e8]">
-      {cam === "outside" ? <FlightOutside phase={phase} progress={gone} /> : null}
-      {cam === "cabin" ? <CabinView seat={false} /> : null}
-      {cam === "seat" ? <CabinView seat /> : null}
+      {cam === "outside" ? <FlightOutside phase={phase} progress={gone} night={night} /> : null}
+      {cam === "cabin" ? <CabinView /> : null}
+      {cam === "seat" ? <Seatback from={code} to={dest} line={spoken} minutes={minutes} gone={gone} /> : null}
 
-      <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(300px,78vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold">
-              AL {200 + Math.round(minutes)} · {cabin}
-            </p>
-            <p className="text-[11px] text-white/70">9G-ALA · Accra Life Air</p>
-          </div>
-          <p className="text-xs font-bold text-[#FCD116]">
+      <div className="absolute right-3 top-[max(4.8rem,calc(env(safe-area-inset-top)+4rem))] z-10 w-[min(230px,58vw)] rounded-2xl bg-[#12141c]/90 p-3 text-white shadow-xl">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#f5c518]">Passion Air · Ghana</p>
+        <div className="mt-1 flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold">OP 204 · {cabin}</p>
+          <p className="text-xs font-bold text-white">
             {code} → {dest}
           </p>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
-          <div className="relative h-full rounded-full bg-[#FCD116]" style={{ width: `${Math.max(4, gone * 100)}%` }}>
-            <span className="absolute -right-2 -top-2 text-[10px]">✈️</span>
-          </div>
+        <p className="text-[11px] text-white/65">9G-PAD</p>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+          <div className="h-full rounded-full bg-[#f5c518]" style={{ width: `${Math.max(6, gone * 100)}%` }} />
         </div>
         <p className="mt-2 text-xs font-semibold text-white/90">
-          {phase === "boarding"
-            ? `Boarding · gate 2 · ${Math.max(1, Math.ceil((0.12 - gone) * 14))}s`
-            : phase === "land"
-              ? "Arrived"
-              : `${left} min to landing`}
+          {phase === "boarding" ? "Boarding" : phase === "land" ? "Arrived" : `${left} min to landing`}
         </p>
-        <p className="mt-1 text-xs leading-5 text-white/85">{beat.line}</p>
-        <p className="mt-1 text-xs text-white/65">Fare {cedis(fare)}</p>
-        <div className="mt-3 flex gap-2">
-          <button type="button" onClick={finish} className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#121212]">
+        <p className="mt-2 text-xs leading-5 text-white/85">{spoken}</p>
+        <p className="mt-1 text-[11px] text-white/55">Fare {cedis(fare)}</p>
+        <div className="mt-2 flex gap-2">
+          <button type="button" onClick={finish} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#121212]">
             Skip ›
           </button>
-          <button type="button" onClick={onBack} className="rounded-full bg-white/15 px-3 py-2 text-xs font-semibold">
+          <button type="button" onClick={onBack} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold">
             Leave gate
           </button>
         </div>
       </div>
 
-      <div className="absolute bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-[#121212]/80 p-1 text-white shadow-lg">
+      <div className="absolute left-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1.5">
         {(
           [
             ["outside", "Outside"],
@@ -628,7 +627,12 @@ export function FlightRide({
             ["seat", "My seat"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setCam(id)} className={`rounded-full px-3 py-1.5 text-xs font-bold ${cam === id ? "bg-white text-[#121212]" : ""}`}>
+          <button
+            key={id}
+            type="button"
+            onClick={() => setCam(id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold shadow ${cam === id ? "bg-white text-[#121212]" : "bg-[#121212]/75 text-white"}`}
+          >
             {label}
           </button>
         ))}
@@ -646,45 +650,72 @@ const CABIN_PAX = [
   { skin: "#4a2f1c", shirt: "#f97316", hair: "#111" },
 ];
 
-function CabinView({ seat }: { seat: boolean }) {
+function CabinView() {
   return (
-    <div className={`flight-cabin-3d ${seat ? "flight-cabin-3d-seat" : ""}`}>
+    <div className="flight-cabin-3d">
       <div className="flight-cabin-3d-tunnel">
+        <div className="flight-windows" />
         <div className="flight-cabin-3d-ceiling" />
+        <div className="flight-bins" />
         <div className="flight-cabin-3d-floor" />
-        {Array.from({ length: 6 }, (_, row) => {
+        <p className="flight-exit">EXIT</p>
+        {Array.from({ length: 7 }, (_, row) => {
           const pax = CABIN_PAX[row % CABIN_PAX.length];
-          const depth = 8 + row * 12;
+          const other = CABIN_PAX[(row + 2) % CABIN_PAX.length];
+          const depth = 6 + row * 11;
           return (
-            <div key={row} className="flight-cabin-3d-row" style={{ bottom: `${depth}%`, transform: `translateX(-50%) scale(${1 - row * 0.08})` }}>
+            <div key={row} className="flight-cabin-3d-row" style={{ bottom: `${depth}%`, transform: `translateX(-50%) scale(${1.15 - row * 0.12})` }}>
               <span className="flight-cabin-3d-bench">
-                <span className="flight-cabin-3d-pax">
-                  <IsoHuman skin={pax.skin} shirt={pax.shirt} hair={pax.hair} cloth={pax.shirt} pose="idle" face={1} className="h-full" />
-                </span>
+                <Head skin={pax.skin} hair={pax.hair} shirt={pax.shirt} cloth={row === 0} />
               </span>
               <span className="flight-cabin-3d-gap" />
-              <span className={`flight-cabin-3d-bench ${row === 1 ? "flight-cabin-3d-you" : ""}`}>
-                {row === 1 ? (
-                  <span className="flight-cabin-3d-pax">
-                    <IsoHuman skin="#8d5a3b" shirt="#e7c85a" hair="#2b2118" cloth="#e7c85a" pose="idle" face={-1} className="h-full" />
-                  </span>
-                ) : (
-                  <span className="flight-cabin-3d-pax">
-                    <IsoHuman skin={CABIN_PAX[(row + 2) % CABIN_PAX.length].skin} shirt={CABIN_PAX[(row + 2) % CABIN_PAX.length].shirt} hair={CABIN_PAX[(row + 2) % CABIN_PAX.length].hair} cloth={CABIN_PAX[(row + 2) % CABIN_PAX.length].shirt} pose="idle" face={-1} className="h-full" />
-                  </span>
-                )}
+              <span className={`flight-cabin-3d-bench ${row === 2 ? "flight-cabin-3d-you" : ""}`}>
+                <Head skin={row === 2 ? "#8d5a3b" : other.skin} hair={row === 2 ? "#2b2118" : other.hair} shirt={row === 2 ? "#e7c85a" : other.shirt} />
               </span>
             </div>
           );
         })}
-        <div className="flight-cabin-3d-crew" aria-hidden>
-          <IsoHuman skin="#5c3a24" shirt="#006B3F" hair="#1a1a1a" cloth="#006B3F" pose="walk" face={1} className="h-full" />
-        </div>
-        <div className="flight-cabin-3d-cart" aria-hidden>
-          🧳
-        </div>
-        <p className="flight-cabin-3d-wc">WC</p>
       </div>
+    </div>
+  );
+}
+
+function Head({ skin, hair, shirt, cloth }: { skin: string; hair: string; shirt: string; cloth?: boolean }) {
+  return (
+    <span className="flight-head">
+      <span className="flight-shoulders" style={{ background: cloth ? "repeating-linear-gradient(90deg, #1d4ed8 0 6px, #fff 6px 10px)" : shirt }} />
+      <span className="flight-face" style={{ background: skin }} />
+      <span className="flight-hair" style={{ background: hair }} />
+    </span>
+  );
+}
+
+function Seatback({ from, to, line, minutes, gone }: { from: string; to: string; line: string; minutes: number; gone: number }) {
+  const left = Math.max(1, Math.ceil(minutes * (1 - gone)));
+  const caption = gone < 0.12 ? `Boarding · ${minutes} min flight` : line;
+  return (
+    <div className="flight-seat">
+      <div className="flight-seat-shell">
+        <div className="flight-ife">
+          <svg viewBox="0 0 220 150" className="h-full w-full" aria-hidden>
+            <rect width="220" height="150" rx="14" fill="#0c3d32" />
+            <circle cx="108" cy="96" r="70" fill="none" stroke="#1c6b4e" strokeWidth="14" />
+            <path d="M46 108 Q108 24 178 88" fill="none" stroke="#e7f8d8" strokeWidth="3" strokeDasharray="5 4" />
+            <circle cx="46" cy="108" r="5" fill="#f5c518" />
+            <circle cx="178" cy="88" r="5" fill="#ffffff" />
+            <text x="28" y="132" fill="#ffffff" fontSize="13" fontFamily="sans-serif">
+              {from}
+            </text>
+            <text x="156" y="112" fill="#ffffff" fontSize="16" fontWeight="700" fontFamily="sans-serif">
+              {to}
+            </text>
+          </svg>
+          <p className="flight-ife-caption">{caption}</p>
+          <p className="flight-ife-sub">{to} · {left} min</p>
+        </div>
+        <div className="flight-seat-pocket" />
+      </div>
+      <div className="flight-seat-window" />
     </div>
   );
 }

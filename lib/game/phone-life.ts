@@ -1,6 +1,7 @@
 import { seasonOf, type Weather } from "@/lib/game/sky";
 import { trafficFactor } from "@/lib/game/roads";
-import { cloneLife, invitePerson, moodOf, type Life, type StepResult } from "@/lib/game/world";
+import { askOver, type InvitePurpose } from "@/lib/game/home-life";
+import { cloneLife, moodOf, type Life, type StepResult } from "@/lib/game/world";
 
 /** Soft Accra clout — one number for the phone home screen. */
 export function cloutOf(life: Life) {
@@ -39,7 +40,8 @@ export function weatherBrief(sky: Weather, hour: number) {
 
 export type CallKind = "gist" | "plan" | "come-home" | "check" | "work";
 
-export function callPerson(life: Life, name: string, kind: CallKind = "gist"): StepResult {
+export function callPerson(life: Life, name: string, kind: CallKind = "gist", purpose: InvitePurpose = "gist"): StepResult {
+  if (kind === "come-home") return askOver(life, name, purpose);
   const next = cloneLife(life);
   const known = next.relations.find((person) => person.name === name);
   const score = known?.score ?? 0;
@@ -49,7 +51,7 @@ export function callPerson(life: Life, name: string, kind: CallKind = "gist"): S
   next.minutes += kind === "gist" ? 12 : kind === "plan" ? 8 : 6;
   next.needs.social = Math.min(100, next.needs.social + (kind === "gist" ? 10 : 6));
   next.needs.energy = Math.max(0, next.needs.energy - 2);
-  if (known) known.score = Math.min(100, known.score + (kind === "come-home" ? 4 : kind === "gist" ? 5 : 3));
+  if (known) known.score = Math.min(100, known.score + (kind === "gist" ? 5 : 3));
   else next.relations.push({ name, score: 8 });
 
   let line = `You called ${name}.`;
@@ -59,15 +61,6 @@ export function callPerson(life: Life, name: string, kind: CallKind = "gist"): S
   if (kind === "work") {
     next.needs.fun = Math.min(100, next.needs.fun + 2);
     line = `Work call with ${name}. Something might come.`;
-  }
-  if (kind === "come-home") {
-    // Phone Calls still queue a local guest; home "Invite over" is for real @players.
-    const invited = invitePerson(next, name);
-    if (invited.error) return invited;
-    invited.life.log = [`${name}: "I dey come. Make the door open."`, ...invited.life.log].slice(0, 14);
-    invited.life.inbox = [`${name} is coming over after your call.`, ...invited.life.inbox].slice(0, 20);
-    invited.life.stats = { ...(invited.life.stats ?? {}), calls: ((invited.life.stats ?? {}).calls ?? 0) + 1 };
-    return { life: invited.life, notes: [`${name} is coming over.`] };
   }
 
   next.log = [line, ...next.log].slice(0, 14);
@@ -80,19 +73,13 @@ export function callPerson(life: Life, name: string, kind: CallKind = "gist"): S
 }
 
 export function textPerson(life: Life, name: string, kind: "hi" | "plan" | "come" | "thanks" = "hi"): StepResult {
+  if (kind === "come") return askOver(life, name, "pass");
   const next = cloneLife(life);
   next.minutes += 2;
   next.needs.social = Math.min(100, next.needs.social + 4);
   const known = next.relations.find((person) => person.name === name);
   if (known) known.score = Math.min(100, known.score + 2);
   else next.relations.push({ name, score: 6 });
-
-  if (kind === "come") {
-    const invited = invitePerson(next, name);
-    if (invited.error) return invited;
-    invited.life.stats = { ...(invited.life.stats ?? {}), texts: ((invited.life.stats ?? {}).texts ?? 0) + 1 };
-    return { life: invited.life, notes: [`Texted ${name}: "You dey home? I wan pass."`] };
-  }
 
   const line =
     kind === "plan"

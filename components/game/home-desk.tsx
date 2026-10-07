@@ -4,9 +4,12 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import {
   RECIPES,
   activeGuests,
+  doorGuests,
+  enRouteGuests,
   friendTier,
   guestHomeReact,
   homeUpgradeHints,
+  minutesAway,
   type HomeGuest,
 } from "@/lib/game/home-life";
 import { cedis, type Life } from "@/lib/game/world";
@@ -22,6 +25,7 @@ export function HomeDesk({
   onHang,
   onSleepover,
   onSendHome,
+  onOpenDoor,
   onInvite,
   onVisit,
   onBuyHint,
@@ -34,11 +38,14 @@ export function HomeDesk({
   onHang: (name: string, kind: "chat" | "tv" | "game" | "drink") => void;
   onSleepover: (name: string) => void;
   onSendHome: (name: string) => void;
+  onOpenDoor?: (name: string) => void;
   onInvite: (username: string) => void;
   onVisit: (username: string) => void;
   onBuyHint?: () => void;
 }) {
   const guests = activeGuests(life);
+  const coming = enRouteGuests(life);
+  const knocking = doorGuests(life);
   const [cookOpen, setCookOpen] = useState(false);
   const [doorOpen, setDoorOpen] = useState(false);
   const [share, setShare] = useState<string | undefined>(guests[0]?.name);
@@ -78,10 +85,27 @@ export function HomeDesk({
           <p className="text-xs font-bold uppercase tracking-wide text-[#006B3F]">Home life</p>
           <p className="text-[11px] font-semibold text-[#5c6b82]">🛒 {pantry} groceries</p>
         </div>
-        {guests.length === 0 ? (
-          <p className="mt-1 text-xs text-[#5c6b82]">Quiet for now. Invite real Accra Life players over.</p>
+        {guests.length === 0 && coming.length === 0 && knocking.length === 0 ? (
+          <p className="mt-1 text-xs text-[#5c6b82]">Quiet for now. Call someone to pass by.</p>
         ) : (
           <div className="mt-2 space-y-2">
+            {coming.map((guest) => (
+              <p key={guest.name} className="rounded-xl bg-[#f4f7fb] px-2.5 py-2 text-[11px] leading-4 text-[#243044]">
+                <span className="font-bold">{guest.name}</span> is {guest.ride ?? "on the way"} from {guest.from ?? "town"}. About {minutesAway(life, guest)}m.
+              </p>
+            ))}
+            {knocking.map((guest) => (
+              <div key={guest.name} className="flex items-center justify-between gap-2 rounded-xl bg-[#121212] px-2.5 py-2 text-[11px] text-white">
+                <p>
+                  <span className="font-bold">{guest.name}</span> is at the door.
+                </p>
+                {onOpenDoor ? (
+                  <button type="button" onClick={() => onOpenDoor(guest.name)} className="rounded-full bg-[#FCD116] px-2 py-1 text-[10px] font-bold text-[#121212]">
+                    Open
+                  </button>
+                ) : null}
+              </div>
+            ))}
             {guests.map((guest) => (
               <GuestCard
                 key={guest.username ?? guest.name}

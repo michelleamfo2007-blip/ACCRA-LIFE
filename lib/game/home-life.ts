@@ -1,6 +1,9 @@
-import { cloneLife, hourOf, type Life, type Verb } from "@/lib/game/world";
+import { travelFactor, weatherAt } from "@/lib/game/sky";
+import { cloneLife, homeById, hourOf, type Life, type StepResult, type Verb } from "@/lib/game/world";
 
-export type GuestDoing = "arrive" | "chat" | "eat" | "cook" | "tv" | "game" | "sleep" | "leave";
+export type GuestDoing = "coming" | "door" | "arrive" | "chat" | "eat" | "cook" | "tv" | "game" | "sleep" | "leave";
+
+export type InvitePurpose = "eat" | "gist" | "pass";
 
 export type HomeGuest = {
   name: string;
@@ -11,6 +14,10 @@ export type HomeGuest = {
   doing: GuestDoing;
   sleepover?: boolean;
   gift?: string;
+  eta?: number;
+  ride?: string;
+  purpose?: string;
+  from?: string;
 };
 
 export type Recipe = {
@@ -132,38 +139,195 @@ function bumpStat(life: Life, key: string, n = 1) {
   life.stats = { ...(life.stats ?? {}), [key]: (life.stats?.[key] ?? 0) + n };
 }
 
-export function activeGuests(life: Life): HomeGuest[] {
-  return (life.guests ?? [])
-    .map((guest) => ({ ...guest, doing: guest.doing as GuestDoing }))
-    .filter((guest) => guest.until > life.minutes && guest.doing !== "leave");
+const AREAS = ["Madina", "Kaneshie", "Osu", "Lapaz", "Tema", "Dansoman", "Spintex", "Circle"];
+
+function hash(text: string) {
+  let value = 2166136261;
+  for (const char of text) value = Math.imul(value ^ char.charCodeAt(0), 16777619);
+  return (value >>> 0) / 4294967295;
 }
 
-export function tickGuests(life: Life): Life {
-  if (!life.guests?.length) return life;
+function liveGuests(life: Life) {
+  return (life.guests ?? []).filter((guest) => guest.until > life.minutes && guest.doing !== "leave" && guest.doing !== "dine");
+}
+
+export function activeGuests(life: Life): HomeGuest[] {
+  return liveGuests(life)
+    .map((guest) => ({ ...guest, doing: guest.doing as GuestDoing }))
+    .filter((guest) => guest.doing !== "coming" && guest.doing !== "door");
+}
+
+export function enRouteGuests(life: Life): HomeGuest[] {
+  return liveGuests(life)
+    .filter((guest) => guest.doing === "coming")
+    .map((guest) => ({ ...guest, doing: "coming" as const }));
+}
+
+export function doorGuests(life: Life): HomeGuest[] {
+  return liveGuests(life)
+    .filter((guest) => guest.doing === "door")
+    .map((guest) => ({ ...guest, doing: "door" as const }));
+}
+
+export function minutesAway(life: Life, guest: HomeGuest) {
+  return Math.max(0, (guest.eta ?? guest.arrivedAt) - life.minutes);
+}
+
+export function settleGuests(life: Life): { life: Life; notes: string[] } {
+  if (!life.guests?.length) return { life, notes: [] };
   const next = cloneLife(life);
   const hour = hourOf(next.minutes);
+  const notes: string[] = [];
   next.guests = (next.guests ?? [])
     .map((guest) => {
+      if (guest.doing === "dine" || guest.doing === "leave") return guest;
+      if (guest.doing === "coming") {
+        if (next.minutes < (guest.eta ?? guest.arrivedAt)) return guest;
+        if (next.where !== "home") {
+          bump(next, guest.name, -4);
+          const line = `${guest.name} came by but you weren't home.`;
+          notes.push(line);
+          pushNote(next, line);
+          return { ...guest, doing: "leave" as const, until: next.minutes };
+        }
+        const score = next.relations.find((person) => person.name === guest.name)?.score ?? 0;
+        if (score >= 50) {
+          guest.doing = "arrive";
+          guest.arrivedAt = next.minutes;
+          guest.until = next.minutes + 90;
+          guest.gift = giftFor(guest.name);
+          const line = welcome(next, guest.name, true);
+          notes.push(line);
+          return guest;
+        }
+        const line = `${guest.name} is at your door.`;
+        notes.push(line);
+        pushNote(next, line);
+        return { ...guest, doing: "door" as const, arrivedAt: next.minutes, until: next.minutes + 8 };
+      }
+      if (guest.doing === "door") {
+        if (guest.until > next.minutes) return guest;
+        bump(next, guest.name, -3);
+        const line = `${guest.name} waited, then left.`;
+        notes.push(line);
+        pushNote(next, line);
+        return { ...guest, doing: "leave" as const };
+      }
       if (guest.until <= next.minutes) return { ...guest, doing: "leave" as const };
       if (guest.sleepover && guest.doing === "sleep" && hour >= 6 && hour < 11) {
+        const line = `${guest.name} is up. Breakfast gist before they go.`;
+        notes.push(line);
+        pushNote(next, line);
         return { ...guest, doing: "eat" as const, until: next.minutes + 40 };
       }
       const span = guest.until - guest.arrivedAt;
       const progress = span > 0 ? (next.minutes - guest.arrivedAt) / span : 1;
       if (guest.sleepover && progress > 0.55 && guest.doing !== "sleep") return { ...guest, doing: "sleep" as const };
-      if (progress > 0.75) return { ...guest, doing: "chat" as const };
-      if (progress > 0.45) return { ...guest, doing: guest.doing === "cook" ? "cook" : "tv" as const };
-      if (progress > 0.2) return { ...guest, doing: "chat" as const };
+      if (progress > 0.75 && guest.doing !== "chat") return { ...guest, doing: "chat" as const };
+      if (progress > 0.45 && guest.doing !== "cook" && guest.doing !== "tv") return { ...guest, doing: "tv" as const };
+      if (progress > 0.2 && guest.doing === "arrive") return { ...guest, doing: "chat" as const };
       return guest;
     })
     .filter((guest) => guest.doing !== "leave" || guest.until > next.minutes - 5);
-  return next;
+  return { life: next, notes };
+}
+
+export function tickGuests(life: Life): Life {
+  return settleGuests(life).life;
+}
+
+export function askOver(life: Life, name: string, purpose: InvitePurpose = "gist"): StepResult {
+  const known = life.relations.find((person) => person.name === name);
+  const score = known?.score ?? 0;
+  if (score < 8) return { life, notes: [], error: `${name} barely knows you. Gist more outside first.` };
+  if (liveGuests(life).some((guest) => guest.name === name)) {
+    return { life, notes: [], error: `${name} is already coming, or already here.` };
+  }
+  const hour = hourOf(life.minutes);
+  const day = Math.floor(life.minutes / 1440);
+  const roll = hash(`${name}:${day}:${purpose}`);
+  const sky = weatherAt();
+  let decline = "";
+  if ((hour >= 23 || hour < 6) && score < 70) decline = "It's late. I'll pass tomorrow.";
+  else if (hour >= 8 && hour < 17 && score < 45 && roll > 0.4) decline = "I dey work. I can't today, sorry.";
+  else if (score < 22 && roll > 0.5) decline = "I can't today, sorry.";
+  else if (score < 36 && roll > 0.78) decline = "I'll pass tomorrow.";
+  const next = cloneLife(life);
+  next.minutes += 2;
+  if (decline) {
+    const line = `${name}: "${decline}"`;
+    pushNote(next, line);
+    return { life: next, notes: [line] };
+  }
+
+  let mins = score >= 70 ? 6 : score >= 40 ? 12 : 18;
+  const from = AREAS[Math.floor(hash(name) * AREAS.length)];
+  if (sky.flood) mins = Math.round(mins * 1.8);
+  else if (sky.rain) mins = Math.round(mins * 1.35);
+  if (travelFactor(hour, sky) > 1.3) mins = Math.round(mins * 1.25);
+  const afterWork = hour >= 8 && hour < 17 && score < 65;
+  if (afterWork) mins += 12;
+  mins = Math.max(4, Math.min(24, mins));
+  const ride = mins <= 8 && !sky.rain ? "walking" : mins <= 22 ? "trotro" : "taxi";
+  const reply = afterWork ? "I dey work. Give me time, I go pass." : mins >= 24 ? "Give me small time." : "I dey come.";
+  const memory = (known?.visits ?? 0) > 0 ? " Last time was sweet." : "";
+  const weather = sky.flood ? " Roads flood, so e go take longer." : sky.rain ? " Rain go slow me small." : "";
+  const guest: HomeGuest = {
+    name,
+    arrivedAt: next.minutes,
+    eta: next.minutes + mins,
+    until: next.minutes + mins + (purpose === "eat" ? 100 : 80),
+    doing: "coming",
+    ride,
+    purpose,
+    from,
+  };
+  next.guests = [...(next.guests ?? []).filter((item) => item.name !== name && item.doing !== "leave"), guest];
+  bump(next, name, 2);
+  const line = `${name}: "${reply}${memory}" ${ride} from ${from}. About ${mins}m.${weather}`;
+  pushNote(next, line);
+  return { life: next, notes: [line] };
+}
+
+export function openDoor(life: Life, name: string): StepResult {
+  const guest = doorGuests(life).find((item) => item.name === name);
+  if (!guest) return { life, notes: [], error: "Nobody is at the door." };
+  const next = cloneLife(life);
+  const found = next.guests!.find((item) => item.name === name && item.doing === "door");
+  if (!found) return { life, notes: [], error: "Nobody is at the door." };
+  found.doing = "arrive";
+  found.arrivedAt = next.minutes;
+  found.until = next.minutes + 90;
+  found.gift = giftFor(name);
+  const line = welcome(next, name, false);
+  return { life: next, notes: [line] };
+}
+
+function giftFor(name: string) {
+  return hash(name) > 0.35 ? GIFTS[Math.floor(hash(`${name}:gift`) * GIFTS.length)] : undefined;
+}
+
+function welcome(life: Life, name: string, walkedIn: boolean) {
+  const known = life.relations.find((person) => person.name === name);
+  if (known) known.visits = (known.visits ?? 0) + 1;
+  else life.relations.push({ name, score: 12, visits: 1 });
+  bump(life, name, walkedIn ? 6 : 8);
+  life.needs.social = Math.min(100, life.needs.social + 8);
+  const gift = life.guests?.find((guest) => guest.name === name)?.gift;
+  if (gift) life.needs.fun = Math.min(100, life.needs.fun + 4);
+  const line = walkedIn
+    ? `${name} knows the place. They stepped in.${gift ? ` Brought ${gift}.` : ""}`
+    : `${name} is in.${gift ? ` They brought ${gift}.` : " Clear a chair."}`;
+  pushNote(life, line);
+  const react = guestHomeReact(life);
+  if (react) pushNote(life, react);
+  return line;
 }
 
 /** Neighbour or friend knocks when player is home. */
 export function maybeKnock(life: Life): { life: Life; note?: string } {
   if (life.where !== "home") return { life };
-  if (activeGuests(life).length >= 2) return { life };
+  if (liveGuests(life).length >= 4) return { life };
   const hour = hourOf(life.minutes);
   if (hour < 10 || hour > 22) return { life };
   if (Math.random() > 0.22) return { life };
@@ -186,7 +350,10 @@ export function receiveGuest(life: Life, name: string, opts: { invited?: boolean
     sleepover: opts.sleepover,
     gift,
   };
-  next.guests = [...activeGuests(next).filter((item) => item.name !== name && item.username !== opts.username), guest];
+  next.guests = [
+    ...(next.guests ?? []).filter((item) => item.until > next.minutes && item.doing !== "leave" && item.name !== name && item.username !== opts.username),
+    guest,
+  ];
   next.needs.social = Math.min(100, next.needs.social + (opts.invited ? 8 : 6));
   bump(next, name, opts.invited ? 8 : 5);
   if (gift) {
@@ -326,19 +493,24 @@ export function recipeVerb(recipe: Recipe): Verb {
   };
 }
 
-/** Guest line when they notice upgrades. */
 export function guestHomeReact(life: Life): string | null {
-  const guest = activeGuests(life)[0];
+  const guest = activeGuests(life).find((item) => item.doing === "arrive") ?? activeGuests(life)[0];
   if (!guest) return null;
-  const pieces = life.furniture?.length ?? 0;
-  const hasSofa = life.inventory.some((id) => ["sofa", "family", "leather", "gold"].includes(id) || id.includes("sofa"));
-  const hasTv = life.inventory.some((id) => id.includes("tv") || id === "flat");
-  const hasGas = life.inventory.includes("gas-cooker");
-  if (hasGas && Math.random() > 0.5) return `${guest.name}: "Chale, this kitchen dey serious."`;
-  if (hasTv && Math.random() > 0.5) return `${guest.name}: "Ah, flat screen. We dey watch something?"`;
-  if (hasSofa) return `${guest.name}: "Chale, your place dey nice o. Proper seat."`;
-  if (pieces >= 3) return `${guest.name}: "You dey decorate small. I like am."`;
-  return `${guest.name}: "At least you get four walls. Make we gist."`;
+  const name = guest.name;
+  const visits = life.relations.find((person) => person.name === name)?.visits ?? 0;
+  const home = homeById(life.homeId);
+  const hasSofa = life.inventory.some((id) => ["sofa", "family", "leather", "gold", "armchair"].includes(id));
+  const hasAc = life.inventory.includes("ac");
+  const hour = hourOf(life.minutes);
+  if (life.needs.hygiene < 35) return `${name}: "You no dey clean? Hmm."`;
+  if (visits > 1) return `${name}: "Same seat as last time. I remember."`;
+  if ((life.pantry ?? 0) >= 3) return `${name}: "Ah, you get food! Make I take something."`;
+  if (hasAc) return `${name}: "Ah, this place cold pass outside!"`;
+  if (!hasAc && hour >= 11 && hour < 16) return `${name}: "This place hot o. Open window."`;
+  if (hasSofa && (life.furniture?.length ?? 0) >= 3) return `${name}: "Ei, new things! You dey chop money."`;
+  if (hasSofa) return `${name}: "Chale, your place dey nice o!"`;
+  if (home.comfort <= 4) return `${name}: "Space small, but e dey okay."`;
+  return `${name}: "At least you get four walls. Make we gist."`;
 }
 
 export function homeUpgradeHints(life: Life) {

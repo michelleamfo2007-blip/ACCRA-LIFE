@@ -46,9 +46,23 @@ export type Life = {
   inventory: string[];
   log: string[];
   inbox: string[];
-  relations: { name: string; score: number }[];
+  relations: { name: string; score: number; visits?: number }[];
   /** Friends currently at your place (home loop) or seated at your restaurant table. */
-  guests?: { name: string; username?: string; arrivedAt: number; until: number; doing: string; sleepover?: boolean; gift?: string; spot?: string; seatId?: string }[];
+  guests?: {
+    name: string;
+    username?: string;
+    arrivedAt: number;
+    until: number;
+    doing: string;
+    sleepover?: boolean;
+    gift?: string;
+    spot?: string;
+    seatId?: string;
+    eta?: number;
+    ride?: string;
+    purpose?: string;
+    from?: string;
+  }[];
   /** Nightlife session — bar → table → bottle → dance → leave. */
   club?: { spot: string; state: string; bottles: number; spend: number; danced: boolean; startedAt: number; posted?: boolean };
   /** Soft next-morning penalty after a heavy club night. */

@@ -37,7 +37,7 @@ export function Apartment({
   pieces?: Placed[];
   picked?: string | null;
   placing?: boolean;
-  guests?: string[];
+  guests?: { name: string; doing?: string }[];
   onPick?: (id: string) => void;
   onDrag?: (x: number, z: number) => void;
 }) {
@@ -138,26 +138,31 @@ export function Apartment({
           />
         </group>
       )}
-      {guests.slice(0, 2).map((name, index) => (
-        <group key={name} position={[-1.35 + index * 0.55, 0, 0.15 + index * 0.2]}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-            <circleGeometry args={[0.28, 14]} />
-            <meshBasicMaterial color="#3b82f6" transparent opacity={0.2} />
-          </mesh>
-          <Figure
-            skin={["#8d5a3b", "#a06a45", "#6b4423"][index % 3]}
-            shirt={["#3b82f6", "#FCD116", "#22c55e"][index % 3]}
-            pants="#1c2744"
-            hair={["Afro", "Bun", "Bob"][index % 3]}
-            cloth="#3b82f6"
-            pattern="Plain"
-            outfit="Casual"
-            body={index % 2 === 0 ? "woman" : "man"}
-            pose="sit"
-            turn={20 + index * 15}
-          />
-        </group>
-      ))}
+      {guests.slice(0, 3).map((guest, index) => {
+        const atDoor = guest.doing === "door";
+        const inKitchen = guest.doing === "eat" || guest.doing === "cook";
+        const spot: [number, number, number] = atDoor ? [-4.35, 0, 0.15] : inKitchen ? [3.7, 0, 1.15] : [-1.35 + index * 0.5, 0, 0.35];
+        return (
+          <group key={guest.name} position={spot}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+              <circleGeometry args={[0.28, 14]} />
+              <meshBasicMaterial color="#3b82f6" transparent opacity={0.2} />
+            </mesh>
+            <Figure
+              skin={["#8d5a3b", "#a06a45", "#6b4423"][index % 3]}
+              shirt={["#3b82f6", "#FCD116", "#22c55e"][index % 3]}
+              pants="#1c2744"
+              hair={["Afro", "Bun", "Bob"][index % 3]}
+              cloth="#3b82f6"
+              pattern="Plain"
+              outfit="Casual"
+              body={index % 2 === 0 ? "woman" : "man"}
+              pose={atDoor || inKitchen ? "idle" : "sit"}
+              turn={atDoor ? 90 : 20 + index * 15}
+            />
+          </group>
+        );
+      })}
     </Canvas>
   );
 }

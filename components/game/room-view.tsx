@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { HomeDesk } from "@/components/game/home-desk";
 import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
-import { activeGuests } from "@/lib/game/home-life";
+import { activeGuests, doorGuests } from "@/lib/game/home-life";
 import { cedis, hasCurrent, homeLook, hourOf, sellValue, SHOP, type Life, type Placed, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
@@ -46,6 +46,7 @@ export function RoomView({
   onHang,
   onSleepover,
   onSendHome,
+  onOpenDoor,
   onInvite,
   onVisit,
   cloud = false,
@@ -66,6 +67,7 @@ export function RoomView({
   onHang?: (name: string, kind: "chat" | "tv" | "game" | "drink") => void;
   onSleepover?: (name: string) => void;
   onSendHome?: (name: string) => void;
+  onOpenDoor?: (name: string) => void;
   onInvite?: (username: string) => void;
   onVisit?: (username: string) => void;
   cloud?: boolean;
@@ -245,7 +247,7 @@ export function RoomView({
   const owns = (id: string) => life.inventory.includes(id);
   const look = homeLook(life.homeId);
   const sofaColor = owns("gold") ? "#8b1e3f" : owns("leather") ? "#1c1c1c" : owns("family") ? "#c4844a" : look.sofa;
-  const guests = activeGuests(life);
+  const guests = [...doorGuests(life), ...activeGuests(life)];
 
   return (
     <div className="absolute inset-0 touch-none" style={{ background: dark ? "#10131a" : night ? "#1b2744" : "#c5d7ea" }}>
@@ -257,7 +259,7 @@ export function RoomView({
         dark={dark}
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
-        guests={guests.map((guest) => guest.name)}
+        guests={guests.map((guest) => ({ name: guest.name, doing: guest.doing }))}
         onAsk={onAsk}
         onWalk={(x, z) => {
           if (draft || !canInterrupt()) return;
@@ -311,6 +313,7 @@ export function RoomView({
           onHang={onHang}
           onSleepover={onSleepover}
           onSendHome={onSendHome}
+          onOpenDoor={onOpenDoor}
           onInvite={onInvite}
           onVisit={onVisit}
           onBuyHint={onUpgrade}
