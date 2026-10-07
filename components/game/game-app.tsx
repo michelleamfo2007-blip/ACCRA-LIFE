@@ -1587,6 +1587,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           place={trip.name}
           ride={trip.ride}
           onBack={() => setTrip(null)}
+          onMap={() => {
+            setTrip(null);
+            setTab("map");
+          }}
           onArrive={() => {
             const going = trip;
             setTrip(null);

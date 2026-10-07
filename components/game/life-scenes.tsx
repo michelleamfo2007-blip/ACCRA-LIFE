@@ -7,6 +7,7 @@ import type { FlightPhase } from "@/components/game/flight-outside";
 import { accraHour, cedis, type Life, type Ride } from "@/lib/game/world";
 
 const FlightOutside = dynamic(() => import("@/components/game/flight-outside").then((mod) => mod.FlightOutside), { ssr: false });
+const AccraRoad = dynamic(() => import("@/components/game/accra-road").then((mod) => mod.AccraRoad), { ssr: false });
 
 const LINES = [
   "Liberation Road is thick. A trotro cuts in without asking.",
@@ -17,6 +18,17 @@ const LINES = [
   "An okada filters between the bumpers and vanishes ahead.",
   "Almost there — you can smell the place before you see the gate.",
 ];
+
+const ROAD_SIGNS = ["LIBERATION ROAD", "OXFORD STREET", "INDEPENDENCE AVE", "AIRPORT ROAD", "RING ROAD EAST", "SPINTEX ROAD", "GRAPHIC ROAD"];
+
+const RIDE_SLOGANS: Record<string, string> = {
+  taxi: "GOD'S TIME IS THE BEST",
+  trotro: "NO CONDITION IS PERMANENT",
+  car: "SAFE JOURNEY",
+  okada: "NO RUSH",
+  train: "ACCRA · TEMA",
+  trek: "",
+};
 
 type TrafficKind = "taxi" | "trotro" | "private" | "okada" | "suv" | "truck";
 
@@ -65,22 +77,27 @@ export function StreetRide({
   ride,
   onArrive,
   onBack,
+  onMap,
 }: {
   life: Life;
   place: string;
   ride: Ride;
   onArrive: () => void;
   onBack: () => void;
+  onMap?: () => void;
 }) {
-  const [camera, setCamera] = useState<"chase" | "side" | "selfie">("chase");
+  const [camera, setCamera] = useState<"chase" | "cabin" | "selfie">("chase");
   const [left, setLeft] = useState<number>(ride.minutes);
   const [line, setLine] = useState(0);
   const [progress, setProgress] = useState(0);
-  const fare = ride.cost ? `${cedis(ride.cost)}.` : "Free ride: your own two legs.";
+  const fare = ride.cost ? cedis(ride.cost) : "Free";
   const arriveRef = useRef(onArrive);
   const finished = useRef(false);
   const night = accraHour() >= 19 || accraHour() < 5;
   const traffic = useMemo(() => makeRideTraffic(`${ride.id}:${place}`), [ride.id, place]);
+  const slogan = RIDE_SLOGANS[ride.id] || "SAFE JOURNEY";
+  const sign = ROAD_SIGNS[Math.min(ROAD_SIGNS.length - 1, Math.floor(progress * ROAD_SIGNS.length))];
+  const boarding = progress < 0.12 && ride.id !== "trek";
   arriveRef.current = onArrive;
   function finish() {
     if (finished.current) return;
@@ -90,7 +107,7 @@ export function StreetRide({
 
   useEffect(() => {
     const started = Date.now();
-    const span = 9000;
+    const span = 11000;
     const id = window.setInterval(() => {
       const gone = Math.min(1, (Date.now() - started) / span);
       setProgress(gone);
@@ -110,16 +127,54 @@ export function StreetRide({
   const facing = camera === "selfie" ? -1 : 1;
   const walking = ride.id === "trek";
   const onRails = ride.id === "train";
+  const chase = camera === "chase" && !walking;
 
   return (
-    <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0c1220]" : "bg-[#c5e4f7]"}`}>
-      <div className={`street-world street-${camera} ${walking ? "street-on-foot" : `street-on-${ride.id}`} ${night ? "street-night" : ""}`}>
+    <div className={`absolute inset-0 z-40 overflow-hidden ${night ? "bg-[#0a1020]" : "bg-[#7eb8e0]"}`}>
+      {camera === "chase" ? (
+        <AccraRoad ride={ride.id} night={night} boarding={boarding && ride.id !== "trek"} slowing={progress > 0.82} slogan={slogan} look={life.look} />
+      ) : null}
+      {camera === "chase" ? null : (
+      <div className={`street-world street-${camera} ${walking ? "street-on-foot" : `street-on-${ride.id}`} ${night ? "street-night" : ""} ${boarding ? "street-boarding" : ""}`}>
         <div className="street-sky" />
-        <div className="street-skyline" aria-hidden />
+        {chase ? (
+          <>
+            <div className="street-clouds" aria-hidden>
+              <span className="street-cloud street-cloud-a" />
+              <span className="street-cloud street-cloud-b" />
+              <span className="street-cloud street-cloud-c" />
+              <span className="street-cloud street-cloud-d" />
+            </div>
+            {night ? <div className="street-stars" aria-hidden /> : null}
+            <div className="street-haze" aria-hidden />
+            <div className="street-city street-city-l" aria-hidden>
+              {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                <span key={`cl${i}`} className={`street-tower street-tower-${(i % 6) + 1}`} style={{ ["--i" as string]: i }} />
+              ))}
+              <span className="street-palm street-palm-a" />
+              <span className="street-lamp street-lamp-a" />
+              <span className="street-lamp street-lamp-b" />
+            </div>
+            <div className="street-city street-city-r" aria-hidden>
+              {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                <span key={`cr${i}`} className={`street-tower street-tower-${((i + 3) % 6) + 1}`} style={{ ["--i" as string]: i }} />
+              ))}
+              <span className="street-billboard">ACCRA NIGHTS</span>
+              <span className="street-palm street-palm-b" />
+              <span className="street-lamp street-lamp-c" />
+              <span className="street-lamp street-lamp-d" />
+            </div>
+            <div className="street-verge street-verge-l" aria-hidden />
+            <div className="street-verge street-verge-r" aria-hidden />
+          </>
+        ) : (
+          <div className="street-skyline" aria-hidden />
+        )}
         <div className="street-road">
           <span className="street-gutter street-gutter-l" />
           <span className="street-gutter street-gutter-r" />
-          <span className="street-lane" />
+          <span className="street-lane street-lane-a" />
+          <span className="street-lane street-lane-b" />
           <span className="street-pothole street-pothole-a" />
           <span className="street-pothole street-pothole-b" />
           <span className="street-bump" />
@@ -131,58 +186,84 @@ export function StreetRide({
             {traffic.map((bit) => (
               <RoadCar key={bit.id} bit={bit} night={night} />
             ))}
-            <span className="street-hawker street-hawker-a" />
-            <span className="street-hawker street-hawker-b" />
+            {!chase ? (
+              <>
+                <span className="street-hawker street-hawker-a" />
+                <span className="street-hawker street-hawker-b" />
+              </>
+            ) : null}
           </div>
         ) : null}
-        <div className="street-walk">
-          <span className="street-kiosk" />
-          <span className="street-stall" />
-          <span className="street-pole" />
-        </div>
+        {!chase ? (
+          <div className="street-walk">
+            <span className="street-kiosk" />
+            <span className="street-stall" />
+            <span className="street-pole" />
+          </div>
+        ) : (
+          <div className="street-sign" aria-hidden>
+            <span className="street-sign-post" />
+            <span className="street-sign-board">{sign}</span>
+          </div>
+        )}
         {night ? <div className="street-glow" aria-hidden /> : null}
         {walking ? (
           <div className={`street-sim street-sim-${camera}`}>
             <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={facing} className="h-full" />
           </div>
+        ) : boarding && chase ? (
+          <div className="street-board-beat">
+            <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={1} className="h-full" />
+            <div className={`street-vehicle street-vehicle-await street-vehicle-${ride.id}`}>
+              <Vehicle ride={ride.id} life={life} face={1} night={night} chase slogan={slogan} />
+            </div>
+          </div>
         ) : (
-          <div className={`street-vehicle street-vehicle-${ride.id} ${progress > 0.82 ? "street-vehicle-brake" : ""}`}>
-            <Vehicle ride={ride.id} life={life} face={facing} night={night} />
+          <div className={`street-vehicle street-vehicle-${ride.id} ${chase ? "street-vehicle-chase" : ""} ${progress > 0.82 ? "street-vehicle-brake" : ""}`}>
+            <Vehicle ride={ride.id} life={life} face={facing} night={night} chase={chase} slogan={slogan} />
           </div>
         )}
       </div>
-      <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] z-10 w-[min(300px,74vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
-        <p className="text-sm font-semibold">
-          {ride.label} · {place}
+      )}
+
+      <div className="absolute right-3 top-[max(5.2rem,calc(env(safe-area-inset-top)+4.4rem))] z-10 w-[min(240px,68vw)] rounded-3xl bg-white/95 p-3 text-[#121212] shadow-xl">
+        <p className="text-sm font-bold leading-snug">
+          {boarding ? `Boarding the ${ride.label.toLowerCase()}…` : `On the way to ${place}…`}
         </p>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
-          <div className="h-full rounded-full bg-[#FCD116]" style={{ width: `${progress * 100}%` }} />
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e8edf5]">
+          <div className="h-full rounded-full bg-[#006B3F]" style={{ width: `${progress * 100}%` }} />
         </div>
-        <p className="mt-2 text-xs text-white/80">{left}:00 on the road</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
-          <span className="rounded-full bg-[#006B3F] px-2 py-0.5">{walking ? "On foot" : "In traffic"}</span>
-          <span className="rounded-full bg-white/15 px-2 py-0.5">{night ? "Night road" : life.dumsor ? "Dumsor" : "Day traffic"}</span>
-        </div>
-        <p className="mt-2 text-xs leading-5 text-white/85">{progress > 0.9 ? `${place} is just ahead.` : walking ? (progress > 0.5 ? "Cars keep rolling past. Keep walking." : LINES[line]) : LINES[line]}</p>
-        <p className="mt-1 text-xs text-white/70">{fare}</p>
-        <div className="mt-3 flex gap-2">
-          <button type="button" onClick={finish} className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#121212]">
-            Skip ride ›
-          </button>
-          <button type="button" onClick={onBack} className="rounded-full bg-white/15 px-3 py-2 text-xs font-semibold">
-            Turn back
+        <p className="mt-1.5 text-[11px] font-semibold text-[#5c6b82]">
+          {ride.label} · {fare} · {left}m left
+        </p>
+        <p className="mt-1 text-[11px] leading-4 text-[#5c6b82]">
+          {boarding ? "Door open. Find your seat." : progress > 0.9 ? `${place} is just ahead.` : LINES[line]}
+        </p>
+        <div className="mt-2.5 flex gap-2">
+          {onMap ? (
+            <button type="button" onClick={onMap} className="flex-1 rounded-full bg-[#f4f7fb] px-3 py-2 text-xs font-bold text-[#243044]">
+              Map
+            </button>
+          ) : (
+            <button type="button" onClick={onBack} className="flex-1 rounded-full bg-[#f4f7fb] px-3 py-2 text-xs font-bold text-[#243044]">
+              Back
+            </button>
+          )}
+          <button type="button" onClick={finish} className="flex flex-1 items-center justify-center gap-1 rounded-full bg-[#121212] px-3 py-2 text-xs font-bold text-white">
+            Skip <span aria-hidden>››</span>
           </button>
         </div>
       </div>
-      <div className="absolute right-3 top-[max(8rem,calc(env(safe-area-inset-top)+6rem))] z-10 flex flex-col gap-2">
+
+      <div className="absolute bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-1/2 z-10 flex -translate-x-1/2 gap-1.5 rounded-full bg-[#121212]/75 p-1 shadow-lg backdrop-blur">
         {(
           [
-            ["chase", "Chase"],
-            ["side", "Side"],
-            ["selfie", "Selfie"],
+            ["chase", "Outside"],
+            ["cabin", "Cabin"],
+            ["selfie", "Seat"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setCamera(id)} className={`rounded-2xl px-3 py-2 text-xs font-bold shadow ${camera === id ? "bg-white text-[#121212]" : "bg-[#121212]/80 text-white"}`}>
+          <button key={id} type="button" onClick={() => setCamera(id)} className={`rounded-full px-3 py-1.5 text-[11px] font-bold ${camera === id ? "bg-white text-[#121212]" : "text-white/85"}`}>
             {label}
           </button>
         ))}
@@ -216,8 +297,39 @@ function RoadCar({ bit, night }: { bit: TrafficBit; night: boolean }) {
   );
 }
 
-function Vehicle({ ride, life, face, night }: { ride: Ride["id"]; life: Life; face: 1 | -1; night?: boolean }) {
+function Vehicle({
+  ride,
+  life,
+  face,
+  night,
+  chase,
+  slogan,
+}: {
+  ride: Ride["id"];
+  life: Life;
+  face: 1 | -1;
+  night?: boolean;
+  chase?: boolean;
+  slogan?: string;
+}) {
   const rider = <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="idle" face={face} className="h-full" />;
+  if (chase && ride !== "okada" && ride !== "trek") {
+    const body =
+      ride === "trotro" ? "chase-van" : ride === "train" ? "chase-coach" : ride === "car" ? "chase-private" : "chase-taxi";
+    return (
+      <div className={`chase-car ${body} ${night ? "ride-lit" : ""}`}>
+        <span className="chase-roof" />
+        <span className="chase-window" />
+        <span className="chase-bumper" />
+        <span className="chase-light chase-light-l" />
+        <span className="chase-light chase-light-r" />
+        {slogan ? <span className="chase-slogan">{slogan}</span> : null}
+        <span className="chase-wheel chase-wheel-l" />
+        <span className="chase-wheel chase-wheel-r" />
+        <span className="chase-rider">{rider}</span>
+      </div>
+    );
+  }
   if (ride === "trotro") {
     return (
       <div className={`van ${night ? "ride-lit" : ""}`}>
@@ -226,7 +338,7 @@ function Vehicle({ ride, life, face, night }: { ride: Ride["id"]; life: Life; fa
         <span className="van-glass">{rider}</span>
         <span className="van-glass" />
         <span className="van-glass" />
-        <span className="van-board">NO CONDITION IS PERMANENT</span>
+        <span className="van-board">{slogan || "NO CONDITION IS PERMANENT"}</span>
         <span className="ride-brake" />
         <span className="wheel wheel-back" />
         <span className="wheel wheel-front" />
@@ -262,6 +374,7 @@ function Vehicle({ ride, life, face, night }: { ride: Ride["id"]; life: Life; fa
       <div className={`cab ${night ? "ride-lit" : ""}`}>
         <span className="cab-lamp">TAXI</span>
         <span className="cab-glass">{rider}</span>
+        {slogan ? <span className="cab-slogan">{slogan}</span> : null}
         <span className="ride-brake" />
         <span className="wheel wheel-back" />
         <span className="wheel wheel-front" />
