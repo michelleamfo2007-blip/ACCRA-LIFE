@@ -1284,7 +1284,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
               return result;
             }
             commitLife(account.username, result.life);
-            if (action.kind === "spray" && result.notes[0]) flash(result.notes[0]);
+            if (result.notes[0]) flash(result.notes[0]);
             return result;
           }}
           onMove={shareSpot}

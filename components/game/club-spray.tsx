@@ -131,7 +131,7 @@ export function ClubSpray({
     const bag = buildNotes(cost, gold).slice(0, gold ? 10 : 7);
     const next = bag.map((value, index) => ({
       id: `${born}-${index}-${value}`,
-      value: gold ? Math.round(value * 1.5) : value,
+      value,
       x: 8 + ((index * 37) % 78),
       gold: gold || value >= 100,
       mine,
@@ -162,16 +162,10 @@ export function ClubSpray({
 
   function tap(note: Note) {
     const now = Date.now();
-    if (taken.current.has(note.id) || now - lastTap.current < 90) return;
+    if (taken.current.has(note.id) || now - lastTap.current < 40) return;
     lastTap.current = now;
     taken.current.add(note.id);
     setNotes((list) => list.filter((item) => item.id !== note.id));
-    if (note.mine) {
-      setLine("The crowd caught that one. Your spray is for them.");
-      setHype((value) => Math.min(100, value + 2));
-      tone(180, 0.08, 0.04);
-      return;
-    }
     const chain = now - combo.current.at < 1600;
     combo.current = { n: chain ? combo.current.n + 1 : 1, at: now };
     let value = note.value;
@@ -238,7 +232,7 @@ export function ClubSpray({
           key={note.id}
           type="button"
           aria-label={`Catch ${cedis(note.value)} note`}
-          className="club-note-fall pointer-events-auto absolute top-0 border-0 bg-transparent p-1"
+          className="club-note-fall pointer-events-auto absolute top-0 grid h-11 w-11 place-items-center border-0 bg-transparent p-0"
           style={{
             left: `${note.x}%`,
             animation: `club-note ${note.ms}ms linear forwards`,

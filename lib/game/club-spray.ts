@@ -10,16 +10,10 @@ export const SPRAYS = [
 
 export type SprayId = (typeof SPRAYS)[number]["id"];
 
-const CATCH_CAP = 400;
 const NOTE_VALUES = [1, 5, 5, 10, 10, 20, 20, 50];
 
 export function sprayPack(id: string) {
   return SPRAYS.find((pack) => pack.id === id) ?? null;
-}
-
-export function caughtTonight(life: Life) {
-  const day = Math.floor(life.minutes / 1440);
-  return life.stats?.catchDay === day ? (life.stats?.caughtToday ?? 0) : 0;
 }
 
 export function sprayCash(life: Life, id: SprayId, name: string): StepResult {
@@ -41,13 +35,10 @@ export function sprayCash(life: Life, id: SprayId, name: string): StepResult {
   return { life: next, notes: [line] };
 }
 
-/** Notes from someone else's spray. Your own rain does not pay you back. */
+/** A tapped note lands in the wallet. No nightly cap. */
 export function catchCash(life: Life, value: number): StepResult {
-  const gain = Math.max(0, Math.round(value));
-  if (gain <= 0) return { life, notes: [], error: "Empty note." };
-  const room = CATCH_CAP - caughtTonight(life);
-  if (room <= 0) return { life, notes: [], error: "Your hands are full for tonight." };
-  const take = Math.min(gain, room);
+  const take = Math.max(0, Math.round(value));
+  if (take <= 0) return { life, notes: [], error: "Empty note." };
   const next = cloneLife(life);
   const day = Math.floor(next.minutes / 1440);
   next.cash += take;
