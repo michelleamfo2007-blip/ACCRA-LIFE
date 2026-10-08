@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { CanvasTexture, ExtrudeGeometry, RepeatWrapping, Shape, SphereGeometry, SRGBColorSpace, type PerspectiveCamera } from "three";
+import { ExtrudeGeometry, Shape, SphereGeometry, type PerspectiveCamera } from "three";
 import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
 import { HouseGarage } from "@/components/game/house-garage";
 import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
+import { InteriorFinish, plankMap, PlasterBox, tileMap } from "@/components/game/room-finish";
 import { Figure } from "@/components/game/low-poly-human";
 import { garageBox } from "@/lib/game/garage";
 import { DIVIDERS, FIXTURES, fixtureAt, hangSpot, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
@@ -72,9 +73,9 @@ export function Apartment({
     >
       <CameraRig frozen={placing} follow={placing && focus ? focus : pos} lift={placing ? 0.85 : 0} />
       <color attach="background" args={[dark ? "#1a140f" : night ? "#1b2744" : look.sky]} />
-      <hemisphereLight args={[night || dark ? "#ffe4c2" : "#f3f7ff", "#d9c4a4", dark ? 0.28 : 0.42]} />
-      <ambientLight color={night || dark ? "#ffe7c8" : "#fffaf3"} intensity={dark ? 0.72 : night ? 0.58 : grade === "low" ? 0.55 : grade === "high" ? 0.9 : 0.78} />
-      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.38 : night ? 0.42 : grade === "low" ? 0.55 : grade === "high" ? 1.2 : 1} />
+      <hemisphereLight args={[night || dark ? "#ffe4c2" : "#fff6ea", "#e7d7b8", dark ? 0.16 : 0.38]} />
+      <ambientLight color={night || dark ? "#ffe7c8" : "#fff8ee"} intensity={dark ? 0.2 : night ? 0.46 : 0.62} />
+      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.1 : night ? 0.26 : 0.42} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
@@ -82,11 +83,8 @@ export function Apartment({
       <Floor grade={grade} floorId={life.floor} span={span} />
       <Walls grade={grade} span={span} gap={garageBox(span, bays)} />
       <HouseGarage life={life} span={span} bays={bays} onWalk={placing ? undefined : onWalk} onCar={placing ? undefined : onCar} />
-      {grade !== "low" ? <PictureWindow span={span} glow={night && !dark} /> : null}
-      {grade === "hall" ? <StripLight glow={!dark} /> : null}
+      <InteriorFinish span={span} night={night} dark={dark} />
       {grade === "high" ? <Cooler /> : null}
-      {(grade === "mid" || grade === "high") && !dark ? <Sconces glow={night} /> : null}
-      {grade === "low" ? <Bulb glow={dark || night} /> : null}
       <Door color={look.door} x={-room.halfW + 0.1} onGo={onGo} />
       <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
         <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
@@ -451,12 +449,17 @@ function Floor({ grade, floorId, span = 0 }: { grade: HomeGrade; floorId?: strin
   const look = homeLook(grade === "low" ? "jamestown" : grade === "hall" ? "legon-hall" : grade === "high" ? "east-legon" : "adabraka");
   const tileA = bought?.color ?? look.tileA;
   const tileB = bought?.accent ?? look.tileB;
-  const map = useMemo(() => tiles(tileA, tileB), [tileA, tileB]);
+  const woodFloor = !bought && (grade === "mid" || grade === "high");
+  const lookWood = homeLook(grade === "high" ? "east-legon" : "adabraka");
+  const map = useMemo(
+    () => (woodFloor ? plankMap(lookWood.woodA, lookWood.woodB) : tileMap(tileA, tileB)),
+    [woodFloor, lookWood.woodA, lookWood.woodB, tileA, tileB],
+  );
   const room = roomReach(span);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
       <planeGeometry args={[room.halfW * 2, room.halfD * 2]} />
-      <meshLambertMaterial map={map} />
+      <meshStandardMaterial map={map} color={map ? "#ffffff" : tileA} roughness={0.58} metalness={0.06} />
     </mesh>
   );
 }
@@ -480,73 +483,19 @@ function Walls({ grade, span = 0, gap }: { grade: HomeGrade; span?: number; gap?
   const rightCenter = (doorX1 + halfW) / 2;
   return (
     <group>
-      <Box color={look.wall} position={[leftCenter, y, -halfD]} size={[leftLen, h, 0.18]} flat={false} />
-      <Box color={look.wall} position={[rightCenter, y, -halfD]} size={[rightLen, h, 0.18]} flat={false} />
-      <Box color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} flat={false} />
-      <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} flat={false} />
-      <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} flat={false} />
-      <Box color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} flat={false} />
-      <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[0, 0.07, -halfD + 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
-      <Box color={grade === "high" ? "#e7d3ae" : "#cbb892"} position={[halfW - 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
-      {grade === "mid" || grade === "high" ? <WoodFloor pale={grade === "high"} /> : null}
+      <PlasterBox color={look.wall} position={[leftCenter, y, -halfD]} size={[leftLen, h, 0.18]} />
+      <PlasterBox color={look.wall} position={[rightCenter, y, -halfD]} size={[rightLen, h, 0.18]} />
+      <PlasterBox color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} />
+      <PlasterBox color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} />
+      <PlasterBox color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} />
+      <PlasterBox color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} />
+      <Box color={look.wall} position={[0, 0.07, -halfD + 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
+      <Box color={look.wall} position={[0, 0.07, halfD - 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
+      <Box color={look.side} position={[halfW - 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
+      <Box color={look.side} position={[-halfW + 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
       {grade === "high" ? <Rug /> : null}
       {grade === "hall" || grade === "mid" ? <Mat /> : null}
       {grade === "low" || grade === "mid" ? <WindowBars rusty={grade === "low"} /> : null}
-    </group>
-  );
-}
-
-function WoodFloor({ pale }: { pale: boolean }) {
-  const map = useMemo(() => wood(pale ? "#f3ead6" : "#e7d2a4", pale ? "#e6d7b4" : "#dcc497"), [pale]);
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[3.2, 0.012, -2.9]}>
-      <planeGeometry args={[3.6, 3]} />
-      <meshLambertMaterial map={map} />
-    </mesh>
-  );
-}
-
-function PictureWindow({ span, glow }: { span: number; glow: boolean }) {
-  const room = roomReach(span);
-  return (
-    <group position={[-1.1, 1.05, -room.halfD + 0.12]}>
-      <mesh>
-        <boxGeometry args={[1.85, 1.02, 0.05]} />
-        <meshStandardMaterial color="#f7f1e6" roughness={0.55} />
-      </mesh>
-      <mesh position={[0, 0.02, 0.03]}>
-        <boxGeometry args={[1.5, 0.72, 0.02]} />
-        <meshBasicMaterial color={glow ? "#243656" : "#c9e7f8"} />
-      </mesh>
-      <mesh position={[0, 0.02, 0.045]}>
-        <boxGeometry args={[0.035, 0.72, 0.02]} />
-        <meshStandardMaterial color="#e6d3ae" />
-      </mesh>
-      <Cushion color="#f4e4cf" position={[-0.98, -0.05, 0.08]} size={[0.16, 0.95, 0.05]} />
-      <Cushion color="#f4e4cf" position={[0.98, -0.05, 0.08]} size={[0.16, 0.95, 0.05]} />
-      {glow ? <pointLight position={[0, 0, 0.8]} color="#ffd7a1" intensity={1.6} distance={9} decay={2} /> : null}
-    </group>
-  );
-}
-
-function Sconces({ glow }: { glow: boolean }) {
-  return (
-    <group>
-      <Light at={[-2.2, 1.45, -4.35]} glow={glow} />
-      <Light at={[2.4, 1.45, -4.35]} glow={glow} />
-      <Light at={[5.85, 1.45, 1.2]} glow={glow} />
-    </group>
-  );
-}
-
-function Light({ at, glow }: { at: [number, number, number]; glow?: boolean }) {
-  return (
-    <group position={at}>
-      <mesh>
-        <sphereGeometry args={[0.07, 10, 8]} />
-        <meshBasicMaterial color="#fff1c2" />
-      </mesh>
-      {glow ? <pointLight intensity={1.8} distance={7.5} decay={2} color="#ffd59a" /> : null}
     </group>
   );
 }
@@ -574,7 +523,7 @@ function Divider({ at, along, length, color, onPick }: { at: [number, number]; a
   const size: [number, number, number] = along === "x" ? [length, 1.7, 0.16] : [0.16, 1.7, length];
   return (
     <group position={[at[0], 0, at[1]]} onClick={(event) => { event.stopPropagation(); onPick(); }}>
-      <Box color={color} position={[0, 0.85, 0]} size={size} flat={false} />
+      <PlasterBox color={color} position={[0, 0.85, 0]} size={size} />
     </group>
   );
 }
@@ -663,27 +612,6 @@ function WindowBars({ rusty }: { rusty: boolean }) {
       {[-0.22, -0.07, 0.08, 0.23].map((z) => (
         <Box key={z} color={rusty ? "#8a5a3a" : "#dfe6ee"} position={[0, 0, z]} size={[0.04, 0.7, 0.03]} />
       ))}
-    </group>
-  );
-}
-
-function Bulb({ glow }: { glow?: boolean }) {
-  return (
-    <group position={[0, 1.55, 0]}>
-      <mesh>
-        <sphereGeometry args={[0.08, 8, 6]} />
-        <meshBasicMaterial color="#e7c56a" />
-      </mesh>
-      {glow ? <pointLight intensity={1.3} distance={8} decay={2} color="#ffd59a" /> : null}
-    </group>
-  );
-}
-
-function StripLight({ glow }: { glow?: boolean }) {
-  return (
-    <group position={[0, 1.62, 0]}>
-      <Box color={glow ? "#fff6d8" : "#d9dee6"} position={[0, 0, 0]} size={[2.4, 0.06, 0.18]} flat={false} />
-      {glow ? <pointLight intensity={2.4} distance={12} decay={2} color="#fff1cc" /> : null}
     </group>
   );
 }
@@ -850,42 +778,3 @@ function Box({ color, position, size, flat = true }: { color: string; position: 
   );
 }
 
-function wood(light: string, dark: string) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
-  const pen = canvas.getContext("2d");
-  if (!pen) return null;
-  for (let row = 0; row < 8; row += 1) {
-    for (let col = 0; col < 8; col += 1) {
-      pen.fillStyle = (col + row) % 2 === 0 ? light : dark;
-      pen.fillRect(col * 16, row * 16, 16, 16);
-    }
-  }
-  const texture = new CanvasTexture(canvas);
-  texture.wrapS = RepeatWrapping;
-  texture.wrapT = RepeatWrapping;
-  texture.repeat.set(3, 2);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}
-
-function tiles(light: string, dark: string) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
-  const pen = canvas.getContext("2d");
-  if (!pen) return null;
-  for (let row = 0; row < 8; row += 1) {
-    for (let col = 0; col < 8; col += 1) {
-      pen.fillStyle = (col + row) % 2 === 0 ? light : dark;
-      pen.fillRect(col * 16, row * 16, 16, 16);
-    }
-  }
-  const texture = new CanvasTexture(canvas);
-  texture.wrapS = RepeatWrapping;
-  texture.wrapT = RepeatWrapping;
-  texture.repeat.set(6, 4.5);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
-}

@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { baySpot, garageBox, motorsOf } from "@/lib/game/garage";
 import { MotorMesh } from "@/components/game/motor-mesh";
+import { WallLamp } from "@/components/game/room-finish";
 import { Figure } from "@/components/game/low-poly-human";
-import type { Life } from "@/lib/game/world";
+import { hasCurrent, type Life } from "@/lib/game/world";
 
 function Slab({ color, position, size }: { color: string; position: [number, number, number]; size: [number, number, number] }) {
   return (
@@ -37,10 +38,11 @@ export function HouseGarage({
   const depth = box.z1 - box.z0;
   const midX = (box.x0 + box.x1) / 2;
   const midZ = (box.z0 + box.z1) / 2;
-  const wall = "#d5d0c6";
+  const wall = "#e7e0d2";
   const concrete = "#b7b3aa";
   const hasGen = life.inventory.some((id) => id === "generator" || id === "yellow-gen");
   const hasSolar = life.inventory.includes("solar");
+  const lit = !life.dumsor || hasCurrent(life.inventory);
   const lift = bays >= 3;
   const guests = (life.guests ?? []).filter((guest) => guest.doing !== "leave");
   return (
@@ -76,13 +78,14 @@ export function HouseGarage({
         <circleGeometry args={[0.55, 16]} />
         <meshBasicMaterial color="#3a342c" transparent opacity={0.35} />
       </mesh>
+      <WallLamp x={box.x0 + 0.12} z={midZ} yaw={Math.PI / 2} on={lit} />
       <Slab color={wall} position={[box.x0, 0.9, midZ]} size={[0.14, 1.7, depth]} />
       <Slab color={wall} position={[box.x1, 0.9, midZ]} size={[0.14, 1.7, depth]} />
       <Slab color="#c8c3b8" position={[box.x0 + 0.35, 1.72, midZ]} size={[0.12, 0.08, depth]} />
       <Slab color="#c8c3b8" position={[box.x1 - 0.35, 1.72, midZ]} size={[0.12, 0.08, depth]} />
       <mesh position={[midX, 1.62, midZ]}>
         <boxGeometry args={[0.7, 0.06, 0.28]} />
-        <meshStandardMaterial color="#f7f3df" emissive="#f4e7b0" emissiveIntensity={life.dumsor && !hasGen && !hasSolar ? 0 : 0.7} />
+        <meshStandardMaterial color="#f7f3df" emissive="#f4e7b0" emissiveIntensity={lit ? 0.7 : 0} />
       </mesh>
       {shut ? (
         <Slab color="#8e99a6" position={[midX, 0.85, box.z0]} size={[width - 0.3, 1.5, 0.08]} />
