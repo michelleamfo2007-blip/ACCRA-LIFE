@@ -1,5 +1,6 @@
 import { phoneOf, spendAirtime } from "@/lib/game/phone-shell";
 import { seasonOf, type Weather } from "@/lib/game/sky";
+import { stampPost } from "@/lib/game/spine";
 import { trafficFactor } from "@/lib/game/roads";
 import { askOver, type InvitePurpose } from "@/lib/game/home-life";
 import { cloneLife, moodOf, type Life, type StepResult } from "@/lib/game/world";
@@ -120,8 +121,8 @@ export function postClout(life: Life, place: string): StepResult {
   next.needs.social = Math.min(100, next.needs.social + 4);
   if (!next.community) next.community = { standing: 8, projects: [] };
   next.community.standing = Math.min(100, (next.community.standing ?? 0) + 2);
-  const likes = 8 + Math.floor(Math.random() * 40) + Math.floor(cloutOf(life) / 3);
-  const line = `Posted from ${place}. ${likes} likes. Accra dey notice.`;
+  const likes = stampPost(next, 8 + Math.floor(Math.random() * 40) + Math.floor(cloutOf(life) / 3), place);
+  const line = likes === 0 ? `Posted from ${place}. The comments turned on you.` : `Posted from ${place}. ${likes} likes. Accra dey notice.`;
   next.log = [line, ...next.log].slice(0, 14);
   next.stats = { ...(next.stats ?? {}), posts: ((next.stats ?? {}).posts ?? 0) + 1 };
   return { life: next, notes: [line] };

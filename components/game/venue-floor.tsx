@@ -19,8 +19,10 @@ import {
   type ClubNpc,
 } from "@/lib/game/club-night";
 import { BoutiqueFloor } from "@/components/game/boutique-floor";
+import { ShopFloor } from "@/components/game/shop-floor";
 import { EstateStreet } from "@/components/game/estate-street";
 import { roomLine, roomOf, staffOf } from "@/lib/game/place-kit";
+import { rivalHere } from "@/lib/game/spine";
 import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
@@ -696,8 +698,10 @@ export function VenueFloor({
               ) : null}
             </div>
           ) : null}
+          {rivalHere(life) ? <p className="mt-2 text-xs font-semibold leading-5 text-[#7a1f1f]">{rivalHere(life)!.name} is in the room. {rivalHere(life)!.line}</p> : null}
           <p className="mt-2 text-xs leading-5 text-[#5c6b82]">{roomLine(spot)}</p>
           {roomOf(spot) === "boutique" && onApply ? <BoutiqueFloor life={life} onApply={onApply} /> : null}
+          {onApply ? <ShopFloor life={life} onApply={onApply} /> : null}
           {spot.id === "trasacco-gate" ? <EstateStreet life={life} /> : null}
           {zones.length ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">

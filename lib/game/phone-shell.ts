@@ -128,7 +128,7 @@ export function wallpaperCss(paper: Wallpaper) {
 export function followersOf(life: Life) {
   const posts = life.stats?.posts ?? 0;
   const fans = life.music?.fans ?? 0;
-  return Math.round((life.relations.filter((person) => person.score >= 20).length + posts) * 12 + fans);
+  return Math.round((life.relations.filter((person) => person.score >= 20).length + posts) * 12 + fans + (life.spine?.followers ?? 0));
 }
 
 export function cloutTier(score: number) {

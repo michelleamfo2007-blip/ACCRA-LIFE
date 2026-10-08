@@ -1,3 +1,4 @@
+import { clearDebtMark } from "@/lib/game/spine";
 import { cedis, cloneLife, logLine, type Bank, type Life, type StepResult } from "@/lib/game/world";
 
 export const DAILY_RATE = 0.002;
@@ -85,5 +86,6 @@ export function repayBank(life: Life, amount: number): StepResult {
   const left = bank.loan - value;
   const onTime = life.minutes <= bank.loanDue;
   next.bank = { ...bank, loan: left, score: left === 0 ? Math.min(850, bank.score + (onTime ? 30 : 10)) : bank.score };
+  if (left === 0) clearDebtMark(next);
   return { life: next, notes: [left === 0 ? `Loan cleared.${onTime ? " On time, so your credit score went up." : ""}` : `Repaid ${cedis(value)}. ${cedis(left)} left.`] };
 }

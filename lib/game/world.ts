@@ -4,9 +4,11 @@ import { tickPhone } from "@/lib/game/phone-shell";
 import { arrivalFor, crossedTownNote, townOf, type TownId } from "@/lib/game/towns";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
+import { pulseShops } from "@/lib/game/shop-run";
 import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night";
 import { foodFromOffer, menuFor } from "@/lib/game/foods";
 import { weatherAt, weatherStress } from "@/lib/game/sky";
+import { cityArrival, copySpine, doorBlocked, noteRep, pulseSpine, type Spine } from "@/lib/game/spine";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -179,6 +181,8 @@ export type Life = {
   movedAt?: number;
   tour?: boolean;
   turf?: { area: string; week: number; points: number; last?: { week: number; points: number; area: string } };
+  /** City name, rival, seasons, and the journal. Missing on older saves. */
+  spine?: Spine;
 };
 
 export type ChopBar = {
@@ -239,7 +243,42 @@ export function jobBoost(life: Life) {
 
 export const PANTRY_MAX = 12;
 
-export type Business = { id: string; kind: string; openedAt: number; lastCollect: number; level: number };
+export type Staffer = {
+  id: string;
+  name: string;
+  role: string;
+  skill: number;
+  pay: number;
+  morale: number;
+  reliable: number;
+  trait: string;
+};
+
+export type Business = {
+  id: string;
+  kind: string;
+  openedAt: number;
+  lastCollect: number;
+  level: number;
+  name?: string;
+  color?: string;
+  tagline?: string;
+  town?: string;
+  spot?: string;
+  site?: string;
+  staff?: Staffer[];
+  /** 0.8 cheap, 1 fair, 1.25 steep. */
+  markup?: number;
+  /** 0–100. Low stock cuts the till. */
+  stock?: number;
+  /** 1–5. */
+  stars?: number;
+  notice?: string | null;
+  noticeId?: string | null;
+  pulsedDay?: number;
+  branches?: number;
+  heir?: string;
+};
 
 export type PurseNote = { id: string; delta: number; note: string };
 
@@ -1343,7 +1382,7 @@ function clone(life: Life): Life {
     transfers: (life.transfers ?? []).map((note) => ({ ...note })),
     seenTransfers: [...(life.seenTransfers ?? [])],
     chats: life.chats,
-    businesses: (life.businesses ?? []).map((shop) => ({ ...shop })),
+    businesses: (life.businesses ?? []).map((shop) => ({ ...shop, staff: shop.staff?.map((person) => ({ ...person })) })),
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
@@ -1372,6 +1411,7 @@ function clone(life: Life): Life {
     drop: life.drop ? { ...life.drop } : life.drop,
     wardrobe: (life.wardrobe ?? []).map((item) => ({ ...item })),
     outfits: life.outfits ? { ...life.outfits } : life.outfits,
+    spine: copySpine(life.spine),
   };
 }
 
@@ -1530,6 +1570,8 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
   }
   checkHealth(next, clockTo, notes);
   checkPets(next, clockTo, notes);
+  pulseShops(next, notes);
+  pulseSpine(next, notes);
   tickPhone(next, minutes, notes);
   return { life: next, notes };
 }
@@ -1578,7 +1620,7 @@ function settleBills(life: Life, from: number, to: number) {
     const rates = own ? Math.max(15, Math.round((own.spent || 8000) * 0.002)) : 0;
     const loanPay = Math.min(life.loan, life.weeklyLoan);
     const upkeep = SHOP.reduce((sum, item) => sum + (item.upkeep && life.inventory.includes(item.id) ? item.upkeep : 0), 0);
-    const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level), 0);
+    const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level, shop), 0);
     const fees = (life.kids ?? []).filter((kid) => kid.school).length * 40;
     const drivers = (life.fleet ?? []).reduce((sum, car) => sum + (car.driver ? (FLEET_WAGES[car.kind] ?? 0) : 0), 0);
     life.cash -= rent + loanPay + upkeep + wages + fees + drivers + rates;
@@ -1686,6 +1728,8 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
     for (const line of notes) pushLog(next, line);
     return { life: next, notes };
   }
+  const shut = doorBlocked(life, placeId);
+  if (shut) return { life, notes: [], error: shut };
   const ride = farRide(base, life.where, placeId);
   if (ride.blocked) return { life, notes: [], error: ride.blocked };
   const fuel = ride.fuel ?? FUEL_PER_TRIP;
@@ -1704,8 +1748,10 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   timed.notes.unshift(`${heading} to ${spotById(landed.where).name}${fare}${noteExtra}`);
   const away = crossedTownNote(fromTown, landed.town, ride.id === "car", Boolean(life.car));
   if (away) {
-    timed.notes.push(away);
-    timed.life.inbox = [away, ...timed.life.inbox].slice(0, 20);
+    const voice = cityArrival(landed.town);
+    const heard = voice ? `${away} ${voice}` : away;
+    timed.notes.push(heard);
+    timed.life.inbox = [heard, ...timed.life.inbox].slice(0, 20);
   }
   collectStamp(timed.life, placeId, timed.notes);
   if (ride.id === "car" && timed.life.car) {
@@ -1719,6 +1765,7 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
       else {
         timed.life.cash -= 80;
         timed.notes.push("Police checkpoint. No insurance sticker: ₵80 fine.");
+        noteRep(timed.life, -3, "A checkpoint fine. The people in the car will retell it.");
       }
     }
   }
@@ -2138,6 +2185,7 @@ export function giftCash(life: Life, name: string, amount: number): StepResult {
   next.cash -= value;
   next.needs.social = clampNeed(next.needs.social + 4);
   bumpRelation(next, name, 6);
+  noteRep(next, 4, `You sent ${name} money. The good version is the one people repeat.`);
   const handle = handleOf(name);
   const id = `momo-local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   next.transfers = [...(next.transfers ?? []), { id, delta: -value, note: `You sent ${cedis(value)} to ${handle}.` }].slice(-80);

@@ -5,7 +5,6 @@ import {
   SPRAYS,
   buildNotes,
   hypeLine,
-  spraysLeft,
   type SprayId,
 } from "@/lib/game/club-spray";
 import { cedis, type Life, type StepResult } from "@/lib/game/world";
@@ -61,7 +60,6 @@ function tone(freq: number, dur = 0.12, gain = 0.06) {
 tone.ctx = null as AudioContext | null;
 
 export function ClubSpray({
-  life,
   name,
   onPurse,
   lifted = false,
@@ -84,8 +82,6 @@ export function ClubSpray({
   const taken = useRef(new Set<string>());
   const momentRef = useRef(false);
   momentRef.current = moment;
-  const left = spraysLeft(life);
-
   useEffect(() => {
     const id = window.setInterval(() => {
       setHype((value) => Math.max(0, value - (momentRef.current ? 0.4 : 1.4)));
@@ -281,9 +277,8 @@ export function ClubSpray({
           <button
             key={pack.id}
             type="button"
-            disabled={left <= 0 || life.cash < pack.cost}
             onClick={() => spray(pack.id)}
-            className="rounded-full bg-[#121212] px-2.5 py-1.5 text-[10px] font-bold text-white shadow disabled:opacity-40"
+            className="rounded-full bg-[#121212] px-2.5 py-1.5 text-[10px] font-bold text-white shadow"
           >
             {pack.label} · {cedis(pack.cost)}
           </button>

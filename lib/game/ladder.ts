@@ -1,5 +1,6 @@
 import { BIG_HOMES, HOMES, JOBS, JOB_RANKS, RANK_CAREER, RANK_SHIFTS, cedis, cloneLife, homeById, logLine, passTime, rankOf, spotById, type Home, type Life, type StepResult } from "@/lib/game/world";
 import { STAGES, landOf } from "@/lib/game/estate";
+import { jobBlocked } from "@/lib/game/spine";
 
 export const ASK_GAP = 1440;
 export const MOVE_GAP = 4320;
@@ -24,6 +25,8 @@ export function promoteOdds(life: Life) {
 export function askPromotion(life: Life, jobId: string): StepResult {
   const job = JOBS.find((item) => item.id === jobId);
   if (!job) return { life, notes: [], error: "That job is gone." };
+  const barred = jobBlocked(life, jobId);
+  if (barred) return { life, notes: [], error: barred };
   const next = nextRank(life, jobId);
   if (!next) return { life, notes: [], error: `You already run the place at ${spotById(job.place).name}.` };
   if (next.held.shifts < next.shifts) return { life, notes: [], error: `Work ${next.shifts - next.held.shifts} more shifts here first.` };

@@ -5,6 +5,7 @@ import { IsoHuman } from "@/components/game/iso-human";
 import { NameSuggest } from "@/components/game/name-hints";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
+import { SpineApp } from "@/components/game/spine-app";
 import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
 import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
 import { HomeApp, InviteApp, TurfApp } from "@/components/game/ladder-apps";
@@ -121,9 +122,10 @@ type AppId =
   | "photos"
   | "delivery"
   | "bet"
-  | "papers";
+  | "papers"
+  | "book";
 
-const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "bet", "papers"];
+const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "bet", "papers", "book"];
 
 export function Handset({
   life,
@@ -517,6 +519,7 @@ export function Handset({
                 <WorkScreen life={life} onBack={() => setApp("home")} onWork={onWork} onPromote={(jobId) => onSocial(askPromotion(life, jobId))} onHustle={(id) => onSocial(doHustle(life, id))} onOpen={setApp} />
               ) : null}
               {app === "goals" ? <GoalsScreen life={life} onBack={() => setApp("home")} /> : null}
+              {app === "book" ? <SpineApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "momo" ? (
                 <MomoScreen
                   life={life}
@@ -562,7 +565,7 @@ export function Handset({
               {app === "charts" ? <ChartsApp me={username} life={life} cloud={cloud} onBack={() => setApp("home")} /> : null}
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
-              {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))} /> : null}
               {app === "susu" ? <SusuApp me={username} life={life} social={social} cloud={cloud} onBack={() => setApp("home")} onAction={onNet} /> : null}
               {app === "people" ? (
                 <PeopleApp
@@ -801,6 +804,9 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Dream" color="#f08a3c" onClick={() => onOpen("goals")}>
           <Star />
+        </AppIcon>
+        <AppIcon label="Rival" color="#7a1f1f" onClick={() => onOpen("book")}>
+          <span className="text-2xl">🔥</span>
         </AppIcon>
         <AppIcon label="Family" color="#e88bbf" onClick={() => onOpen("family")}>
           <span className="text-2xl">👨🏾‍👩🏾‍👧🏾</span>

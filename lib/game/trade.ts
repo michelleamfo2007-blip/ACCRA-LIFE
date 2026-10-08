@@ -6,7 +6,7 @@ function copy(life: Life): Life {
     ...life,
     log: [...life.log],
     inbox: [...life.inbox],
-    businesses: (life.businesses ?? []).map((shop) => ({ ...shop })),
+    businesses: (life.businesses ?? []).map((shop) => ({ ...shop, staff: shop.staff?.map((person) => ({ ...person })) })),
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
   };
@@ -20,7 +20,14 @@ export function tillOf(life: Life, shopId: string) {
   const shop = (life.businesses ?? []).find((item) => item.id === shopId);
   if (!shop) return 0;
   const hours = Math.min(TILL_HOURS, Math.max(0, life.minutes - shop.lastCollect) / 60);
-  return Math.floor(hours * bizRate(shop.kind, shop.level));
+  const stars = shop.stars ?? 3;
+  const stock = shop.stock ?? 100;
+  const markup = shop.markup ?? 1;
+  const starFactor = 0.7 + stars * 0.1;
+  const stockFactor = stock < 20 ? 0.4 : stock < 50 ? 0.75 : 1;
+  const priceFactor = markup > 1.2 ? 0.82 : markup < 0.9 ? 1.12 : 1;
+  const branches = 1 + (shop.branches ?? 0) * 0.35;
+  return Math.floor(hours * bizRate(shop.kind, shop.level) * starFactor * stockFactor * priceFactor * branches);
 }
 
 export function buyBusiness(life: Life, kind: string): StepResult {

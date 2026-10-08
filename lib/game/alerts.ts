@@ -59,6 +59,10 @@ export function alertsFor(life: Life): Alert[] {
   if (interestDue(life) >= 20) list.push({ id: "interest", emoji: "🏦", text: "Interest is waiting on your savings.", app: "bank" });
 
   if (storyReady(life)) list.push({ id: "story", emoji: "📖", text: "A story chapter is ready to finish.", app: "stories" });
+  if (life.spine?.moment) list.push({ id: "moment", emoji: "✨", text: life.spine.moment.line, app: "book", urgent: true });
+  if (life.spine?.kin.some((person) => person.need)) list.push({ id: "kin", emoji: "👨🏾‍👩🏾‍👧🏾", text: "Family needs you. Open Rival.", app: "book", urgent: true });
+  if (life.spine?.rare) list.push({ id: "rare", emoji: "🌟", text: life.spine.rare, app: "book" });
+  if (life.spine && life.spine.rep <= -14) list.push({ id: "name", emoji: "🗣️", text: "The city is talking about you.", app: "book" });
   if (life.health?.sick) list.push({ id: "sick", emoji: "🤒", text: "You are sick. See the clinic.", app: "health", urgent: true });
   if (hangoverActive(life)) list.push({ id: "hangover", emoji: "😵‍💫", text: "Club night hangover. Sleep it off or move slow.", app: "health" });
   const due = royaltiesDue(life);

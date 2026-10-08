@@ -10,18 +10,11 @@ export const SPRAYS = [
 
 export type SprayId = (typeof SPRAYS)[number]["id"];
 
-const DAY_CAP = 4;
 const CATCH_CAP = 400;
 const NOTE_VALUES = [1, 5, 5, 10, 10, 20, 20, 50];
 
 export function sprayPack(id: string) {
   return SPRAYS.find((pack) => pack.id === id) ?? null;
-}
-
-export function spraysLeft(life: Life) {
-  const day = Math.floor(life.minutes / 1440);
-  const used = life.stats?.sprayDay === day ? (life.stats?.spraysToday ?? 0) : 0;
-  return Math.max(0, DAY_CAP - used);
 }
 
 export function caughtTonight(life: Life) {
@@ -32,15 +25,11 @@ export function caughtTonight(life: Life) {
 export function sprayCash(life: Life, id: SprayId, name: string): StepResult {
   const pack = sprayPack(id);
   if (!pack) return { life, notes: [], error: "That spray is not on the menu." };
-  if (spraysLeft(life) <= 0) return { life, notes: [], error: "Enough spray for tonight. Let somebody else rain." };
   if (life.cash < pack.cost) return { life, notes: [], error: `You need ${cedis(pack.cost)} to spray.` };
   const next = cloneLife(life);
-  const day = Math.floor(next.minutes / 1440);
   next.cash -= pack.cost;
   next.stats = {
     ...(next.stats ?? {}),
-    sprayDay: day,
-    spraysToday: (next.stats?.sprayDay === day ? (next.stats?.spraysToday ?? 0) : 0) + 1,
     sprayed: (next.stats?.sprayed ?? 0) + pack.cost,
   };
   if (!next.community) next.community = { standing: 8, projects: [] };
