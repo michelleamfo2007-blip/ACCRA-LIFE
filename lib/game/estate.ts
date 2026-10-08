@@ -9,6 +9,7 @@ export const LAND = [
   { id: "spintex", label: "Spintex", price: 35000, rooms: 6, rent: 130, size: "80×100 ft", rule: "Residential, gated", blurb: "Gated estates and young families." },
   { id: "east-legon", label: "East Legon", price: 90000, rooms: 6, rent: 300, size: "100×100 ft", rule: "Residential only", blurb: "Embassy row. Rent paid in advance." },
   { id: "airport", label: "Airport Residential", price: 160000, rooms: 8, rent: 480, size: "100×200 ft", rule: "Residential only", blurb: "The expensive side. Quiet roads, heavy gates." },
+  { id: "trasacco", label: "Trasacco", price: 420000, rooms: 8, rent: 900, size: "120×150 ft", rule: "Gated. Mansions only.", blurb: "East Legon hills. Security at the gate, pools behind the walls, and a street that knows your car." },
 ] as const;
 
 export const HOUSES = [
@@ -237,10 +238,15 @@ export function buyLand(life: Life, area: string): StepResult {
   if (life.cash < land.price) return { life, notes: [], error: `The plot costs ${cedis(land.price)}.` };
   const next = cloneLife(life);
   const plotId = id();
-  const guarded = Math.random() < 0.35;
+  const guarded = land.id === "trasacco" ? false : Math.random() < 0.35;
   next.cash -= land.price;
   next.plots = [...plotsOf(next), { id: plotId, area: land.id, stage: 0, stageAt: next.minutes, spent: land.price, guard: guarded ? "waiting" : null, tenants: 0, lastRent: next.minutes }];
-  const line = guarded ? `You bought a plot in ${land.label}. Land guards are standing on it, asking for "drink money".` : `You bought a plot in ${land.label}. The indenture is in your name.`;
+  if (land.id === "trasacco") next.stats = { ...(next.stats ?? {}), clout: (next.stats?.clout ?? 0) + 12 };
+  const line = land.id === "trasacco"
+    ? `The Trasacco gate logged your name. The plot is ${cedis(land.price)}. Build a mansion, then the street will show it.`
+    : guarded
+      ? `You bought a plot in ${land.label}. Land guards are standing on it, asking for "drink money".`
+      : `You bought a plot in ${land.label}. The indenture is in your name.`;
   logLine(next, line);
   return { life: next, notes: [line] };
 }

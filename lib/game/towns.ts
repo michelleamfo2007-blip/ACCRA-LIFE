@@ -1,4 +1,5 @@
 import type { Spot } from "@/lib/game/world";
+import { SPOT_HOURS } from "@/lib/game/food-spots";
 
 export type TownId = "accra" | "kumasi" | "takoradi" | "tamale" | "cape-coast" | "ho";
 
@@ -404,7 +405,7 @@ export function placeCard(spot: Spot) {
   const costs = spot.actions.map((verb) => verb.cost).filter((cost) => cost > 0);
   const low = costs.length ? Math.min(...costs) : 0;
   return {
-    hours: known?.hours ?? (spot.group === "hang" || spot.group === "sea" ? "11:00 – late" : "8:00 – 18:00"),
+    hours: SPOT_HOURS[spot.id]?.hours ?? known?.hours ?? (spot.group === "hang" || spot.group === "sea" ? "11:00 – late" : "8:00 – 18:00"),
     cost: known?.cost ?? (low ? `From ₵${low}` : "Free to walk in"),
     neighborhood: known?.neighborhood ?? "",
   };

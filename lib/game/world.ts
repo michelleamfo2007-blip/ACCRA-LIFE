@@ -1,10 +1,11 @@
 import { ACCRA_SPOTS, CLUB_IDS } from "@/lib/game/accra-spots";
 import { MORE_SPOTS, TRIP_IDS } from "@/lib/game/more-spots";
 import { tickPhone } from "@/lib/game/phone-shell";
-import { arrivalFor, crossedTownNote, type TownId } from "@/lib/game/towns";
+import { arrivalFor, crossedTownNote, townOf, type TownId } from "@/lib/game/towns";
 import type { Net, SpotPos } from "@/lib/game/net";
 import { bizWages } from "@/lib/game/biz-table";
 import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night";
+import { foodFromOffer, menuFor } from "@/lib/game/foods";
 import { weatherAt, weatherStress } from "@/lib/game/sky";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
@@ -1860,11 +1861,11 @@ export type Offer = {
   cloth?: string;
 };
 
-export function offersFor(verb: Verb): Offer[] {
+export function offersFor(verb: Verb, town = "accra", place = ""): Offer[] {
   const name = `${verb.id} ${verb.label}`.toLowerCase();
   if (name.includes("outfit") || name.includes("cloth") || name.includes("kente")) return CLOTHES;
   if (name.includes("cinema") || name.includes("show") || name.includes("film")) return FILMS;
-  if (verb.tag === "food" || name.includes("food") || name.includes("eat") || name.includes("jollof") || name.includes("waakye") || name.includes("kelewele") || name.includes("ice")) return plates(verb);
+  if (verb.tag === "food" || /food|eat|jollof|waakye|kelewele|ice|suya|shawarma|pizza|burger|coffee|grill|snack|plate|\bbar\b|drink/.test(name)) return plates(verb, town, place);
   return [
     {
       id: verb.id,
@@ -1891,12 +1892,14 @@ export const CLOTHES: Offer[] = [
   { id: "fit-site", label: "Site work", detail: "For a day that gets dusty.", minutes: 15, cost: 70, effects: { fun: 4 }, outfit: "Site work", cloth: "#f59e42" },
 ];
 
-function plates(verb: Verb): Offer[] {
+function plates(verb: Verb, town = "accra", place = ""): Offer[] {
+  const index = townOf(town).priceIndex ?? 1;
+  const rows = menuFor(`${verb.id} ${verb.label} ${verb.detail}`, accraHour(), town, index, place);
+  if (rows.length) return rows;
   const base = Math.max(verb.cost, 12);
   return [
     { id: `${verb.id}-plate`, label: verb.label, detail: verb.detail, minutes: verb.minutes, cost: base, effects: verb.effects },
     { id: `${verb.id}-small`, label: "Small plate", detail: "Enough to hold you.", minutes: Math.max(10, verb.minutes - 10), cost: Math.max(8, Math.round(base * 0.6)), effects: { hunger: 18, fun: 4 } },
-    { id: `${verb.id}-full`, label: "Full plate", detail: "The one you finish slowly.", minutes: verb.minutes + 5, cost: Math.round(base * 1.4), effects: { hunger: 40, fun: 8 } },
   ];
 }
 
@@ -1910,11 +1913,22 @@ export function payOffer(life: Life, verb: Verb, offer: Offer, placeId = life.wh
     pushLog(timed.life, `Bought ${offer.label}.`);
     return { life: timed.life, notes: [`${offer.label} is what you are wearing.`] };
   }
-  return runVerb(
+  return finishPlate(life, verb, offer, placeId);
+}
+
+function finishPlate(life: Life, verb: Verb, offer: Offer, placeId: string): StepResult {
+  const result = runVerb(
     life,
     { ...verb, id: offer.id, label: offer.label, detail: offer.detail, minutes: offer.minutes, cost: offer.cost, effects: offer.effects, earn: verb.earn },
     placeId,
   );
+  const dish = foodFromOffer(offer.id);
+  if (result.error || !dish?.risk || Math.random() >= dish.risk) return result;
+  result.life.needs.energy = Math.max(0, result.life.needs.energy - 14);
+  result.life.needs.hunger = Math.max(0, result.life.needs.hunger - 8);
+  const note = `Your stomach turned after the ${dish.name}.`;
+  pushLog(result.life, note);
+  return { life: result.life, notes: [note, ...result.notes] };
 }
 
 function actionBoost(life: Life, verb: Verb) {

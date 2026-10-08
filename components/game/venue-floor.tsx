@@ -19,6 +19,7 @@ import {
   type ClubNpc,
 } from "@/lib/game/club-night";
 import { BoutiqueFloor } from "@/components/game/boutique-floor";
+import { EstateStreet } from "@/components/game/estate-street";
 import { roomLine, roomOf, staffOf } from "@/lib/game/place-kit";
 import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
@@ -697,6 +698,7 @@ export function VenueFloor({
           ) : null}
           <p className="mt-2 text-xs leading-5 text-[#5c6b82]">{roomLine(spot)}</p>
           {roomOf(spot) === "boutique" && onApply ? <BoutiqueFloor life={life} onApply={onApply} /> : null}
+          {spot.id === "trasacco-gate" ? <EstateStreet life={life} /> : null}
           {zones.length ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {zones.map((zone) => {
@@ -758,6 +760,8 @@ export function VenueFloor({
               ...spot.actions,
             ]}
             here
+            town={life.town ?? "accra"}
+            place={spot.id}
             focus={focus}
             busy={(Boolean(doing) && !seatedAt) || Boolean(bottleShow)}
             onPay={performAction}
@@ -1079,7 +1083,27 @@ function staffFor(spot: Spot) {
   const shore = BEACHES.has(spot.id);
   const club = isNightlife(spot.id, CLUB_IDS);
   const air = spot.id === "kotoka" || spot.id === "kumasi-airport";
-  if (!shore && !club && !air) return staffOf(spot);
+  if (!shore && !club && !air && spot.id !== "trasacco-gate") return staffOf(spot);
+  if (spot.id === "trasacco-gate") {
+    return [
+      {
+        role: "Gate guard",
+        line: "Residents drive in. Everyone else says who they came to see. Luxury cars only past this point.",
+        style: { left: "28%", top: "46%" },
+        skin: "#8d5a3b",
+        shirt: "#1d2433",
+        hair: "Low cut",
+      },
+      {
+        role: "Gardener",
+        line: "The hedges are mine. The pool at the Owusu house is not.",
+        style: { left: "68%", top: "40%" },
+        skin: "#c68a62",
+        shirt: "#1f6b45",
+        hair: "Afro",
+      },
+    ];
+  }
   return [
     {
       role: air ? "Check-in" : shore ? "Beach usher" : club ? "Bouncer" : "Manager",
@@ -1270,7 +1294,7 @@ function sceneKind(spot: Spot): Kind {
   if (room === "market") return "market";
   if (room === "clinic") return "clinic";
   if (spot.id === "kotoka" || room === "airport") return "airport";
-  if (HOTELS.has(spot.id)) return "hotel";
+  if (spot.id === "trasacco-gate" || HOTELS.has(spot.id) || room === "hotel") return "hotel";
   if (isNightlife(spot.id, CLUB_IDS)) return "club";
   if (BEACHES.has(spot.id)) return "shore";
   if (GARDENS.has(spot.id)) return "garden";

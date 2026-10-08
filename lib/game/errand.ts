@@ -1,15 +1,18 @@
+import { deliverableFoods } from "@/lib/game/foods";
 import { cedis, cloneLife, type Life, type StepResult } from "@/lib/game/world";
 
-export const MENU = [
-  { id: "waakye", label: "Waakye", kind: "food", price: 25 },
-  { id: "jollof", label: "Jollof", kind: "food", price: 30 },
-  { id: "kenkey", label: "Kenkey and fish", kind: "food", price: 28 },
+const GOODS = [
   { id: "provisions", label: "Provisions", kind: "groceries", price: 40 },
   { id: "chair", label: "Plastic chair", kind: "furniture", price: 80 },
   { id: "shirt", label: "Shirt", kind: "clothes", price: 45 },
   { id: "phone", label: "Earphones", kind: "electronics", price: 60 },
   { id: "para", label: "Paracetamol", kind: "medicine", price: 12 },
 ] as const;
+
+export const MENU = [
+  ...GOODS,
+  ...deliverableFoods().map((item) => ({ id: item.id, label: item.name, kind: "food" as const, price: item.price })),
+];
 
 export const RIDERS = [
   { id: "okada", name: "Kwame", vehicle: "Okada", rating: 4.2, fee: 8, risk: 0.16 },

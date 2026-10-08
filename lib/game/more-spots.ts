@@ -1,3 +1,4 @@
+import { CITY_SPOTS, FOOD_SPOTS } from "@/lib/game/food-spots";
 import { KUMASI_SPOTS } from "@/lib/game/kumasi-spots";
 import type { Spot, Verb } from "@/lib/game/world";
 
@@ -194,7 +195,7 @@ const GATEWAYS: Spot[] = [
       stroll("kotoka-planes", "Watch the planes land", "Wheels down, engines roaring, kids pointing at the fence."),
       act({ id: "kotoka-arrivals", label: "Meet arrivals", detail: "A cousin from abroad, two suitcases and a hug that lasts a minute.", minutes: 40, effects: { social: 22, fun: 10 }, social: true, emoji: "🤗" }),
       act({ id: "kotoka-lounge", label: "Sit in the lounge", detail: "Quiet chairs, soft drinks, and a board of domestic flights to Kumasi.", minutes: 40, cost: 80, effects: { fun: 16, energy: 8, hygiene: 4 }, emoji: "🛋️" }),
-      plate("kotoka-snack", "Arrivals hall snack", "Meat pie and a cold malt while you wait.", 25, 24),
+      plate("kotoka-airport-snack", "Airport coffee and a wrap", "The departure gate. You eat it standing while the board refreshes.", 25, 24),
     ],
   },
   {
@@ -321,4 +322,4 @@ const TRIPS: Spot[] = [
 
 export const TRIP_IDS = TRIPS.map((spot) => spot.id);
 
-export const MORE_SPOTS: Spot[] = [...NEIGHBOURHOODS, ...GATEWAYS, ...TRIPS, ...KUMASI_SPOTS];
+export const MORE_SPOTS: Spot[] = [...NEIGHBOURHOODS, ...GATEWAYS, ...TRIPS, ...KUMASI_SPOTS, ...FOOD_SPOTS, ...CITY_SPOTS];

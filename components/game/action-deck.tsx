@@ -6,12 +6,16 @@ import { cedis, offersFor, type Offer, type Verb } from "@/lib/game/world";
 export function ActionDeck({
   verbs,
   here,
+  town = "accra",
+  place = "",
   onPay,
   focus = null,
   busy = false,
 }: {
   verbs: Verb[];
   here: boolean;
+  town?: string;
+  place?: string;
   onPay: (verb: Verb, offer: Offer) => void;
   focus?: string | null;
   busy?: boolean;
@@ -23,7 +27,7 @@ export function ActionDeck({
   return (
     <div className="mt-3 space-y-2">
       {verbs.map((verb) => {
-        const offers = offersFor(verb);
+        const offers = offersFor(verb, town, place);
         const shown = open === verb.id;
         return (
           <div key={verb.id} className="overflow-hidden rounded-2xl bg-[#f4f7fb]">

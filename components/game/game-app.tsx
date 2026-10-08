@@ -2284,7 +2284,7 @@ function PlaceSheet({
         {copied ? "Link copied" : `Share a link to ${place.name}`}
       </button>
       {children}
-      <ActionDeck verbs={[...extra, ...place.actions]} here={here} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
+      <ActionDeck verbs={[...extra, ...place.actions]} here={here} town={place.town ?? "accra"} place={place.id} onPay={(verb, offer) => onAct({ ...verb, ...offer })} />
       {onGem ? (
         <button type="button" onClick={onGem} className="mt-2 rounded-full bg-[#fff4c2] px-3 py-1.5 text-sm font-semibold text-[#1f8a4c]">
           Search for the gem

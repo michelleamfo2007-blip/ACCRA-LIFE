@@ -1,5 +1,6 @@
 import { CLUB_IDS } from "@/lib/game/accra-spots";
 import { isNightlife } from "@/lib/game/club-night";
+import { SPOT_HOURS } from "@/lib/game/food-spots";
 import { accraHour, type Spot, type Verb } from "@/lib/game/world";
 
 export type RoomKind =
@@ -304,7 +305,16 @@ const ROOMS: Record<RoomKind, Room> = {
 };
 
 const BY_ID: [RegExp, RoomKind][] = [
-  [/boutique|osu-rails|legon-rails|mall-rails|adum-print|kantamanto/, "boutique"],
+  [/shawarma|pizza|burger|fanice|coffee|bakery|food-court|street-food|night-food|night-grill|kejetia-night/, "chop"],
+  [/casino|karaoke|shisha|cigar/, "bar"],
+  [/spa|tattoo|nail-bar|braid-house|pet-groom/, "salon"],
+  [/dental|eye-clinic|vet-clinic|pharmacy/, "clinic"],
+  [/hardware|furniture-hall|showroom|laundry-house|dry-clean|shoe-fix|pet-shop|plant-nursery|builders-yard|mini-mart|supermarket|super/, "shop"],
+  [/okada-hub/, "station"],
+  [/car-wash/, "garage"],
+  [/farmers-market|fish-market|meat-market/, "market"],
+  [/embassy|barracks|parliament|jubilee|fire-station|law-office|accounts-firm|insurance-desk|immigration-desk|estate-agent|fuel|passport|dvla/, "office"],
+  [/traffic-police/, "police"],
   [/court|tribunal/, "court"],
   [/korle|hospital|clinic|pharmacy/, "clinic"],
   [/police/, "police"],
@@ -327,6 +337,7 @@ const BY_ID: [RegExp, RoomKind][] = [
 export function roomOf(spot: Spot): RoomKind {
   if (isNightlife(spot.id, CLUB_IDS)) return "club";
   const id = `${spot.id} ${spot.name}`.toLowerCase();
+  if (spot.id === "trasacco-gate") return "hotel";
   if (spot.id === "kantamanto" || spot.id.endsWith("-rails") || spot.id === "adum-print") return "boutique";
   for (const [test, kind] of BY_ID) {
     if (test.test(id)) return kind;
@@ -350,9 +361,10 @@ function hourOpen(open: [number, number], hour: number) {
 
 export function roomLine(spot: Spot, hour = accraHour()) {
   const room = roomProfile(spot);
-  const open = hourOpen(room.open, hour);
+  const special = SPOT_HOURS[spot.id];
+  const open = hourOpen(special?.open ?? room.open, hour);
   const event = room.event[hour % room.event.length];
-  return `${open ? "Open" : "Closed for the night"} · ${room.hours}. ${event}`;
+  return `${open ? "Open" : "Closed for the night"} · ${special?.hours ?? room.hours}. ${event}`;
 }
 
 export function staffOf(spot: Spot) {
@@ -380,6 +392,7 @@ export function kitVerbs(spot: Spot): Verb[] {
       cost: verb.cost,
       earn: verb.earn,
       effects: { fun: verb.fun, social: verb.social, energy: verb.energy },
+      tag: room.kind === "chop" || room.kind === "bar" ? "food" : undefined,
       emoji: spot.emoji,
       social: verb.social > 0,
     },
