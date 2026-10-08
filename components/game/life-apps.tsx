@@ -6,6 +6,7 @@ import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass,
 import { CREWS, CROPS, HOUSES, MAX_PLOTS, ROOM_CHOICES, SPECS, STAGES, addRoom, advertRooms, answerSite, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, crewOf, cropOf, designQuote, evictTenant, farmSize, goToCourt, harvestBed, hireCrew, hireSpec, houseOf, landOf, pauseSite, payGuards, plantCrop, plotsOf, rateCrew, rentDue, rentRate, roomsOf, rushSite, saveDesign, sellPlot, setRentAsk, siteLeft, stageCost, visitSite, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
 import { CARS, CAR_PAINTS, INSURANCE, PLATE_FEE, RESPRAY, assignDriver, bayCount, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, hireGuard, insureCar, motorsOf, nameCar, plateCar, rentMotor, repaintCar, sellCar, setPrimary, washCar } from "@/lib/game/garage";
+import { strain } from "@/lib/game/crisis";
 import { CLINIC_FEE, CLINIC_NHIS, MEDS_FEE, NHIS_FEE, buyNhis, hasNhis, restSick, seeClinic, selfMedicate, sickness } from "@/lib/game/health";
 import { MAX_ORDERS, STYLES, TAILOR_COLORS, collectOrder, orderStyle, styleOf, wearFit } from "@/lib/game/tailor";
 import { moveHome } from "@/lib/game/ladder";
@@ -615,7 +616,7 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
   return (
     <Screen title="Garage" life={life} color="#243044" onBack={onBack}>
       <p className="text-xs text-[#5c6b82]">
-        {owned.length}/{bays} bays. The marked car is the one you drive out. A garage on a finished house adds bays.
+        {owned.length}/{bays} bays in the compound. At home, walk up to a car and get in. Fuel, papers, and a sale still happen here.
       </p>
       {owned.length > 1 ? (
         <div className="flex flex-wrap gap-1">
@@ -826,6 +827,9 @@ export function HealthApp({ life, onBack, onApply }: { life: Life; onBack: () =>
         <p className="text-xs font-semibold uppercase tracking-wide text-[#8b97ab]">Today</p>
         <p className="font-display text-2xl">{sick ? `🤒 ${sick.label}` : "💚 Feeling fine"}</p>
         <p className="mt-1 text-sm text-[#5c6b82]">{sick ? `Energy and fun drain faster and work pays half. It clears on its own in about ${sick.hoursLeft}h.` : "Sleep well, eat, stay clean, and keep the mosquitoes away."}</p>
+        {(life.health?.weakUntil ?? 0) > life.minutes ? <p className="mt-2 text-sm font-semibold text-[#9a3412]">Still weak for {wait((life.health?.weakUntil ?? 0) - life.minutes)}. A long walk can drop you again. Shifts can wait.</p> : null}
+        {(life.stats?.clinicDebt ?? 0) > 0 ? <p className="mt-1 text-sm text-[#5c6b82]">Hospital still owed {cedis(life.stats?.clinicDebt ?? 0)}. It comes off on Saturday.</p> : null}
+        <p className="mt-2 text-xs text-[#8b97ab]">Walk strain {strain(life, true)}. Eat, drink, sleep, or pay for a ride before it climbs.</p>
       </Card>
       <Card>
         <p className="font-semibold">🏥 Polyclinic</p>

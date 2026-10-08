@@ -76,3 +76,18 @@ export function PlacedModel({ file, tall, span }: { file: string; tall?: number;
     </Suspense>
   );
 }
+
+/** Wood desk, open laptop on the top, pink chair beside it. Kenney Furniture Kit. */
+export function LaptopSet() {
+  return (
+    <group>
+      <PlacedModel file="furniture/desk.glb" span={1.5} />
+      <group position={[-0.1, 0.8, 0.02]}>
+        <PlacedModel file="furniture/laptop.glb" span={0.52} />
+      </group>
+      <group position={[-1.05, 0, 0.02]} rotation={[0, Math.PI / 2, 0]}>
+        <PlacedModel file="furniture/loungeChair.glb" tall={0.82} />
+      </group>
+    </group>
+  );
+}

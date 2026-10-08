@@ -169,7 +169,7 @@ export function phoneNotices(life: Life): Alert[] {
   const list = alertsFor(life);
   const phone = phoneOf(life);
   if (phone.battery <= 15) list.unshift({ id: "battery", emoji: "🔋", text: phone.battery <= 0 ? "Phone is dead. Charge it at home." : `Battery at ${phone.battery}%.`, app: "papers", urgent: phone.battery <= 0 });
-  if (phone.airtime < 3) list.unshift({ id: "airtime", emoji: "📶", text: "Airtime is low. Top up from the phone settings.", app: "papers" });
+  if (phone.airtime < 3) list.unshift({ id: "airtime", emoji: "📶", text: "Airtime is low. Buy more on the phone home screen.", app: "papers" });
   if (phone.lostUntil && life.minutes < phone.lostUntil) list.unshift({ id: "stolen", emoji: "📱", text: "This phone was snatched. Replace it or wait.", app: "papers", urgent: true });
   if (!hasSignal(life.where)) list.unshift({ id: "signal", emoji: "📡", text: "No network here.", app: "map" });
   return list;
@@ -243,7 +243,7 @@ export function spendAirtime(life: Life, units = 1): string | null {
   if (phone.lostUntil && life.minutes < phone.lostUntil) return "The phone is gone.";
   if (phone.battery <= 0) return "Phone dead. Charge it at home.";
   if (!hasSignal(life.where)) return "No network here.";
-  if (phone.airtime < units) return "Airtime finished. Top up in phone settings.";
+  if (phone.airtime < units) return "Airtime finished. Buy more on the phone home screen.";
   return null;
 }
 

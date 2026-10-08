@@ -1,4 +1,4 @@
-import { FUEL_PER_TRIP, cedis, cloneLife, logLine, passTime, type CarState, type Life, type Ride, type StepResult } from "@/lib/game/world";
+import { FUEL_PER_TRIP, cedis, cloneLife, logLine, passTime, roomReach, type CarState, type Life, type Ride, type StepResult } from "@/lib/game/world";
 
 export const CARS = [
   { id: "vitz", label: "Used Toyota Vitz", short: "Vitz", emoji: "🚗", price: 18000, minutes: 12, hail: 25, paint: "#f2f5f8", suv: false, scale: 0.86, speed: 1, seats: 4, cargo: 1, style: 1 },
@@ -68,6 +68,62 @@ export function tradeIn(life: Life) {
 }
 
 const motorKey = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+/** Garage on the back of the house, opening into the compound. Cars face the roller door. */
+export function garageBox(span = 0, bays = 1) {
+  const room = roomReach(span);
+  const count = Math.max(1, Math.min(4, bays));
+  const pitch = 3.2;
+  const x0 = -2.7;
+  const x1 = x0 + 3.35 + (count - 1) * pitch;
+  const z1 = -room.halfD - 0.04;
+  const z0 = z1 - 3.7;
+  return {
+    x0,
+    x1,
+    z0,
+    z1,
+    count,
+    pitch,
+    doorX0: x0 + 0.3,
+    doorX1: x0 + 1.75,
+    gate: { x: x0 + 1.6, z: z0 - 1.7 },
+  };
+}
+
+export function baySpot(span: number, bays: number, index: number) {
+  const box = garageBox(span, bays);
+  return { x: box.x0 + 1.65 + index * box.pitch, z: (box.z0 + box.z1) / 2 };
+}
+
+export function carDust(motor: CarState, minutes: number, indoors: boolean) {
+  const age = motor.washedAt == null ? (indoors ? 700 : 2200) : Math.max(0, minutes - motor.washedAt);
+  return Math.max(0, Math.min(0.82, age / (indoors ? 2600 : 900)));
+}
+
+export function yardTalk(life: Life) {
+  const cars = motorsOf(life);
+  if (!cars.length) return null;
+  const guest = (life.guests ?? []).find((person) => person.doing !== "leave");
+  const showy = cars.some((motor) => motor.id === "benz" || motor.id === "cruiser");
+  if (guest && showy) return `${guest.name}: Chale, you buy new Benz!`;
+  if (guest && cars.length >= 3) return `${guest.name}: Three cars? You dey chop money o.`;
+  if (guest) return `${guest.name} is walking around ${cars[0].name || carOf(cars[0].id)?.short || "the car"}.`;
+  if (showy) return "Kojo Mensah would have something to say about this one.";
+  return null;
+}
+
+/** A click on the room floor stays in the room. A click in the garage, the doorway, or the drive is allowed through. */
+export function footHere(x: number, z: number, span: number, bays: number) {
+  const room = roomReach(span);
+  const box = garageBox(span, bays);
+  const inRoom = x >= room.minX && x <= room.maxX && z >= room.minZ && z <= room.maxZ;
+  const inBay = x >= box.x0 + 0.25 && x <= box.x1 - 0.25 && z >= box.z0 + 0.35 && z <= box.z1 - 0.15;
+  const inDoor = x >= box.doorX0 - 0.1 && x <= box.doorX1 + 0.1 && z <= room.minZ + 0.15 && z >= box.z1 - 0.2;
+  const inDrive = x >= box.x0 - 0.4 && x <= box.x1 + 2.6 && z <= box.z0 + 0.25 && z >= box.z0 - 2.3;
+  if (inRoom || inBay || inDoor || inDrive) return { x, z };
+  return null;
+}
 
 export function bayCount(life: Life) {
   const finished = (life.plots ?? []).find((plot) => plot.stage >= 5 && plot.plan?.rooms.includes("garage"));
@@ -291,8 +347,11 @@ export function washCar(life: Life, key: string): StepResult {
   const motor = owned.find((item) => item.key === key);
   if (!motor) return { life, notes: [], error: "That car is not in the garage." };
   const timed = passTime(cloneLife(life), 20).life;
-  timed.motors = motorsOf(life).map((item) => (item.key === key ? { ...item, condition: Math.min(100, (item.condition ?? 100) + 2) } : { ...item }));
-  if (timed.car?.key === key && timed.motors) timed.car = { ...timed.car, condition: Math.min(100, (timed.car.condition ?? 100) + 2) };
+  timed.motors = motorsOf(life).map((item) => (item.key === key ? { ...item, condition: Math.min(100, (item.condition ?? 100) + 2), washedAt: timed.minutes } : { ...item }));
+  if (timed.car?.key === key && timed.motors) {
+    const fresh = timed.motors.find((item) => item.key === key);
+    if (fresh) timed.car = { ...fresh };
+  }
   const who = life.yard?.guard ?? life.yard?.driver ?? "You";
   return { life: timed, notes: [`${who} washed ${motor.name || carOf(motor.id)?.short || "the car"}.`] };
 }

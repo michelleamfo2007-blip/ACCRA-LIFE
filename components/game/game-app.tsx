@@ -13,7 +13,8 @@ import { Payday, ShiftFloor, StreetRide, FlightRide } from "@/components/game/li
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { TourCoach } from "@/components/game/tour-coach";
 import { FeatureBulletin } from "@/components/game/bulletin";
-import { GarageYard } from "@/components/game/garage-yard";
+import { CrisisLayer } from "@/components/game/crisis-sheet";
+import { callForPerson, helpPerson, leavePerson, personDown, robPerson } from "@/lib/game/crisis";
 import { BULLETIN_ID, seenBulletin } from "@/lib/game/bulletin";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
@@ -78,6 +79,7 @@ import {
   accraDateLabel,
   birthById,
   buyItem,
+  buyCart,
   cedis,
   CLOTHES,
   clockLabel,
@@ -122,6 +124,7 @@ import {
   type StepResult,
   type Verb,
 } from "@/lib/game/world";
+import { useStock } from "@/lib/game/item-verbs";
 
 const emptyServer = "";
 
@@ -1188,6 +1191,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
   return (
     <div className="fixed inset-0 h-dvh w-full max-w-full overflow-clip overscroll-none touch-none">
       <Soundtrack tune={tuneFor(life.where, onAir)} />
+      <CrisisLayer life={life} onApply={apply} />
       {tab === "map" ? (
         <CityBoard
           night={mapNight}
@@ -1230,12 +1234,12 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
         />
       ) : tab === "home" && life.where === "home" ? (
         <>
-        <GarageYard life={life} onApply={apply} />
         <RoomView
           life={life}
           errand={errand}
           onMap={() => setTab("map")}
           onAsk={() => setDoOpen(true)}
+          onMotor={apply}
           onLay={(id, x, z, rot) => apply(layPiece(life, id, x, z, rot))}
           onStore={(id) => apply(storePiece(life, id))}
           onSell={(id) => apply(sellPiece(life, id))}
@@ -1746,6 +1750,11 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onGem={gemSpotId(life.minutes) === place.id ? () => apply(huntGem(life)) : null}
           starred={(life.stars ?? []).includes(place.id)}
           onStar={() => apply({ life: toggleStar(life, place.id), notes: [] })}
+          down={personDown(life, place.id)}
+          onDown={(action) => {
+            const run = action === "help" ? helpPerson : action === "call" ? callForPerson : action === "leave" ? leavePerson : robPerson;
+            apply(run(life, place.id));
+          }}
         >
           <HappeningBanner spotId={place.id} at={now ? new Date(now) : new Date()} people={sheetPeople.length} />
           <WeeklyCard life={life} spotId={place.id} here={life.where === place.id} cloud={Boolean(account.cloud)} onCheck={() => apply(checkIn(life, new Date()))} />
@@ -1901,7 +1910,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       ) : null}
       {payday ? <Payday earned={payday.earned} performance={payday.performance} onClose={() => setPayday(null)} /> : null}
       {tab === "buy" ? (
-        <Catalogue cash={life.cash} owned={life.inventory} stored={life.stored ?? []} floor={life.floor} onClose={() => setTab("home")} onBuy={(id) => apply(buyItem(life, id))} />
+        <Catalogue
+          cash={life.cash}
+          owned={life.inventory}
+          stored={life.stored ?? []}
+          floor={life.floor}
+          cupboard={life.cupboard}
+          onClose={() => setTab("home")}
+          onBuy={(id) => apply(buyItem(life, id))}
+          onUse={(id) => apply(useStock(life, id))}
+          onCart={(ids) => {
+            const result = buyCart(life, ids);
+            apply(result);
+            return !result.error;
+          }}
+        />
       ) : null}
       {boardId ? (
         <div className="absolute inset-x-0 bottom-0 z-40 max-h-[min(78vh,100dvh-4.5rem)] overflow-auto rounded-t-[28px] bg-white p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-16px_50px_rgba(22,32,60,.2)] sm:p-5">
@@ -2238,6 +2261,8 @@ function PlaceSheet({
   onGem,
   starred = false,
   onStar,
+  down,
+  onDown,
   children,
 }: {
   children?: ReactNode;
@@ -2256,6 +2281,8 @@ function PlaceSheet({
   onGem: (() => void) | null;
   starred?: boolean;
   onStar?: () => void;
+  down?: { name: string; reason: string } | null;
+  onDown?: (action: "help" | "call" | "leave" | "rob") => void;
 }) {
   const rides = car ? [...RIDES, car] : RIDES;
   const ride = farRide(rideIn(rides.find((item) => item.id === rideId) ?? RIDES[1], sky), from, place.id);
@@ -2283,6 +2310,18 @@ function PlaceSheet({
         </button>
       </div>
       <p className="mt-3 text-sm leading-6 text-[#5c6b82]">{blurb}</p>
+      {down && onDown ? (
+        <div className="mt-3 rounded-2xl bg-[#f6f1ea] p-3">
+          <p className="text-sm font-semibold">{down.name} is on the ground</p>
+          <p className="mt-1 text-xs text-[#5c6b82]">{down.name} {down.reason}.</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => onDown("help")} className="rounded-full bg-[#121212] py-2 text-xs font-bold text-white">Stay with them</button>
+            <button type="button" onClick={() => onDown("call")} className="rounded-full bg-white py-2 text-xs font-bold">Call for help</button>
+            <button type="button" onClick={() => onDown("leave")} className="rounded-full bg-white py-2 text-xs font-bold">Walk on</button>
+            <button type="button" onClick={() => onDown("rob")} className="rounded-full bg-white py-2 text-xs font-bold text-[#9a3412]">Take their money</button>
+          </div>
+        </div>
+      ) : null}
       <p className="mt-2 text-xs font-semibold text-[#5c6b82]">
         {card.hours} · {card.cost}
         {far ? ` · ${far} min away` : ""}

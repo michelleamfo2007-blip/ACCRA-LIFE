@@ -9,7 +9,7 @@ import { tillOf } from "@/lib/game/trade";
 import { TILL_HOURS } from "@/lib/game/biz-table";
 import { SERVE_HOURS, salesOf } from "@/lib/game/kitchen";
 import { checkInReward, checkedIn, weeklyNow } from "@/lib/game/weekly";
-import { cedis, spotById, type Life } from "@/lib/game/world";
+import { SHOP, cedis, spotById, type Life } from "@/lib/game/world";
 
 export type Alert = { id: string; emoji: string; text: string; app: string; urgent?: boolean };
 
@@ -68,6 +68,14 @@ export function alertsFor(life: Life): Alert[] {
   else if (docket?.status === "fine") list.push({ id: "fine", emoji: "⚖️", text: docket.note, app: "law", urgent: true });
   else if (docket?.status === "service" || docket?.status === "probation" || docket?.status === "bail") list.push({ id: "sentence", emoji: "⚖️", text: docket.note, app: "law" });
   if ((life.plots ?? []).some((plot) => plot.siteNote)) list.push({ id: "site", emoji: "🧱", text: "The building site needs you.", app: "land", urgent: true });
+  const short = Object.entries(life.cupboard ?? {}).filter(([, qty]) => qty <= 0).slice(0, 3);
+  if (short.length) {
+    const names = short.map(([id]) => SHOP.find((item) => item.id === id)?.name ?? "supplies");
+    list.push({ id: "cupboard", emoji: "📦", text: `You're out of ${names.join(", ")}.`, app: "house" });
+  }
+  if (life.health?.crisis) list.push({ id: "faint", emoji: "🫀", text: life.health.crisis.note, app: "health", urgent: true });
+  else if (life.health?.warn) list.push({ id: "weak", emoji: "😵", text: life.health.warn, app: "health", urgent: true });
+  else if ((life.health?.weakUntil ?? 0) > life.minutes) list.push({ id: "recover", emoji: "🩺", text: "You are still weak. Eat, drink, and rest before the next walk.", app: "health" });
   if (life.health?.sick) list.push({ id: "sick", emoji: "🤒", text: "You are sick. See the clinic.", app: "health", urgent: true });
   if (hangoverActive(life)) list.push({ id: "hangover", emoji: "😵‍💫", text: "Club night hangover. Sleep it off or move slow.", app: "health" });
   const due = royaltiesDue(life);

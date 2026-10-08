@@ -2,27 +2,54 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Canvas } from "@react-three/fiber";
+import { LaptopSet } from "@/components/game/kit-mesh";
 import { SHOP, SHOP_CATEGORIES, cedis, type ShopCategory, type ShopItem } from "@/lib/game/world";
+import { jobLine } from "@/lib/game/essentials";
+
+type Sort = "cheap" | "dear" | "stars" | "new";
+type TierPick = "all" | "starter" | "mid" | "luxury";
 
 export function Catalogue({
   cash,
   owned,
   stored = [],
   floor,
+  cupboard = {},
   onBuy,
+  onCart,
+  onUse,
   onClose,
 }: {
   cash: number;
   owned: string[];
   stored?: string[];
   floor?: string;
+  cupboard?: Record<string, number>;
   onBuy: (id: string) => void;
+  onCart?: (ids: string[]) => boolean;
+  onUse?: (id: string) => void;
   onClose: () => void;
 }) {
   const [category, setCategory] = useState<ShopCategory>("design");
   const [edge, setEdge] = useState({ left: false, right: true });
+  const [query, setQuery] = useState("");
+  const [tier, setTier] = useState<TierPick>("all");
+  const [sort, setSort] = useState<Sort>("cheap");
+  const [job, setJob] = useState("all");
+  const [cart, setCart] = useState<string[]>([]);
+  const [preview, setPreview] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const items = SHOP.filter((item) => item.category === category);
+  const q = query.trim().toLowerCase();
+  const items = SHOP.filter((item) => {
+    if (q) {
+      const blob = `${item.name} ${item.category} ${item.job ?? ""} ${item.detail}`.toLowerCase();
+      if (!blob.includes(q)) return false;
+    } else if (item.category !== category) return false;
+    if (tier !== "all" && (item.tier ?? "mid") !== tier) return false;
+    if (job !== "all" && item.job !== job) return false;
+    return true;
+  }).sort((a, b) => (sort === "dear" ? b.price - a.price : sort === "stars" ? b.stars - a.stars || a.price - b.price : sort === "new" ? Number(b.id.startsWith("e-")) - Number(a.id.startsWith("e-")) || a.price - b.price : a.price - b.price));
+  const shown = preview ? SHOP.find((item) => item.id === preview) : null;
 
   function reveal(id: ShopCategory) {
     const list = listRef.current;
@@ -118,40 +145,161 @@ export function Catalogue({
             })}
           </div>
         </div>
-        <p className="px-4 pb-3 pt-3 text-xs text-[#8b97ab] sm:px-5">Wallet {cedis(cash)}</p>
-      </div>
-      <div id="shop-grid" role="tabpanel" aria-labelledby={`shop-tab-${category}`} className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
-        {items.map((item) => {
-          const have = !item.consume && owned.includes(item.id);
-          const parked = stored.includes(item.id);
-          const laid = item.kind === "floor" && floor === item.id;
-          const pricey = item.price >= 20000;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                if (laid) return;
-                if (have && !parked && item.kind !== "floor") return;
-                onBuy(item.id);
-              }}
-              className="rounded-[22px] bg-white p-3 text-left shadow-sm"
-            >
-              <span className="flex items-center justify-between text-[11px] text-[#8b97ab]">
-                <span>{item.size}</span>
-                <span className="text-[#e0b44a]">{"★".repeat(item.stars)}</span>
-              </span>
-              <span className="mt-1 grid h-28 place-items-center">
-                <ItemArt item={item} />
-              </span>
-              <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
-              <span className={`mt-1 block text-sm font-bold ${laid || (have && !parked && item.kind !== "floor") ? "text-[#8b97ab]" : pricey ? "text-[#9a3412]" : "text-[#006B3F]"}`}>
-                {laid ? "On the floor" : item.kind === "floor" && have ? "Lay this floor" : parked ? "Put it out" : have ? "In the room" : cedis(item.price)}
-              </span>
-              {item.upkeep ? <span className="mt-0.5 block text-[11px] font-semibold text-[#9a3412]">+{cedis(item.upkeep)} a week</span> : null}
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-2 pt-3 sm:px-5">
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPreview(null);
+            }}
+            placeholder="Search pots, soap, tanks"
+            className="min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-sm text-[#121212] outline-none"
+          />
+          <select value={sort} onChange={(event) => setSort(event.target.value as Sort)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[#121212]">
+            <option value="cheap">Cheap first</option>
+            <option value="dear">Dear first</option>
+            <option value="stars">Popular</option>
+            <option value="new">New</option>
+          </select>
+          <select value={job} onChange={(event) => setJob(event.target.value)} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[#121212]">
+            <option value="all">Any job</option>
+            {["cook", "serve", "bathe", "sleep", "cool", "power", "water", "wash", "clean", "store", "guard", "care", "food", "faith", "fit", "health", "groom", "kid", "desk", "pet", "yard", "motor"].map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto px-4 pb-2 sm:px-5">
+          {(["all", "starter", "mid", "luxury"] as TierPick[]).map((id) => (
+            <button key={id} type="button" onClick={() => setTier(id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${tier === id ? "bg-[#121212] text-white" : "bg-white text-[#121212]"}`}>
+              {id === "all" ? "Any price" : id}
             </button>
-          );
-        })}
+          ))}
+        </div>
+        <p className="px-4 pb-3 text-xs text-[#8b97ab] sm:px-5">
+          Wallet {cedis(cash)}
+          {q ? " · searching every shelf" : ""}
+          {cart.length ? ` · ${cart.length} in the cart` : ""}
+        </p>
+      </div>
+      {shown ? (
+        <Preview
+          item={shown}
+          cash={cash}
+          owned={owned}
+          stored={stored}
+          floor={floor}
+          qty={cupboard[shown.id] ?? 0}
+          onBack={() => setPreview(null)}
+          onBuy={() => onBuy(shown.id)}
+          onAdd={() => setCart((list) => [...list, shown.id])}
+          onUse={onUse && shown.stock ? () => onUse(shown.id) : undefined}
+        />
+      ) : (
+        <div id="shop-grid" role="tabpanel" aria-labelledby={`shop-tab-${category}`} className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
+          {items.map((item) => {
+            const have = !item.consume && !item.stock && owned.includes(item.id);
+            const parked = stored.includes(item.id);
+            const laid = item.kind === "floor" && floor === item.id;
+            const qty = cupboard[item.id] ?? 0;
+            return (
+              <button key={item.id} type="button" onClick={() => setPreview(item.id)} className="rounded-[22px] bg-white p-3 text-left shadow-sm">
+                <span className="flex items-center justify-between text-[11px] text-[#8b97ab]">
+                  <span>{item.size}</span>
+                  <span className="text-[#e0b44a]">{"★".repeat(item.stars)}</span>
+                </span>
+                <span className="mt-1 grid h-28 place-items-center">
+                  <ItemArt item={item} />
+                </span>
+                <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
+                <span className="mt-1 block text-sm font-bold text-[#006B3F]">
+                  {laid ? "On the floor" : parked ? "Stored" : have ? "In the house" : item.stock && qty > 0 ? `${qty} in the cupboard` : cedis(item.price)}
+                </span>
+              </button>
+            );
+          })}
+          {items.length === 0 ? <p className="col-span-2 py-8 text-sm text-[#5c6b82]">Nothing on that shelf.</p> : null}
+        </div>
+      )}
+      {cart.length && onCart ? (
+        <div className="flex items-center justify-between gap-3 border-t border-[#e6ebf2] bg-white px-4 py-3">
+          <p className="text-sm font-semibold text-[#121212]">
+            {cart.length} · {cedis(cart.reduce((sum, id) => sum + (SHOP.find((item) => item.id === id)?.price ?? 0), 0))}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              if (onCart(cart)) setCart([]);
+            }}
+            className="rounded-full bg-[#006B3F] px-4 py-2 text-sm font-bold text-white"
+          >
+            Deliver
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Preview({
+  item,
+  owned,
+  stored,
+  floor,
+  qty,
+  onBack,
+  onBuy,
+  onAdd,
+  onUse,
+}: {
+  item: ShopItem;
+  cash: number;
+  owned: string[];
+  stored: string[];
+  floor?: string;
+  qty: number;
+  onBack: () => void;
+  onBuy: () => void;
+  onAdd: () => void;
+  onUse?: () => void;
+}) {
+  const have = !item.consume && !item.stock && owned.includes(item.id);
+  const parked = stored.includes(item.id);
+  const laid = item.kind === "floor" && floor === item.id;
+  return (
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-5">
+      <button type="button" onClick={onBack} className="text-sm font-semibold text-[#5c6b82]">
+        Back to the shelf
+      </button>
+      <div className="mt-3 grid place-items-center rounded-[22px] bg-white py-4">
+        {item.kind === "desk" ? <DeskPreview /> : <ItemArt item={item} />}
+      </div>
+      <h3 className="mt-3 font-display text-2xl text-[#121212]">{item.name}</h3>
+      <p className="mt-1 text-sm text-[#5c6b82]">{item.detail}</p>
+      <p className="mt-2 text-sm font-semibold text-[#121212]">{jobLine(item.job)}</p>
+      <p className="mt-1 text-xs text-[#8b97ab]">
+        {item.tier ?? "mid"} · {item.where ?? "shop"} · {item.stock ? "cupboard" : item.size === "yard" ? "compound" : "placed in the house"}
+        {item.unlock ? ` · clout ${item.unlock}` : ""}
+        {item.stock ? ` · ${qty} in the cupboard` : have ? " · already in the house" : ""}
+      </p>
+      {item.asset ? <p className="mt-2 text-xs text-[#8b97ab]">{item.asset}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {onUse && qty > 0 ? (
+          <button type="button" onClick={onUse} className="rounded-full bg-[#121212] px-4 py-2 text-sm font-bold text-white">
+            Use
+          </button>
+        ) : null}
+        {!laid && !(have && !parked && item.kind !== "floor") ? (
+          <button type="button" onClick={onBuy} className="rounded-full bg-[#006B3F] px-4 py-2 text-sm font-bold text-white">
+            {parked ? "Put it out" : item.kind === "floor" && have ? "Lay this floor" : `Buy ${cedis(item.price)}`}
+          </button>
+        ) : null}
+        {!have || item.stock ? (
+          <button type="button" onClick={onAdd} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#121212] shadow-sm">
+            Add to cart
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -233,6 +381,9 @@ function CategoryIcon({ id, active }: { id: ShopCategory; active: boolean }) {
           <path {...common} d="M12 21 5.5 9 12 3.5 18.5 9 12 21z" />
           <path {...common} d="M5.5 9h13" />
         </>
+      ) : null}
+      {id !== "design" && id !== "sleep" && id !== "kitchen" && id !== "bath" && id !== "comfort" && id !== "fun" && id !== "skills" && id !== "light" && id !== "decor" && id !== "pets" && id !== "luxury" ? (
+        <rect {...common} x="5" y="6" width="14" height="12" rx="2" />
       ) : null}
     </svg>
   );
@@ -330,7 +481,8 @@ function Piece({ item }: { item: ShopItem }) {
   if (kind === "sofa") return <Sofa color={color} seats={size.startsWith("3") ? 3 : 2} />;
   if (kind === "bed") return <Bed color={color} />;
   if (kind === "wall") return <Crate color={color} />;
-  if (kind === "table" || kind === "desk") return <Table color={color} />;
+  if (kind === "desk") return <LaptopDeskArt />;
+  if (kind === "table") return <Table color={color} />;
   if (kind === "fan") return <Fan />;
   if (kind === "ac") return <AirCon />;
   if (kind === "food") return <KenkeyPlate />;
@@ -533,6 +685,55 @@ function Bed({ color }: { color: string }) {
         { x: 1, y: 9.2, z: -6, w: 8, h: 2.2, d: 5, color: "#f7f4ef" },
       ]}
     />
+  );
+}
+
+function DeskPreview() {
+  return (
+    <Canvas
+      className="h-44 w-full"
+      camera={{ position: [2.6, 2.15, 2.35], fov: 30 }}
+      dpr={1}
+      frameloop="demand"
+      gl={{ antialias: true, alpha: true }}
+      onCreated={({ gl }) => gl.setClearColor("#ffffff", 0)}
+      style={{ width: "100%", height: "11rem", pointerEvents: "none" }}
+    >
+      <ambientLight intensity={0.82} />
+      <directionalLight position={[4, 7, 3]} intensity={1.2} />
+      <directionalLight position={[-3, 2, -2]} intensity={0.28} />
+      <group position={[0.45, 0, 0.05]}>
+        <LaptopSet />
+      </group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <circleGeometry args={[1.7, 32]} />
+        <meshBasicMaterial color="#121212" transparent opacity={0.06} />
+      </mesh>
+    </Canvas>
+  );
+}
+
+function LaptopDeskArt() {
+  const wood = "#f3cca8";
+  const leg = { w: 2.4, h: 13, d: 2.4, color: "#e7c9a0" };
+  const screen = [at(-2, 22, -6), at(10, 22, -6), at(10, 30, -1), at(-2, 30, -1)];
+  return (
+    <g>
+      <Blocks
+        items={[
+          { x: -22, y: 0, z: -2, w: 10, h: 16, d: 12, color: "#f9a39e" },
+          { x: -20, y: 16, z: -4, w: 8, h: 10, d: 3, color: "#f9a39e" },
+          { x: -8, y: 0, z: -6, ...leg },
+          { x: 8, y: 0, z: -6, ...leg },
+          { x: -8, y: 0, z: 6, ...leg },
+          { x: 8, y: 0, z: 6, ...leg },
+          { x: -10, y: 13, z: -8, w: 22, h: 2.2, d: 16, color: wood },
+          { x: -4, y: 15.2, z: -2, w: 12, h: 0.8, d: 8, color: "#a3b6b6" },
+        ]}
+      />
+      <polygon points={screen.map((point) => point.join(",")).join(" ")} fill="#6d7c86" />
+      <polygon points={[at(-1, 22.4, -5.2), at(9, 22.4, -5.2), at(9, 28.6, -1.6), at(-1, 28.6, -1.6)].map((point) => point.join(",")).join(" ")} fill="#d7ece8" />
+    </g>
   );
 }
 

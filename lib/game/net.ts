@@ -85,7 +85,9 @@ export type Match = {
 
 export type PostKind = "status" | "house" | "outfit" | "car" | "team" | "harvest";
 
-export type Post = { id: string; kind: PostKind; text: string; snap: string; likes: string[]; at: string };
+export type PostReply = { id: string; who: string; name: string; text: string; at: string };
+
+export type Post = { id: string; kind: PostKind; text: string; snap: string; likes: string[]; at: string; replies?: PostReply[]; by?: string; byName?: string };
 
 export type ListingKind = "item" | "good" | "fit";
 
@@ -158,7 +160,7 @@ export function crewGoal(crew: Crew) {
   return 1000 * crew.members.length;
 }
 
-export const POST_GAP_MS = 20 * 60000;
+export const POST_GAP_MS = 0;
 export const MARKET_FEE = 0.05;
 export const MAX_LISTINGS = 8;
 export const RUN_FEE = 300;

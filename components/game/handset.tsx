@@ -6,6 +6,7 @@ import { NameSuggest } from "@/components/game/name-hints";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
 import { JusticeApp } from "@/components/game/justice-app";
+import { BetTable } from "@/components/game/bet-table";
 import { SpineApp } from "@/components/game/spine-app";
 import { BadgesApp, FamilyApp, FarmApp, GarageApp, HealthApp, LandApp, SchoolApp, StudioApp, TailorApp } from "@/components/game/life-apps";
 import { CrewApp, EventsApp, GamesApp, LeaderApp } from "@/components/game/play-apps";
@@ -33,7 +34,6 @@ import {
 } from "@/lib/game/phone-shell";
 import { ChartsApp, ChopApp, TripsApp } from "@/components/game/city-apps";
 import { askPrice, buyGarment, RACK, TIERS, wearGarment, type RackItem, type Tier } from "@/lib/game/boutique";
-import { lostToday, betCard, betColour, betDice, BET_CAP } from "@/lib/game/bet";
 import { ADDRESSES, MENU, RIDERS, collectErrand, errandLine, placeErrand, rateDrop } from "@/lib/game/errand";
 import { alertsFor } from "@/lib/game/alerts";
 import { streakState } from "@/lib/game/badges";
@@ -368,6 +368,7 @@ export function Handset({
                   onMarket={onMarket}
                   onMap={onMap}
                   onPost={() => onSocial(postClout(life, spotById(life.where).name))}
+                  onTopUp={(bundle) => onSocial(topUpAirtime(life, bundle))}
                 />
               ) : null}
               {app === "calls" ? <CallsScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
@@ -587,7 +588,7 @@ export function Handset({
               {app === "delivery" ? (
                 <DeliveryScreen life={life} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} onApply={onSocial} />
               ) : null}
-              {app === "bet" ? <BetScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
+              {app === "bet" ? <BetTable life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "papers" ? (
                 <PapersScreen
                   life={life}
@@ -676,6 +677,7 @@ function HomeScreen({
   onMarket,
   onMap,
   onPost,
+  onTopUp,
 }: {
   date: string;
   time: string;
@@ -701,6 +703,7 @@ function HomeScreen({
   onMarket: () => void;
   onMap?: () => void;
   onPost: () => void;
+  onTopUp: (bundle: 5 | 15) => void;
 }) {
   const [shade, setShade] = useState(false);
   const card = cards[Math.floor((now ?? 0) / 8000) % Math.max(1, cards.length)] ?? cards[0];
@@ -752,7 +755,15 @@ function HomeScreen({
           </button>
         </div>
         <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-white/85">{post}</p>
-        <p className="mt-1 text-[10px] font-semibold text-white/70">Airtime {airtime}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="text-[11px] font-semibold text-white">Airtime {airtime}</p>
+          <button type="button" onClick={() => onTopUp(5)} className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[#121212]">
+            ₵5 · 20 units
+          </button>
+          <button type="button" onClick={() => onTopUp(15)} className="rounded-full bg-[#FCD116] px-2.5 py-1 text-[11px] font-bold text-[#121212]">
+            ₵15 · 80 units
+          </button>
+        </div>
       </div>
       <div className="mt-4 grid grid-cols-4 gap-x-1 gap-y-4">
         <AppIcon label="Alerts" color="#243044" badge={alerts} onClick={() => onOpen("alerts")}>
@@ -1147,53 +1158,6 @@ function DeliveryScreen({ life, onBack, onRun, onApply }: { life: Life; onBack: 
           <p className="mt-1 text-sm font-semibold">Runs so far: {runs}</p>
           <button type="button" onClick={onRun} className="mt-3 w-full rounded-full bg-[#121212] py-3 text-sm font-bold text-white">
             Take a bike order
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BetScreen({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: (result: StepResult) => void }) {
-  const [stake, setStake] = useState("10");
-  const amount = Math.round(Number(stake) || 0);
-  const lost = lostToday(life);
-  return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#14110e] text-white">
-      <AppHeader title="Bet" onBack={onBack} />
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto px-4 py-4">
-        <p className="text-sm text-white/70">
-          In-game cedis. Lost today {cedis(lost)} of {cedis(BET_CAP)}.
-        </p>
-        <input value={stake} onChange={(event) => setStake(event.target.value)} inputMode="numeric" className="w-full rounded-2xl bg-white/10 px-3 py-3 text-sm" />
-        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Red or black</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => onApply(betColour(life, amount, "red"))} className="flex-1 rounded-full bg-[#CE1126] py-3 text-sm font-bold">
-            Red
-          </button>
-          <button type="button" onClick={() => onApply(betColour(life, amount, "black"))} className="flex-1 rounded-full bg-black py-3 text-sm font-bold ring-1 ring-white/30">
-            Black
-          </button>
-        </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Higher or lower</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => onApply(betCard(life, amount, "higher"))} className="flex-1 rounded-full bg-white py-3 text-sm font-bold text-[#121212]">
-            Higher
-          </button>
-          <button type="button" onClick={() => onApply(betCard(life, amount, "lower"))} className="flex-1 rounded-full bg-white/15 py-3 text-sm font-bold">
-            Lower
-          </button>
-        </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">Dice</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => onApply(betDice(life, amount, "under"))} className="flex-1 rounded-full bg-[#006B3F] py-3 text-sm font-bold">
-            Under 7
-          </button>
-          <button type="button" onClick={() => onApply(betDice(life, amount, "seven"))} className="flex-1 rounded-full bg-[#f5c542] py-3 text-sm font-bold text-[#121212]">
-            Exact 7
-          </button>
-          <button type="button" onClick={() => onApply(betDice(life, amount, "over"))} className="flex-1 rounded-full bg-[#006B3F] py-3 text-sm font-bold">
-            Over 7
           </button>
         </div>
       </div>

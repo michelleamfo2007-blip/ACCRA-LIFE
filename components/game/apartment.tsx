@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CanvasTexture, ExtrudeGeometry, RepeatWrapping, Shape, SphereGeometry, SRGBColorSpace, type PerspectiveCamera } from "three";
 import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
-import { modelFor, PlacedModel } from "@/components/game/kit-mesh";
+import { HouseGarage } from "@/components/game/house-garage";
+import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
 import { Figure } from "@/components/game/low-poly-human";
+import { garageBox } from "@/lib/game/garage";
 import { DIVIDERS, FIXTURES, fixtureAt, hangSpot, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
 
 export function Apartment({
@@ -29,6 +31,8 @@ export function Apartment({
   guests = [],
   onPick,
   onDrag,
+  bays = 1,
+  onCar,
 }: {
   life: Life;
   pos: { x: number; z: number };
@@ -50,6 +54,8 @@ export function Apartment({
   guests?: { name: string; doing?: string }[];
   onPick?: (id: string) => void;
   onDrag?: (x: number, z: number) => void;
+  bays?: number;
+  onCar?: (key: string, x: number, z: number) => void;
 }) {
   const look = homeLook(life.homeId);
   const grade = look.grade;
@@ -74,7 +80,8 @@ export function Apartment({
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
       </mesh>
       <Floor grade={grade} floorId={life.floor} span={span} />
-      <Walls grade={grade} span={span} />
+      <Walls grade={grade} span={span} gap={garageBox(span, bays)} />
+      <HouseGarage life={life} span={span} bays={bays} onWalk={placing ? undefined : onWalk} onCar={placing ? undefined : onCar} />
       {grade !== "low" ? <PictureWindow span={span} glow={night && !dark} /> : null}
       {grade === "hall" ? <StripLight glow={!dark} /> : null}
       {grade === "high" ? <Cooler /> : null}
@@ -253,8 +260,8 @@ function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x:
       }
       const phone = size.width < 720;
       const step = (phone ? 0.032 : 0.018) * zoom.current;
-      pan.current.x = clamp(pan.current.x - dx * step, -4.2, 4.2);
-      pan.current.z = clamp(pan.current.z + dy * step, -3.4, 3.4);
+      pan.current.x = clamp(pan.current.x - dx * step, -6, 6);
+      pan.current.z = clamp(pan.current.z + dy * step, -8, 4);
     };
     const up = (event: PointerEvent) => {
       pointers.delete(event.pointerId);
@@ -295,7 +302,7 @@ function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x:
     const distance = (phone ? 11.8 : aspect < 1.15 ? 18 : 20) * zoom.current * (frozenRef.current ? 2.4 : 1);
     const lookX = soft.current.x + pan.current.x;
     const lookY = 0;
-    const lookZ = soft.current.z + pan.current.z + (phone ? liftRef.current : liftRef.current * 0.45);
+    const lookZ = soft.current.z + pan.current.z + (phone ? liftRef.current : liftRef.current * 0.45) - 3.1;
     const lens = camera as PerspectiveCamera;
     lens.position.set(lookX + distance * (phone ? 0.36 : 0.42), lookY + distance * (phone ? 0.88 : 0.72), lookZ + distance * (phone ? 0.42 : 0.5));
     lens.fov = phone ? 38 : 30;
@@ -377,6 +384,7 @@ function Prop({ item }: { item: ShopItem }) {
   if (item.id === "counter") return <KitchenCounter />;
   if (item.kind === "sink") return <KitchenSink />;
   if (item.kind === "tv") return <LuxuryTv wide={item.size.startsWith("2")} />;
+  if (item.kind === "desk") return <LaptopSet />;
   if (item.id === "transistor") return <TransistorRadio />;
   if (kit) return <PlacedModel file={kit.file} tall={kit.tall} span={kit.span} />;
   if (item.kind === "jet") {
@@ -453,7 +461,7 @@ function Floor({ grade, floorId, span = 0 }: { grade: HomeGrade; floorId?: strin
   );
 }
 
-function Walls({ grade, span = 0 }: { grade: HomeGrade; span?: number }) {
+function Walls({ grade, span = 0, gap }: { grade: HomeGrade; span?: number; gap?: { doorX0: number; doorX1: number } }) {
   const look = homeLook(grade === "low" ? "jamestown" : grade === "hall" ? "legon-hall" : grade === "high" ? "east-legon" : "adabraka");
   const room = roomReach(span);
   const h = 1.7;
@@ -464,9 +472,16 @@ function Walls({ grade, span = 0 }: { grade: HomeGrade; span?: number }) {
   const backCenter = (-halfD + -0.55) / 2;
   const frontLen = halfD - 0.85;
   const frontCenter = (0.85 + halfD) / 2;
+  const doorX0 = Math.max(-halfW + 0.4, gap?.doorX0 ?? -0.1);
+  const doorX1 = Math.min(halfW - 0.4, gap?.doorX1 ?? 1.35);
+  const leftLen = doorX0 - -halfW;
+  const leftCenter = (-halfW + doorX0) / 2;
+  const rightLen = halfW - doorX1;
+  const rightCenter = (doorX1 + halfW) / 2;
   return (
     <group>
-      <Box color={look.wall} position={[0, y, -halfD]} size={[halfW * 2 + 0.2, h, 0.18]} flat={false} />
+      <Box color={look.wall} position={[leftCenter, y, -halfD]} size={[leftLen, h, 0.18]} flat={false} />
+      <Box color={look.wall} position={[rightCenter, y, -halfD]} size={[rightLen, h, 0.18]} flat={false} />
       <Box color={look.wall} position={[0, y, halfD]} size={[halfW * 2 + 0.2, h, 0.18]} flat={false} />
       <Box color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} flat={false} />
       <Box color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} flat={false} />

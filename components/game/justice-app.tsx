@@ -10,7 +10,8 @@ export function JusticeApp({ life, onBack, onApply }: { life: Life; onBack: () =
   const [approach, setApproach] = useState<string>(APPROACHES[2].id);
   const card = assess(life, target, approach);
   return (
-    <div className="space-y-3 text-[#121212]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
+    <div className="min-h-0 flex-1 touch-pan-y space-y-3 overflow-y-auto overscroll-y-contain px-4 pb-16 pt-3">
       <button type="button" onClick={onBack} className="text-xs font-bold text-[#5c6b82]">
         ← Phone
       </button>
@@ -156,6 +157,7 @@ export function JusticeApp({ life, onBack, onApply }: { life: Life; onBack: () =
           </button>
         ))}
       </div>
+    </div>
     </div>
   );
 }

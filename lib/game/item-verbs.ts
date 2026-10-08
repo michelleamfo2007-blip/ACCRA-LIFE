@@ -1,4 +1,4 @@
-import { HOME_VERBS, SHOP, type Life, type ShopItem, type Verb } from "@/lib/game/world";
+import { HOME_VERBS, SHOP, runVerb, type Life, type ShopItem, type StepResult, type Verb } from "@/lib/game/world";
 
 export type ItemCard = { emoji: string; name: string; detail: string; verbs: Verb[] };
 
@@ -276,8 +276,50 @@ const SOFA_EXTRA: Record<string, Verb> = {
   gold: act({ id: "gold-court", label: "Hold court", detail: "Everybody faces you. Gist flows your way.", minutes: 30, effects: { social: 18, fun: 12 }, social: true }),
 };
 
+const JOBS: Record<string, Pick<Verb, "label" | "detail" | "minutes" | "effects"> & Partial<Verb>> = {
+  cook: { label: "Cook", detail: "A pot on the fire. The house smells like dinner.", minutes: 40, effects: { hunger: 28, fun: 4 }, skill: "cooking", tag: "food" },
+  serve: { label: "Set the table", detail: "Plates out. People can sit.", minutes: 15, effects: { social: 8, hunger: 8 }, social: true },
+  bathe: { label: "Bath", detail: "Bucket, soap, a proper wash.", minutes: 25, effects: { hygiene: 28, energy: 4 } },
+  sleep: { label: "Lie down", detail: "The bed does its job.", minutes: 60, effects: { energy: 16 }, sleep: true },
+  cool: { label: "Switch it on", detail: "The room loses its heat.", minutes: 20, effects: { energy: 8, fun: 4 }, power: true },
+  power: { label: "Bring current", detail: "Light for the hours ECG is gone.", minutes: 10, effects: { fun: 4 } },
+  water: { label: "Draw water", detail: "The tank, the bucket, or the tap.", minutes: 15, effects: { hygiene: 8 } },
+  wash: { label: "Do the laundry", detail: "Clothes come back wearable.", minutes: 45, effects: { hygiene: 12 } },
+  clean: { label: "Clean", detail: "The floor and the corners.", minutes: 30, effects: { hygiene: 14 } },
+  store: { label: "Pack it away", detail: "Off the floor, into the box.", minutes: 15, effects: { fun: 2 } },
+  guard: { label: "Set it", detail: "The night is quieter.", minutes: 10, effects: { energy: 4 } },
+  care: { label: "Use it", detail: "The small thing that keeps you presentable.", minutes: 10, effects: { hygiene: 12, social: 4 } },
+  food: { label: "Eat from the bag", detail: "A meal from what you stored.", minutes: 15, effects: { hunger: 22 }, tag: "food" },
+  faith: { label: "Pray", detail: "A quiet hour.", minutes: 20, effects: { energy: 8, fun: 4 }, tag: "church" },
+  fit: { label: "Train", detail: "A short workout at home.", minutes: 25, effects: { energy: -6, fun: 6, hygiene: -4 }, skill: "fitness", tag: "gym" },
+  health: { label: "Take from the cabinet", detail: "The fever eases. Rest still helps.", minutes: 10, effects: { energy: 10 } },
+  groom: { label: "Get ready", detail: "You leave looking finished.", minutes: 20, effects: { hygiene: 10, social: 8 } },
+  kid: { label: "See to the children", detail: "They have a place and a minute of you.", minutes: 20, effects: { social: 10, fun: 6 } },
+  desk: { label: "Sit and work", detail: "Work that is not done on the bed.", minutes: 40, effects: { fun: 2 }, skill: "career" },
+  pet: { label: "Feed them", detail: "The bowl is full.", minutes: 10, effects: { fun: 8, social: 4 } },
+  yard: { label: "Work the compound", detail: "The yard looks kept.", minutes: 30, effects: { fun: 6, energy: -4 } },
+  motor: { label: "See to the car", detail: "The car stays ready.", minutes: 20, effects: { fun: 4 } },
+};
+
+export function jobVerb(item: ShopItem): Verb {
+  const spec = JOBS[item.job ?? "store"] ?? JOBS.store;
+  return act({
+    ...spec,
+    id: `job-${item.id}`,
+    draw: item.stock ? item.id : undefined,
+    power: spec.power,
+  });
+}
+
+export function useStock(life: Life, id: string): StepResult {
+  const item = SHOP.find((entry) => entry.id === id);
+  if (!item?.stock) return { life, notes: [], error: "That is not in the cupboard." };
+  return runVerb(life, jobVerb(item), life.where);
+}
+
 export function itemCard(item: ShopItem): ItemCard {
-  const verbs = item.kind === "sofa" ? [...SOFA_BASE.map((verb) => ({ ...verb, id: `${verb.id}-${item.id}` })), SOFA_EXTRA[item.id]].filter(Boolean) : (BY_ID[item.id] ?? []);
+  const own = BY_ID[item.id];
+  const verbs = item.kind === "sofa" ? [...SOFA_BASE.map((verb) => ({ ...verb, id: `${verb.id}-${item.id}` })), SOFA_EXTRA[item.id]].filter(Boolean) : own?.length ? own : item.job ? [jobVerb(item)] : [];
   return { emoji: ID_EMOJI[item.id] ?? EMOJI[item.kind] ?? "✨", name: item.name, detail: item.detail, verbs };
 }
 

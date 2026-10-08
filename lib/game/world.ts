@@ -12,6 +12,8 @@ import { cityArrival, copySpine, doorBlocked, noteRep, pulseSpine, type Spine } 
 import { custodyBlock, pulseJustice } from "@/lib/game/justice";
 import { pulseMotors } from "@/lib/game/garage";
 import { pulseSites } from "@/lib/game/estate";
+import { afterWalk, strain } from "@/lib/game/crisis";
+import { ESSENTIALS, POWER_IDS } from "@/lib/game/essentials";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -142,6 +144,8 @@ export type Life = {
   bag?: Record<string, { qty: number; paid: number }>;
   soldToday?: { day: number; spots: Record<string, number> };
   pantry?: number;
+  /** Cups, soap, rice, and the rest. Counts, not floor pieces. */
+  cupboard?: Record<string, number>;
   cool?: Record<string, number>;
   plots?: Plot[];
   kids?: Kid[];
@@ -316,10 +320,31 @@ export type CarState = {
   financePay?: number;
   financeDay?: number;
   security?: number;
+  /** Game minute the car was last washed. */
+  washedAt?: number;
 };
 export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
 export type SickKind = "malaria" | "flu" | "tummy" | "burnout";
-export type Health = { sick?: { kind: SickKind; since: number } | null; nhisUntil?: number; day?: number };
+export type Crisis = {
+  cause: string;
+  help: "friend" | "stranger" | "film" | "none";
+  ward: "ground" | "public" | "private" | "healer" | "chemist";
+  bill: number;
+  paid: number;
+  until: number;
+  robbed: number;
+  note: string;
+  place: string;
+};
+export type Health = {
+  sick?: { kind: SickKind; since: number } | null;
+  nhisUntil?: number;
+  day?: number;
+  /** Game minute the weakness lifts. */
+  weakUntil?: number;
+  warn?: string;
+  crisis?: Crisis | null;
+};
 export type Outfit = { style: string; color: string };
 export type Tailor = { orders: { id: string; style: string; color: string; readyAt: number }[]; wardrobe: Outfit[] };
 
@@ -464,6 +489,8 @@ export type Verb = {
   stock?: number;
   cool?: boolean;
   perSkill?: number;
+  /** Cupboard id this action uses up. */
+  draw?: string;
 };
 
 export type Spot = {
@@ -1208,6 +1235,20 @@ export const SHOP_CATEGORIES = [
   { id: "decor", label: "Decor" },
   { id: "pets", label: "Pets" },
   { id: "luxury", label: "Luxury" },
+  { id: "dining", label: "Dining" },
+  { id: "laundry", label: "Laundry" },
+  { id: "clean", label: "Clean" },
+  { id: "store", label: "Storage" },
+  { id: "safe", label: "Safety" },
+  { id: "care", label: "Hygiene" },
+  { id: "pantry", label: "Pantry" },
+  { id: "power", label: "Power" },
+  { id: "yard", label: "Compound" },
+  { id: "kids", label: "Children" },
+  { id: "faith", label: "Faith" },
+  { id: "health", label: "Health" },
+  { id: "groom", label: "Grooming" },
+  { id: "motor", label: "Motor" },
 ] as const;
 
 export type ShopCategory = (typeof SHOP_CATEGORIES)[number]["id"];
@@ -1226,10 +1267,19 @@ export type ShopItem = {
   accent?: string;
   upkeep?: number;
   kind: ShopKind;
+  /** Cupboard stock. It is not a piece on the floor. */
+  stock?: boolean;
+  tier?: "starter" | "mid" | "luxury";
+  /** What using it does. */
+  job?: string;
+  where?: "market" | "shop" | "boutique";
+  pack?: number;
+  unlock?: number;
+  asset?: string;
 };
 
 export function hasCurrent(inventory: string[]) {
-  return inventory.some((id) => id === "generator" || id === "yellow-gen" || id === "solar");
+  return inventory.some((id) => POWER_IDS.includes(id));
 }
 
 export const SHOP: ShopItem[] = [
@@ -1276,7 +1326,7 @@ export const SHOP: ShopItem[] = [
   { id: "transistor", name: "Transistor radio", price: 65, detail: "Joy FM, even when the phone is flat.", category: "fun", size: "1×1", stars: 1, color: "#c4894f", kind: "box" },
   { id: "tv32", name: "32\" flat TV", price: 720, detail: "Match day without going to the viewing centre.", category: "fun", size: "1×1", stars: 2, color: "#2c3338", kind: "tv" },
   { id: "tv65", name: "65\" smart TV", price: 2560, detail: "Wider, on a gold stand. The room's luxury.", category: "fun", size: "2×1", stars: 3, color: "#1c1c1c", kind: "tv" },
-  { id: "desk", name: "Laptop desk", price: 1200, detail: "A chair, a top, and somewhere for the laptop that is not your lap.", category: "skills", size: "2×2", stars: 3, color: "#e7c9a0", kind: "desk" },
+  { id: "desk", name: "Laptop desk", price: 1200, detail: "Wood top, the pink chair pulled up, and an open laptop already on it.", category: "skills", size: "2×2", stars: 3, color: "#e7c9a0", kind: "desk" },
   { id: "guitar", name: "Acoustic guitar", price: 280, detail: "Highlife practice when the corridor is quiet.", category: "skills", size: "1×1", stars: 2, color: "#e7c85a", kind: "guitar" },
   { id: "weights", name: "Dumbbell rack", price: 220, detail: "A short bar and two ends. The gym can wait.", category: "skills", size: "1×1", stars: 2, color: "#1c1c1c", kind: "weights" },
   { id: "yellow-gen", name: "Yellow gen", price: 960, detail: "The small yellow one. It coughs, then the bulbs stay on.", category: "light", size: "yard", stars: 3, color: "#e7c85a", kind: "box" },
@@ -1297,6 +1347,7 @@ export const SHOP: ShopItem[] = [
   { id: "vault", name: "Bullion vault", price: 320000, detail: "A grey door with a gold handle. The cedis stay in the wallet.", category: "luxury", size: "1×1", stars: 5, color: "#4a4e55", kind: "vault" },
   { id: "jet", name: "Private jet", price: 2400000, detail: "Parked in the yard. The weekly bill still comes.", category: "luxury", size: "yard", stars: 5, color: "#f7f7f7", upkeep: 2400, kind: "jet" },
   { id: "heavy-jet", name: "Heavy jet", price: 7200000, detail: "Bigger wings, bigger Saturday bill.", category: "luxury", size: "yard", stars: 5, color: "#2c3338", upkeep: 7200, kind: "jet" },
+  ...ESSENTIALS,
 ];
 
 const PEOPLE = ["Kojo", "Abena", "Efua", "Yaw", "Selorm", "Maame", "Akua", "Nana", "Esi", "Kweku", "Adjoa", "Fiifi"];
@@ -1478,6 +1529,7 @@ function clone(life: Life): Life {
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
+    cupboard: { ...(life.cupboard ?? {}) },
     plots: (life.plots ?? []).map((plot) => ({
       ...plot,
       people: plot.people?.map((person) => ({ ...person })),
@@ -1494,7 +1546,7 @@ function clone(life: Life): Life {
     docket: life.docket ? { ...life.docket } : life.docket,
     yard: life.yard ? { ...life.yard } : life.yard,
     farm: (life.farm ?? []).map((bed) => (bed ? { ...bed } : null)),
-    health: life.health ? { ...life.health, sick: life.health.sick ? { ...life.health.sick } : life.health.sick } : undefined,
+    health: life.health ? { ...life.health, sick: life.health.sick ? { ...life.health.sick } : life.health.sick, crisis: life.health.crisis ? { ...life.health.crisis } : life.health.crisis } : undefined,
     tailor: life.tailor ? { orders: life.tailor.orders.map((order) => ({ ...order })), wardrobe: life.tailor.wardrobe.map((fit) => ({ ...fit })) } : undefined,
     badges: [...(life.badges ?? [])],
     streak: life.streak ? { ...life.streak } : undefined,
@@ -1631,7 +1683,24 @@ export function freshLife(input: { look: Look; traits: string[]; dream: string; 
   return life;
 }
 
-export type StepResult = { life: Life; notes: string[]; error?: string };
+export type StepResult = {
+  life: Life;
+  notes: string[];
+  error?: string;
+  bet?: {
+    kind: "colour" | "card" | "dice";
+    win: boolean;
+    tie?: boolean;
+    stake: number;
+    payout: number;
+    colour?: "red" | "black";
+    rank?: string;
+    shown?: number;
+    nextRank?: string;
+    dice?: [number, number];
+    streak: number;
+  };
+};
 
 export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = "awake"): StepResult {
   const next = clone(life);
@@ -1699,9 +1768,22 @@ function checkHealth(life: Life, now: number, notes: string[]) {
   if (health.day === undefined) health.day = day;
   else if (health.day !== day) {
     health.day = day;
+    const cup = { ...(life.cupboard ?? {}) };
+    const coilId = Object.keys(cup).find((id) => id.includes("mosquito-coil") && cup[id] > 0);
+    const netted = life.inventory.includes("net") || life.inventory.some((id) => id.includes("mosquito-net")) || Object.entries(cup).some(([id, qty]) => qty > 0 && /mosquito-coil|mosquito-repellent|insect-spray/.test(id));
+    if (coilId) {
+      cup[coilId] -= 1;
+      life.cupboard = cup;
+      if (cup[coilId] === 0) notes.push("You're out of mosquito coil.");
+    }
+    if (Object.entries(life.cupboard ?? {}).some(([id, qty]) => qty <= 0 && /soap/.test(id)) && life.needs.hygiene < 30) notes.push("You're out of soap.");
+    const cold = life.inventory.some((id) => SHOP.find((item) => item.id === id)?.kind === "fridge");
+    if (!cold && (life.pantry ?? 0) > 0) {
+      life.pantry = Math.max(0, (life.pantry ?? 0) - 1);
+      notes.push("Food spoiled overnight. A fridge would have kept it.");
+    }
     if (!health.sick) {
       const { rainy, harmattan } = seasonFlags(now);
-      const netted = life.inventory.includes("net");
       const chance = 0.03 + (life.needs.hygiene < 25 ? 0.1 : 0) + (life.needs.energy < 15 ? 0.08 : 0) + (life.needs.hunger < 20 ? 0.06 : 0) + (rainy && !netted ? 0.12 : 0) + (harmattan ? 0.04 : 0) - life.skills.fitness * 0.006;
       if (Math.random() < chance) {
         const kind: SickKind = rainy && !netted && Math.random() < 0.6 ? "malaria" : life.needs.hunger < 20 ? "tummy" : life.needs.energy < 15 ? "burnout" : "flu";
@@ -1728,13 +1810,16 @@ function settleBills(life: Life, from: number, to: number) {
     const wages = (life.businesses ?? []).reduce((sum, shop) => sum + bizWages(shop.kind, shop.level, shop), 0);
     const fees = (life.kids ?? []).filter((kid) => kid.school).length * 40;
     const drivers = (life.fleet ?? []).reduce((sum, car) => sum + (car.driver ? (FLEET_WAGES[car.kind] ?? 0) : 0), 0);
-    life.cash -= rent + loanPay + upkeep + wages + fees + drivers + rates;
+    const tableDebt = life.stats?.betDebt ?? 0;
+    const clinicDebt = life.stats?.clinicDebt ?? 0;
+    if (tableDebt > 0 || clinicDebt > 0) life.stats = { ...(life.stats ?? {}), betDebt: 0, clinicDebt: 0 };
+    life.cash -= rent + loanPay + upkeep + wages + fees + drivers + rates + tableDebt + clinicDebt;
     life.loan -= loanPay;
     if (life.loan <= 0) {
       life.loan = 0;
       life.weeklyLoan = 0;
     }
-    notes.push(`Saturday bill: rent ${cedis(rent)}${rates ? ` and property upkeep ${cedis(rates)}` : ""}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${drivers ? ` and drivers ${cedis(drivers)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}.`);
+    notes.push(`Saturday bill: rent ${cedis(rent)}${rates ? ` and property upkeep ${cedis(rates)}` : ""}${loanPay ? ` and susu ${cedis(loanPay)}` : ""}${upkeep ? ` and upkeep ${cedis(upkeep)}` : ""}${wages ? ` and staff wages ${cedis(wages)}` : ""}${drivers ? ` and drivers ${cedis(drivers)}` : ""}${fees ? ` and school fees ${cedis(fees)}` : ""}${tableDebt ? ` and the table debt ${cedis(tableDebt)}` : ""}${clinicDebt ? ` and the hospital ${cedis(clinicDebt)}` : ""}.`);
     const bank = life.bank;
     if (bank && bank.loan > 0 && day * 1440 > bank.loanDue) {
       const fine = Math.round(bank.loan * 0.05);
@@ -1837,6 +1922,7 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   if (shut) return { life, notes: [], error: shut };
   const held = custodyBlock(life, placeId);
   if (held) return { life, notes: [], error: held };
+  if (life.health?.crisis) return { life, notes: [], error: "You are not on your feet." };
   const ride = farRide(base, life.where, placeId);
   if (ride.blocked) return { life, notes: [], error: ride.blocked };
   const fuel = ride.fuel ?? FUEL_PER_TRIP;
@@ -1846,6 +1932,12 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
     if (blocked) return { life, notes: [], error: blocked };
   }
   const timed = passTime({ ...clone(life), cash: life.cash - ride.cost }, ride.minutes);
+  if (ride.id === "trek") {
+    const dropped = afterWalk(timed.life, timed.notes);
+    if (dropped) return dropped;
+  } else if (strain(timed.life, true) >= 58) {
+    timed.notes.push("You paid for the ride. Walking that stretch would have put you on the ground.");
+  }
   timed.life.where = landed.where;
   timed.life.town = landed.town;
   bump(timed.life, "trips");
@@ -1892,6 +1984,9 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (moved.error) return moved;
   const next = clone(moved.life);
   const notes = [...moved.notes];
+  if (verb.job && (next.health?.weakUntil ?? 0) > next.minutes) {
+    return { life: next, notes, error: "You are too weak for a shift. Eat, drink, and rest." };
+  }
   if (verb.id === "radio" && next.dumsor && !hasCurrent(next.inventory)) {
     return { life: next, notes, error: "The radio is quiet. Dumsor took the socket." };
   }
@@ -1906,12 +2001,29 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   let cost = verb.cost;
   if (verb.tag === "food" && next.birthId === "market") cost = Math.round(cost * 0.7);
   if (verb.tag === "party" && seasonFlags(next.minutes).detty) cost = Math.round(cost * 1.3);
+  if (verb.draw && (next.cupboard?.[verb.draw] ?? 0) < 1) {
+    const missing = SHOP.find((item) => item.id === verb.draw)?.name ?? "that";
+    return { life: next, notes, error: `You're out of ${missing}.` };
+  }
   if (cost > 0 && next.cash < cost) return { life: next, notes, error: "Wallet light. Make some money first." };
-  const timed = passTime(next, verb.minutes, verb.id === "sleep" || verb.sleep ? "sleep" : "awake");
+  const acted = SHOP.find((item) => item.id === verb.draw || verb.id === `job-${item.id}`);
+  const minutes = acted?.job === "wash" && next.inventory.some((id) => id.includes("washing-machine")) ? Math.max(10, Math.round(verb.minutes * 0.45)) : verb.minutes;
+  const timed = passTime(next, minutes, verb.id === "sleep" || verb.sleep ? "sleep" : "awake");
   const after = timed.life;
   notes.push(...timed.notes);
   after.cash -= cost;
   let earn = verb.earn + (verb.perSkill && verb.skill ? verb.perSkill * after.skills[verb.skill] : 0);
+  if (verb.draw) {
+    const left = Math.max(0, (after.cupboard?.[verb.draw] ?? 1) - 1);
+    after.cupboard = { ...(after.cupboard ?? {}), [verb.draw]: left };
+    const drawn = SHOP.find((item) => item.id === verb.draw);
+    if (left === 0 && drawn) notes.push(`You're out of ${drawn.name}.`);
+    if (drawn?.job === "health" && after.health?.sick) {
+      after.health = { ...after.health, sick: null };
+      notes.push("The fever eases.");
+    }
+    if (drawn?.job === "power" && drawn.stock && hasCurrent(after.inventory)) after.dumsor = false;
+  }
   if (verb.pantry) after.pantry = Math.max(0, (after.pantry ?? 0) - verb.pantry);
   if (verb.stock) after.pantry = Math.min(PANTRY_MAX, (after.pantry ?? 0) + verb.stock);
   if (verb.cool) after.cool = { ...(after.cool ?? {}), [verb.id]: after.minutes + Math.max(30, verb.minutes) };
@@ -1938,10 +2050,15 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
     const shaped = delta > 0 ? delta * boost : delta;
     after.needs[key] = clampNeed(after.needs[key] + shaped);
   });
-  if (verb.id === "sleep") {
-    const bonus = (after.inventory.includes("mattress") ? 14 : 0) + homeById(after.homeId).comfort;
-    after.needs.energy = clampNeed(after.needs.energy + bonus);
-    if (after.hangover) {
+  if (acted && (acted.job === "bathe" || acted.job === "water") && after.inventory.some((id) => /water-tank|borehole|-well|water-pump|dispenser/.test(id))) {
+    after.needs.hygiene = clampNeed(after.needs.hygiene + 8);
+  }
+  if (verb.id === "sleep" || verb.sleep) {
+    const cooled = after.inventory.some((id) => SHOP.find((item) => item.id === id)?.kind === "ac") ? 6 : 0;
+    const netted = after.inventory.some((id) => id === "net" || id.includes("mosquito-net")) ? 4 : 0;
+    const bonus = (verb.id === "sleep" ? (after.inventory.includes("mattress") ? 14 : 0) + homeById(after.homeId).comfort : 0) + cooled + netted;
+    if (bonus) after.needs.energy = clampNeed(after.needs.energy + bonus);
+    if (verb.id === "sleep" && after.hangover) {
       after.hangover = null;
       notes.push("Sleep clears the club night. Head quieter.");
     }
@@ -2118,7 +2235,7 @@ export function sellValue(price: number) {
 export function buyItem(life: Life, itemId: string): StepResult {
   const item = SHOP.find((entry) => entry.id === itemId);
   if (!item) return { life, notes: [], error: "That item is gone." };
-  if (!item.consume && life.inventory.includes(item.id)) {
+  if (!item.consume && !item.stock && life.inventory.includes(item.id)) {
     if (item.kind === "floor") {
       if (life.floor === item.id) return { life, notes: [], error: "That floor is already down." };
       const next = clone(life);
@@ -2137,7 +2254,16 @@ export function buyItem(life: Life, itemId: string): StepResult {
     }
     return { life, notes: [], error: "You already own that." };
   }
+  if (item.unlock && (life.stats?.clout ?? 0) < item.unlock) return { life, notes: [], error: `The city does not sell that yet. Clout ${item.unlock}.` };
   if (life.cash < item.price) return { life, notes: [], error: "Not enough cedis." };
+  if (item.stock) {
+    const next = clone(life);
+    const pack = item.pack ?? 1;
+    next.cash -= item.price;
+    next.cupboard = { ...(next.cupboard ?? {}), [item.id]: (next.cupboard?.[item.id] ?? 0) + pack };
+    pushLog(next, `Bought ${item.name}.`);
+    return { life: next, notes: [`Dropped at the door. ${item.name} is in the cupboard.`] };
+  }
   if (item.consume) {
     return runVerb({ ...clone(life) }, eat({ id: "kenkey", label: "Kenkey and fish", detail: item.detail, minutes: 15, cost: item.price, effects: { hunger: 34, fun: 4 }, tag: "food" }), life.where);
   }
@@ -2145,14 +2271,28 @@ export function buyItem(life: Life, itemId: string): StepResult {
   next.cash -= item.price;
   next.inventory = [...next.inventory, item.id];
   if (item.kind === "floor") next.floor = item.id;
-  else {
+  else if (item.size !== "yard") {
     const hung = hangSpot(item.id, 1.8, 1.2, next.span ?? 0);
     const spot = hung ?? openSpot(next);
     next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: hung?.rot ?? 0 }];
   }
   if (hasCurrent(next.inventory)) next.dumsor = false;
   pushLog(next, `Bought ${item.name}.`);
-  return { life: next, notes: [item.kind === "floor" ? `${item.name} is down.` : `Bought ${item.name}.`] };
+  const landed = item.kind === "floor" ? `${item.name} is down.` : item.size === "yard" ? `${item.name} is in the compound.` : `Bought ${item.name}.`;
+  return { life: next, notes: [landed] };
+}
+
+export function buyCart(life: Life, ids: string[]): StepResult {
+  if (!ids.length) return { life, notes: [], error: "The cart is empty." };
+  let next = life;
+  const notes: string[] = [];
+  for (const id of ids) {
+    const step = buyItem(next, id);
+    if (step.error) return { life, notes: [], error: step.error };
+    next = step.life;
+    notes.push(...step.notes);
+  }
+  return { life: next, notes: [`Delivered ${ids.length}.`, ...notes.slice(0, 2)] };
 }
 
 export function widenRoom(life: Life): StepResult {

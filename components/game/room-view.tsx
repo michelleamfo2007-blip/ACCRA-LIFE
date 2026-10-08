@@ -6,7 +6,8 @@ import { HomeDesk } from "@/components/game/home-desk";
 import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
 import { activeGuests, doorGuests } from "@/lib/game/home-life";
-import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type Verb } from "@/lib/game/world";
+import { bayCount, carDust, carOf, footHere, garageBox, motorsOf, setPrimary, washCar, yardTalk } from "@/lib/game/garage";
+import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
 
@@ -65,6 +66,7 @@ export function RoomView({
   onWiden,
   startArrange = false,
   onArrangeSeen,
+  onMotor,
 }: {
   life: Life;
   onAct: (id: string) => void;
@@ -89,6 +91,7 @@ export function RoomView({
   onWiden?: () => void;
   startArrange?: boolean;
   onArrangeSeen?: () => void;
+  onMotor?: (result: StepResult) => void;
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
   const dark = life.dumsor && !hasCurrent(life.inventory);
@@ -107,6 +110,7 @@ export function RoomView({
   const [fixture, setFixture] = useState<FixtureId | null>(null);
   const [draft, setDraft] = useState<Placed | null>(null);
   const [arrange, setArrange] = useState(false);
+  const [beside, setBeside] = useState<string | null>(null);
 
   function canInterrupt() {
     return !busy.current || seated.current;
@@ -286,9 +290,21 @@ export function RoomView({
         sofaColor={sofaColor}
         guests={guests.map((guest) => ({ name: guest.name, doing: guest.doing }))}
         onAsk={onAsk}
+        bays={bayCount(life)}
+        onCar={(key, x, z) => {
+          if (draft || !canInterrupt()) return;
+          setBeside(null);
+          walkTo({ x, z }, null, () => {
+            setPose("idle");
+            busy.current = false;
+            setBeside(key);
+          });
+        }}
         onWalk={(x, z) => {
           if (draft || !canInterrupt()) return;
-          walkTo({ x: clampRoom(x, box.minX, box.maxX), z: clampRoom(z, box.minZ, box.maxZ) }, null);
+          setBeside(null);
+          const yard = footHere(x, z, life.span ?? 0, bayCount(life));
+          walkTo(yard ?? { x: clampRoom(x, box.minX, box.maxX), z: clampRoom(z, box.minZ, box.maxZ) }, null);
         }}
         onGo={(id) => {
           if (id === "door") {
@@ -333,6 +349,30 @@ export function RoomView({
         <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#121212] shadow-lg">
           🪑 Sitting · tap floor to get up
         </div>
+      ) : null}
+      {beside ? (
+        <CarBay
+          life={life}
+          carKey={beside}
+          onClose={() => setBeside(null)}
+          onGetIn={() => {
+            const result = setPrimary(life, beside);
+            onMotor?.(result);
+          }}
+          onWash={() => {
+            const result = washCar(life, beside);
+            onMotor?.(result);
+          }}
+          onDrive={() => {
+            const gate = garageBox(life.span ?? 0, bayCount(life)).gate;
+            setBeside(null);
+            walkTo(gate, null, () => {
+              setPose("idle");
+              busy.current = false;
+              onMapRef.current();
+            });
+          }}
+        />
       ) : null}
       {guests.some((guest) => guest.sleepover) ? (
         <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-[#121212] px-4 py-2 text-sm font-semibold text-[#FCD116] shadow-lg">
@@ -643,6 +683,57 @@ function PlaceCard({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CarBay({
+  life,
+  carKey,
+  onClose,
+  onGetIn,
+  onWash,
+  onDrive,
+}: {
+  life: Life;
+  carKey: string;
+  onClose: () => void;
+  onGetIn: () => void;
+  onWash: () => void;
+  onDrive: () => void;
+}) {
+  const motor = motorsOf(life).find((item) => item.key === carKey);
+  if (!motor) return null;
+  const plan = carOf(motor.id);
+  const indoors = motorsOf(life).findIndex((item) => item.key === carKey) < bayCount(life);
+  const dust = carDust(motor, life.minutes, indoors);
+  const talk = yardTalk(life);
+  const clean = dust < 0.15 ? "clean" : dust < 0.4 ? "dusty" : "caked in dust";
+  const driving = life.car?.key === motor.key;
+  return (
+    <div className="absolute bottom-[max(5.6rem,calc(env(safe-area-inset-bottom)+4.8rem))] left-3 z-30 w-[min(22rem,calc(100%-1.5rem))] rounded-2xl bg-[#f6f1ea] p-3 text-[#121212] shadow-xl">
+      <p className="text-sm font-bold">{motor.name || plan?.label || "Car"}</p>
+      <p className="mt-1 text-xs text-[#5c6b82]">
+        {Math.round(motor.fuel)}% fuel · {Math.round(motor.condition ?? 100)}% sound · {clean}
+        {motor.plate ? ` · ${motor.plate}` : ""}
+        {motor.driver ? ` · ${motor.driver} has the keys` : ""}
+        {motor.broken ? " · spoilt" : ""}
+      </p>
+      {talk ? <p className="mt-1 text-xs font-semibold text-[#243044]">{talk}</p> : null}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button type="button" className="rounded-full bg-[#121212] px-3 py-1.5 text-xs font-bold text-white" onClick={onGetIn}>
+          {driving ? "You are in this one" : "Get in"}
+        </button>
+        <button type="button" className="rounded-full bg-white px-3 py-1.5 text-xs font-bold" onClick={onWash}>
+          Wash
+        </button>
+        <button type="button" className="rounded-full bg-white px-3 py-1.5 text-xs font-bold" onClick={onDrive}>
+          Drive out
+        </button>
+        <button type="button" className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#5c6b82]" onClick={onClose}>
+          Step back
+        </button>
       </div>
     </div>
   );

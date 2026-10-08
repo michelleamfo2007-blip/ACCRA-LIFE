@@ -732,12 +732,17 @@ export function AlertsApp({ life, onBack, onOpen }: { life: Life; onBack: () => 
   );
 }
 
-type FeedPost = { id: string; kind: PostKind; text: string; snap: string; at: string; likes: number; liked: boolean; author: string; name: string; mine: boolean; followed: boolean };
+type FeedReply = { id: string; who: string; name: string; text: string; at: string };
+type FeedPost = { id: string; kind: PostKind; text: string; snap: string; at: string; likes: number; liked: boolean; replies?: FeedReply[]; author: string; name: string; handle: string; mine: boolean; followed: boolean };
 
 export function FeedApp({ life, cloud, onBack, onNet }: { life: Life; cloud: boolean; onBack: () => void; onNet: NetAction }) {
   const [tab, setTab] = useState("all");
   const [kind, setKind] = useState<PostKind>("status");
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
+  const [wall, setWall] = useState<string | null>(null);
+  const [wallText, setWallText] = useState("");
   const [notice, setNotice] = useState("");
   const [data, refresh] = usePoll<{ posts: FeedPost[]; following: number; followers: number }>(cloud ? `/api/live/play?view=feed&tab=${tab}` : null, 12000);
   const now = useClock();
@@ -798,27 +803,105 @@ export function FeedApp({ life, cloud, onBack, onNet }: { life: Life; cloud: boo
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{item.name}</span>
               <span className="block text-[11px] text-[#5c6b82]">
-                @{item.author} · {now ? when(item.at, now) : ""}
+                @{item.handle}
+                {item.handle !== item.author ? ` on @${item.author}` : ""} · {now ? when(item.at, now) : ""}
               </span>
             </span>
             {!item.mine ? (
-              <button type="button" onClick={() => void act({ action: "feed-follow", to: item.author })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${item.followed ? "bg-[#f4f7fb]" : "bg-[#c2185b] text-white"}`}>
+              <button type="button" onClick={() => void act({ action: "feed-follow", to: item.handle })} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${item.followed ? "bg-[#f4f7fb]" : "bg-[#c2185b] text-white"}`}>
                 {item.followed ? "Following" : "Follow"}
               </button>
             ) : null}
           </div>
           {item.snap ? <p className="mt-2 rounded-xl bg-[#f6f1ea] px-3 py-2 text-xs font-semibold">{item.snap}</p> : null}
           {item.text ? <p className="mt-2 text-sm">{item.text}</p> : null}
-          <div className="mt-2 flex items-center gap-3 text-xs">
+          {(item.replies ?? []).map((note) => (
+            <p key={note.id} className="mt-2 rounded-xl bg-[#f4f7fb] px-3 py-2 text-xs leading-5">
+              <span className="font-semibold">{note.name}</span> {note.text}
+            </p>
+          ))}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
             <button type="button" onClick={() => void act({ action: "feed-like", owner: item.author, id: item.id })} className={`font-semibold ${item.liked ? "text-[#c2185b]" : "text-[#5c6b82]"}`}>
               {item.liked ? "❤️" : "🤍"} {item.likes}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTo(replyTo === item.id ? null : item.id);
+                setReply("");
+              }}
+              className="font-semibold text-[#5c6b82]"
+            >
+              Reply
+            </button>
+            {item.mine && item.handle === item.author ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  setWall(wall === item.id ? null : item.id);
+                  setWallText("");
+                }}
+                className="font-semibold text-[#5c6b82]"
+              >
+                Post on @{item.author}
+              </button>
+            )}
             {item.mine ? (
-              <button type="button" onClick={() => void act({ action: "feed-delete", id: item.id })} className="ml-auto text-[#8b97ab]">
+              <button type="button" onClick={() => void act({ action: "feed-delete", owner: item.author, id: item.id })} className="ml-auto text-[#8b97ab]">
                 Delete
               </button>
             ) : null}
           </div>
+          {replyTo === item.id ? (
+            <div className="mt-2 flex gap-2">
+              <input
+                value={reply}
+                onChange={(event) => setReply(event.target.value)}
+                maxLength={160}
+                placeholder={`Reply to ${item.name}`}
+                className="min-w-0 flex-1 rounded-full bg-[#f4f7fb] px-3 py-2 text-sm outline-none"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  void act({ action: "feed-reply", owner: item.author, id: item.id, text: reply }).then(() => {
+                    setReply("");
+                    setReplyTo(null);
+                  })
+                }
+                className="rounded-full bg-[#121212] px-3 py-2 text-xs font-bold text-white"
+              >
+                Send
+              </button>
+            </div>
+          ) : null}
+          {wall === item.id ? (
+            <div className="mt-2 flex gap-2">
+              <input
+                value={wallText}
+                onChange={(event) => setWallText(event.target.value)}
+                maxLength={200}
+                placeholder={`Post on @${item.author}'s feed`}
+                className="min-w-0 flex-1 rounded-full bg-[#f4f7fb] px-3 py-2 text-sm outline-none"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  void onNet({ api: "play", action: "feed-post", kind: "status", text: wallText, wall: item.author }).then((error) => {
+                    setNotice(error ?? "");
+                    if (!error) {
+                      setWallText("");
+                      setWall(null);
+                    }
+                    refresh();
+                  })
+                }
+                className="rounded-full bg-[#c2185b] px-3 py-2 text-xs font-bold text-white"
+              >
+                Post
+              </button>
+            </div>
+          ) : null}
         </Card>
       ))}
     </Screen>

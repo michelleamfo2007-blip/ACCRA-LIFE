@@ -4,7 +4,6 @@ import { postSnap, putIn, sellables, takeOut } from "@/lib/game/market";
 import {
   MARKET_FEE,
   MAX_LISTINGS,
-  POST_GAP_MS,
   POST_LABEL,
   RUN_FEE,
   RUN_STANDING,
@@ -17,6 +16,7 @@ import {
   type NetRef,
   type Post,
   type PostKind,
+  type PostReply,
 } from "@/lib/game/net";
 import { cedis, mergeMoney, type Life } from "@/lib/game/world";
 import { chargePlayer, creditPlayer, mutedNote, readPlayer, savePlayer, sendChat, updateLife } from "@/lib/server/live";
@@ -139,20 +139,37 @@ export async function marketView(username: string) {
   return { listings: all, mine: netOf(me?.life).listings ?? [] };
 }
 
-export async function makePost(username: string, kind: string, text: string, latest: Life): Promise<Done> {
+export async function makePost(username: string, kind: string, text: string, latest: Life, wall = ""): Promise<Done> {
   if (!(kind in POST_LABEL)) return { error: "Pick what to post." };
   const body = text.trim().replace(/\s+/g, " ").slice(0, 200);
   if (kind === "status" && body.length < 2) return { error: "Write something first." };
   const me = await readPlayer(username);
   const muted = mutedNote(me?.life);
   if (muted) return { error: muted };
-  const last = (netOf(me?.life).posts ?? []).at(-1);
-  if (last && Date.now() - Date.parse(last.at) < POST_GAP_MS) return { error: `Give it ${Math.ceil((POST_GAP_MS - (Date.now() - Date.parse(last.at))) / 60000)} minutes before posting again.` };
-  const post: Post = { id: newId(), kind: kind as PostKind, text: body, snap: postSnap(mergeMoney(me?.life ?? latest, latest), kind as PostKind), likes: [], at: new Date().toISOString() };
-  const saved = await updateLife(username, (life) => withNet(life, (net) => ({ ...net, posts: [...(net.posts ?? []), post].slice(-20) })));
+  const target = wall && wall !== username ? wall : username;
+  if (target !== username) {
+    if (!HANDLE.test(target)) return { error: "Pick a real username." };
+    const them = await readPlayer(target);
+    if (!them?.life) return { error: "Nobody in Accra goes by that name." };
+  }
+  const post: Post = {
+    id: newId(),
+    kind: kind as PostKind,
+    text: body,
+    snap: postSnap(mergeMoney(me?.life ?? latest, latest), kind as PostKind),
+    likes: [],
+    at: new Date().toISOString(),
+    by: target === username ? undefined : username,
+    byName: target === username ? undefined : me?.name || username,
+  };
+  const saved = await updateLife(target, (life) => {
+    const next = withNet(life, (net) => ({ ...net, posts: [...(net.posts ?? []), post].slice(-40) }));
+    if (target !== username) next.inbox = [`@${username} posted on your feed.`, ...(next.inbox ?? [])].slice(0, 20);
+    return next;
+  });
   if (!saved) return { error: "The post did not save." };
   forget();
-  return { note: "Posted." };
+  return { note: target === username ? "Posted." : `Posted on @${target}'s feed.` };
 }
 
 export async function likePost(username: string, author: string, id: string) {
@@ -166,8 +183,38 @@ export async function likePost(username: string, author: string, id: string) {
   return null;
 }
 
-export async function deletePost(username: string, id: string) {
-  await updateLife(username, (life) => withNet(life, (net) => ({ ...net, posts: (net.posts ?? []).filter((item) => item.id !== id) })));
+export async function replyToPost(username: string, author: string, id: string, text: string) {
+  const body = text.trim().replace(/\s+/g, " ").slice(0, 160);
+  if (body.length < 1) return "Write a reply.";
+  const me = await readPlayer(username);
+  const muted = mutedNote(me?.life);
+  if (muted) return muted;
+  const owner = await readPlayer(author);
+  const post = (netOf(owner?.life).posts ?? []).find((item) => item.id === id);
+  if (!post) return "That post is gone.";
+  const reply: PostReply = { id: newId(), who: username, name: me?.name || username, text: body, at: new Date().toISOString() };
+  const saved = await updateLife(author, (life) => {
+    const found = (netOf(life).posts ?? []).find((item) => item.id === id);
+    if (!found) return null;
+    const next = withNet(life, (net) => ({
+      ...net,
+      posts: (net.posts ?? []).map((item) => (item.id === id ? { ...item, replies: [...(item.replies ?? []), reply].slice(-40) } : item)),
+    }));
+    if (author !== username) next.inbox = [`@${username} replied: ${body}`, ...(next.inbox ?? [])].slice(0, 20);
+    return next;
+  });
+  if (!saved) return "That post is gone.";
+  forget();
+  return null;
+}
+
+export async function deletePost(username: string, owner: string, id: string) {
+  await updateLife(owner, (life) => {
+    const post = (netOf(life).posts ?? []).find((item) => item.id === id);
+    if (!post) return life;
+    if (owner !== username && post.by !== username) return life;
+    return withNet(life, (net) => ({ ...net, posts: (net.posts ?? []).filter((item) => item.id !== id) }));
+  });
   forget();
   return null;
 }
@@ -199,14 +246,16 @@ export async function feedView(username: string, tab: string) {
       at: post.at,
       likes: post.likes.length,
       liked: post.likes.includes(username),
+      replies: (post.replies ?? []).slice(-8),
       author: row.username,
-      name: row.name,
-      mine: row.username === username,
-      followed: following.includes(row.username),
+      name: post.byName || row.name,
+      handle: post.by || row.username,
+      mine: (post.by || row.username) === username,
+      followed: following.includes(post.by || row.username),
     })),
   );
   if (tab === "following") posts = posts.filter((post) => post.followed || post.mine);
-  if (tab === "me") posts = posts.filter((post) => post.mine);
+  if (tab === "me") posts = posts.filter((post) => post.mine || post.author === username);
   if (tab === "trending") posts = posts.filter((post) => now - Date.parse(post.at) < 72 * 3600000).sort((a, b) => b.likes - a.likes || Date.parse(b.at) - Date.parse(a.at));
   else posts.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return { posts: posts.slice(0, 40), following: following.length, followers };

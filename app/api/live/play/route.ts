@@ -43,6 +43,7 @@ import {
   likePost,
   listItem,
   makePost,
+  replyToPost,
   marketView,
   runForOffice,
 } from "@/lib/server/town";
@@ -165,11 +166,13 @@ export async function POST(request: Request) {
     case "game-claim":
       return reply(ref ? await claimIdle(username, ref) : "That game is not running.");
     case "feed-post":
-      return life ? done(await makePost(username, String(body?.kind ?? ""), String(body?.text ?? ""), life)) : reply("Log in again.");
+      return life ? done(await makePost(username, String(body?.kind ?? ""), String(body?.text ?? ""), life, handle(body?.wall))) : reply("Log in again.");
     case "feed-like":
       return reply(ref ? await likePost(username, ref.owner, ref.id) : "That post is gone.");
+    case "feed-reply":
+      return reply(ref ? await replyToPost(username, ref.owner, ref.id, String(body?.text ?? "")) : "That post is gone.");
     case "feed-delete":
-      return reply(idOf(body) ? await deletePost(username, idOf(body)) : "That post is gone.");
+      return reply(ref ? await deletePost(username, ref.owner, ref.id) : idOf(body) ? await deletePost(username, username, idOf(body)) : "That post is gone.");
     case "feed-follow":
       return reply(await followPlayer(username, handle(body?.to)));
     case "market-list":
