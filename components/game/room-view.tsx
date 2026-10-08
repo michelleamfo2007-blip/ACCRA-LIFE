@@ -7,6 +7,7 @@ import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
 import { activeGuests, doorGuests } from "@/lib/game/home-life";
 import { bayCount, carDust, carOf, footHere, garageBox, motorsOf, setPrimary, washCar, yardTalk } from "@/lib/game/garage";
+import { askPrice, condOf, goodsOf, materialOf, wearLine } from "@/lib/game/wear";
 import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
@@ -52,6 +53,7 @@ export function RoomView({
   onLay,
   onStore,
   onSell,
+  onMend,
   onCook,
   onHang,
   onSleepover,
@@ -77,6 +79,7 @@ export function RoomView({
   onLay?: (id: string, x: number, z: number, rot: number) => void;
   onStore?: (id: string) => void;
   onSell?: (id: string) => void;
+  onMend?: (id: string, how: "clean" | "polish" | "cloth" | "repair" | "collect" | "friend") => void;
   onCook?: (recipeId: string, shareWith?: string) => void;
   onHang?: (name: string, kind: "chat" | "tv" | "game" | "drink") => void;
   onSleepover?: (name: string) => void;
@@ -492,6 +495,7 @@ export function RoomView({
           footer={
             <PieceTools
               id={picked}
+              life={life}
               onMove={() => {
                 const piece = (life.furniture ?? []).find((item) => item.id === picked);
                 if (piece) setDraft({ ...piece });
@@ -509,6 +513,7 @@ export function RoomView({
                 onSell?.(picked);
                 setPicked(null);
               }}
+              onMend={(how) => onMend?.(picked, how)}
             />
           }
         />
@@ -595,7 +600,7 @@ function ArrangeTray({
                 <span className="h-8 w-8 rounded-lg" style={{ background: item.color }} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold">{item.name}</span>
-                  <span className="block text-[11px] text-[#5c6b82]">{down ? "In the room · move it" : parked ? "Stored · put it down" : "Put it down"}</span>
+                  <span className="block text-[11px] text-[#5c6b82]">{condOf(goodsOf(life, item.id).cond).label} · {down ? "In the room · move it" : parked ? "Stored · put it down" : "Put it down"}</span>
                 </span>
               </button>
             );
@@ -618,18 +623,27 @@ function clampRoom(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function PieceTools({ id, onMove, onTurn, onStore, onSell }: { id: string; onMove: () => void; onTurn: () => void; onStore: () => void; onSell: () => void }) {
+function PieceTools({ id, life, onMove, onTurn, onStore, onSell, onMend }: { id: string; life: Life; onMove: () => void; onTurn: () => void; onStore: () => void; onSell: () => void; onMend?: (how: "clean" | "polish" | "cloth" | "repair" | "collect" | "friend") => void }) {
   const item = SHOP.find((entry) => entry.id === id);
   if (!item) return null;
+  const row = goodsOf(life, id);
+  const guest = (life.guests ?? []).some((person) => person.doing !== "leave" && person.doing !== "coming");
   return (
     <div className="rounded-2xl bg-[#f7f8fb] p-3">
       <p className="text-xs text-[#5c6b82]">
-        Bought for {cedis(item.price)} · sells for {cedis(sellValue(item.price))}
+        {condOf(row.cond).label} condition{row.dust >= 2 ? " · dusty" : ""} · sells for {cedis(sellValue(askPrice(item, row.cond)))}
       </p>
+      {wearLine(item.kind, item.id, row.cond) ? <p className="mt-1 text-xs text-[#9a3412]">{wearLine(item.kind, item.id, row.cond)}</p> : null}
+      {row.back && life.minutes < row.back ? <p className="mt-1 text-xs font-semibold text-[#006B3F]">At the repair shop.</p> : null}
       <div className="mt-2 flex flex-wrap gap-2">
         <Choice onClick={onMove}>Move</Choice>
         <Choice onClick={onTurn}>Turn</Choice>
         <Choice onClick={onStore}>Store</Choice>
+        {row.dust >= 1 ? <Choice onClick={() => onMend?.("clean")}>Clean</Choice> : null}
+        {row.cond !== "new" && row.cond !== "like" && row.cond !== "broken" ? <Choice onClick={() => onMend?.(materialOf(item.kind, item.id) === "fabric" || materialOf(item.kind, item.id) === "textile" ? "cloth" : "polish")}>{materialOf(item.kind, item.id) === "fabric" || materialOf(item.kind, item.id) === "textile" ? "Reupholster" : "Refinish"}</Choice> : null}
+        {row.back && life.minutes >= row.back ? <Choice onClick={() => onMend?.("collect")}>Collect</Choice> : null}
+        {!row.back && row.cond !== "new" && row.cond !== "like" ? <Choice onClick={() => onMend?.("repair")}>Repair shop</Choice> : null}
+        {guest && (row.cond === "fair" || row.cond === "poor" || row.cond === "broken") ? <Choice onClick={() => onMend?.("friend")}>Ask a guest</Choice> : null}
         <button type="button" onClick={onSell} className="min-w-[4.5rem] flex-1 rounded-full bg-[#fde8ea] px-3 py-2.5 text-sm font-semibold text-[#CE1126]">
           Sell
         </button>

@@ -56,6 +56,7 @@ import {
   settleGuests,
   tickGuests,
 } from "@/lib/game/home-life";
+import { buyUsed, mendItem } from "@/lib/game/wear";
 
 const LowPolyHuman = dynamic(() => import("@/components/game/low-poly-human").then((mod) => mod.LowPolyHuman), { ssr: false });
 import { commitLife, getRaw, parseRaw, subscribeSave, writeSave, type Account } from "@/lib/game/save";
@@ -1243,6 +1244,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onLay={(id, x, z, rot) => apply(layPiece(life, id, x, z, rot))}
           onStore={(id) => apply(storePiece(life, id))}
           onSell={(id) => apply(sellPiece(life, id))}
+          onMend={(id, how) => apply(mendItem(life, id, how))}
           onAct={(id) => {
             const verb = HOME_VERBS.find((item) => item.id === id);
             if (verb) apply(runVerb(life, verb, "home"));
@@ -1917,7 +1919,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           floor={life.floor}
           cupboard={life.cupboard}
           onClose={() => setTab("home")}
-          onBuy={(id) => apply(buyItem(life, id))}
+          onBuy={(id, stall) => apply(!stall || stall === "new" ? buyItem(life, id) : buyUsed(life, id, stall))}
           onUse={(id) => apply(useStock(life, id))}
           onCart={(ids) => {
             const result = buyCart(life, ids);

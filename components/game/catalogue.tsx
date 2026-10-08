@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Canvas } from "@react-three/fiber";
 import { LaptopSet } from "@/components/game/kit-mesh";
+import { askPrice, canWear, condOf, shelfCond, stallTag, STALLS, wearLine, type Stall } from "@/lib/game/wear";
 import { SHOP, SHOP_CATEGORIES, cedis, type ShopCategory, type ShopItem } from "@/lib/game/world";
 import { jobLine } from "@/lib/game/essentials";
 
@@ -25,7 +26,7 @@ export function Catalogue({
   stored?: string[];
   floor?: string;
   cupboard?: Record<string, number>;
-  onBuy: (id: string) => void;
+  onBuy: (id: string, stall?: Stall) => void;
   onCart?: (ids: string[]) => boolean;
   onUse?: (id: string) => void;
   onClose: () => void;
@@ -38,9 +39,11 @@ export function Catalogue({
   const [job, setJob] = useState("all");
   const [cart, setCart] = useState<string[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
+  const [stall, setStall] = useState<Stall>("new");
   const listRef = useRef<HTMLDivElement>(null);
   const q = query.trim().toLowerCase();
   const items = SHOP.filter((item) => {
+    if (stall !== "new" && !canWear(item)) return false;
     if (q) {
       const blob = `${item.name} ${item.category} ${item.job ?? ""} ${item.detail}`.toLowerCase();
       if (!blob.includes(q)) return false;
@@ -48,7 +51,11 @@ export function Catalogue({
     if (tier !== "all" && (item.tier ?? "mid") !== tier) return false;
     if (job !== "all" && item.job !== job) return false;
     return true;
-  }).sort((a, b) => (sort === "dear" ? b.price - a.price : sort === "stars" ? b.stars - a.stars || a.price - b.price : sort === "new" ? Number(b.id.startsWith("e-")) - Number(a.id.startsWith("e-")) || a.price - b.price : a.price - b.price));
+  }).sort((a, b) => {
+    const ap = askPrice(a, stall === "new" ? "new" : shelfCond(stall, a.id), stall);
+    const bp = askPrice(b, stall === "new" ? "new" : shelfCond(stall, b.id), stall);
+    return sort === "dear" ? bp - ap : sort === "stars" ? b.stars - a.stars || ap - bp : sort === "new" ? Number(b.id.startsWith("e-")) - Number(a.id.startsWith("e-")) || ap - bp : ap - bp;
+  });
   const shown = preview ? SHOP.find((item) => item.id === preview) : null;
 
   function reveal(id: ShopCategory) {
@@ -170,6 +177,25 @@ export function Catalogue({
             ))}
           </select>
         </div>
+        <div className="flex gap-1.5 overflow-x-auto px-4 pb-1 sm:px-5">
+          {STALLS.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => {
+                setStall(row.id);
+                setPreview(null);
+                setJob("all");
+                setTier("all");
+                setQuery("");
+              }}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${stall === row.id ? "bg-[#006B3F] text-white" : "bg-white text-[#121212]"}`}
+            >
+              {row.label}
+            </button>
+          ))}
+        </div>
+        <p className="px-4 pb-2 text-[11px] text-[#5c6b82] sm:px-5">{STALLS.find((row) => row.id === stall)?.note}</p>
         <div className="flex gap-1.5 overflow-x-auto px-4 pb-2 sm:px-5">
           {(["all", "starter", "mid", "luxury"] as TierPick[]).map((id) => (
             <button key={id} type="button" onClick={() => setTier(id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${tier === id ? "bg-[#121212] text-white" : "bg-white text-[#121212]"}`}>
@@ -192,29 +218,35 @@ export function Catalogue({
           floor={floor}
           qty={cupboard[shown.id] ?? 0}
           onBack={() => setPreview(null)}
-          onBuy={() => onBuy(shown.id)}
+          stall={stall}
+          onBuy={() => onBuy(shown.id, stall)}
           onAdd={() => setCart((list) => [...list, shown.id])}
           onUse={onUse && shown.stock ? () => onUse(shown.id) : undefined}
         />
       ) : (
-        <div id="shop-grid" role="tabpanel" aria-labelledby={`shop-tab-${category}`} className="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
+        <div id="shop-grid" role="tabpanel" aria-labelledby={`shop-tab-${category}`} className="grid min-h-[14rem] flex-1 grid-cols-2 content-start gap-3 overflow-auto px-4 pb-6 sm:grid-cols-3">
           {items.map((item) => {
             const have = !item.consume && !item.stock && owned.includes(item.id);
             const parked = stored.includes(item.id);
             const laid = item.kind === "floor" && floor === item.id;
             const qty = cupboard[item.id] ?? 0;
+            const cond = !canWear(item) || stall === "new" ? "new" : shelfCond(stall, item.id);
+            const price = askPrice(item, cond, stall);
+            const tag = stallTag(cond);
             return (
               <button key={item.id} type="button" onClick={() => setPreview(item.id)} className="rounded-[22px] bg-white p-3 text-left shadow-sm">
                 <span className="flex items-center justify-between text-[11px] text-[#8b97ab]">
-                  <span>{item.size}</span>
+                  <span>{condOf(cond).label}</span>
                   <span className="text-[#e0b44a]">{"★".repeat(item.stars)}</span>
                 </span>
-                <span className="mt-1 grid h-28 place-items-center">
+                <span className="relative mt-1 grid h-28 place-items-center">
                   <ItemArt item={item} />
+                  {cond !== "new" ? <span className="pointer-events-none absolute inset-3 rounded-xl" style={{ background: `rgba(90,60,30,${0.04 + ["new", "like", "good", "fair", "poor", "broken"].indexOf(cond) * 0.06})`, mixBlendMode: "multiply" }} /> : null}
                 </span>
                 <span className="mt-1 block text-sm font-semibold text-[#121212]">{item.name}</span>
+                {tag ? <span className="mt-0.5 block text-[11px] font-semibold text-[#9a3412]">{tag}</span> : null}
                 <span className="mt-1 block text-sm font-bold text-[#006B3F]">
-                  {laid ? "On the floor" : parked ? "Stored" : have ? "In the house" : item.stock && qty > 0 ? `${qty} in the cupboard` : cedis(item.price)}
+                  {laid ? "On the floor" : parked ? "Stored" : have ? "In the house" : item.stock && qty > 0 ? `${qty} in the cupboard` : cedis(price)}
                 </span>
               </button>
             );
@@ -248,6 +280,7 @@ function Preview({
   stored,
   floor,
   qty,
+  stall,
   onBack,
   onBuy,
   onAdd,
@@ -259,6 +292,7 @@ function Preview({
   stored: string[];
   floor?: string;
   qty: number;
+  stall: Stall;
   onBack: () => void;
   onBuy: () => void;
   onAdd: () => void;
@@ -267,6 +301,10 @@ function Preview({
   const have = !item.consume && !item.stock && owned.includes(item.id);
   const parked = stored.includes(item.id);
   const laid = item.kind === "floor" && floor === item.id;
+  const cond = !canWear(item) || stall === "new" ? "new" : shelfCond(stall, item.id);
+  const price = askPrice(item, cond, stall);
+  const worn = wearLine(item.kind, item.id, cond);
+  const tag = stallTag(cond);
   return (
     <div className="min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-5">
       <button type="button" onClick={onBack} className="text-sm font-semibold text-[#5c6b82]">
@@ -276,6 +314,12 @@ function Preview({
         {item.kind === "desk" ? <DeskPreview /> : <ItemArt item={item} />}
       </div>
       <h3 className="mt-3 font-display text-2xl text-[#121212]">{item.name}</h3>
+      <p className="mt-1 text-sm font-semibold text-[#121212]">
+        {condOf(cond).label} condition
+        {tag ? ` · ${tag}` : ""}
+        <span className="ml-2 text-[#e0b44a]">{"★".repeat(item.stars)}</span>
+      </p>
+      {worn ? <p className="mt-1 text-sm text-[#9a3412]">{worn}</p> : null}
       <p className="mt-1 text-sm text-[#5c6b82]">{item.detail}</p>
       <p className="mt-2 text-sm font-semibold text-[#121212]">{jobLine(item.job)}</p>
       <p className="mt-1 text-xs text-[#8b97ab]">
@@ -292,10 +336,10 @@ function Preview({
         ) : null}
         {!laid && !(have && !parked && item.kind !== "floor") ? (
           <button type="button" onClick={onBuy} className="rounded-full bg-[#006B3F] px-4 py-2 text-sm font-bold text-white">
-            {parked ? "Put it out" : item.kind === "floor" && have ? "Lay this floor" : `Buy ${cedis(item.price)}`}
+            {parked ? "Put it out" : item.kind === "floor" && have ? "Lay this floor" : `Buy ${cedis(price)}`}
           </button>
         ) : null}
-        {!have || item.stock ? (
+        {stall === "new" && (!have || item.stock) ? (
           <button type="button" onClick={onAdd} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#121212] shadow-sm">
             Add to cart
           </button>

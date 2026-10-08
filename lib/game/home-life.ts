@@ -1,4 +1,5 @@
 import { travelFactor, weatherAt } from "@/lib/game/sky";
+import { homeWearTalk } from "@/lib/game/wear";
 import { cloneLife, homeById, hourOf, type Life, type StepResult, type Verb } from "@/lib/game/world";
 
 export type GuestDoing = "coming" | "door" | "arrive" | "chat" | "eat" | "cook" | "tv" | "game" | "sleep" | "leave";
@@ -541,6 +542,8 @@ export function guestHomeReact(life: Life): string | null {
   const hasAc = life.inventory.includes("ac");
   const hour = hourOf(life.minutes);
   if (life.needs.hygiene < 35) return `${name}: "You no dey clean? Hmm."`;
+  const worn = homeWearTalk(life, name);
+  if (worn) return worn;
   if (visits > 1) return `${name}: "Same seat as last time. I remember."`;
   if ((life.pantry ?? 0) >= 3) return `${name}: "Ah, you get food! Make I take something."`;
   if (hasAc) return `${name}: "Ah, this place cold pass outside!"`;

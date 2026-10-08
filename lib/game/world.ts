@@ -14,6 +14,7 @@ import { pulseMotors } from "@/lib/game/garage";
 import { pulseSites } from "@/lib/game/estate";
 import { afterWalk, strain } from "@/lib/game/crisis";
 import { ESSENTIALS, POWER_IDS } from "@/lib/game/essentials";
+import { ageHome, askPrice, canWear, comfortOf, goodsOf, type Goods } from "@/lib/game/wear";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -129,6 +130,8 @@ export type Life = {
   dumsor: boolean;
   gemDay: number;
   furniture?: Placed[];
+  /** Wear on a piece you own. Missing means new, except the built-in bed and sofa. */
+  goods?: Record<string, Goods>;
   /** Built-in pieces (bed, stove, and the rest) after you move them. */
   layout?: Placed[];
   /** How many times the room has been paid to grow. 0, 1, or 2. */
@@ -1507,7 +1510,7 @@ export function clampNeed(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function clone(life: Life): Life {
+export function clone(life: Life): Life {
   return {
     ...life,
     look: { ...life.look },
@@ -1520,6 +1523,7 @@ function clone(life: Life): Life {
     relations: life.relations.map((person) => ({ ...person })),
     guests: (life.guests ?? []).map((guest) => ({ ...guest })),
     furniture: (life.furniture ?? []).map((piece) => ({ ...piece })),
+    goods: life.goods ? Object.fromEntries(Object.entries(life.goods).map(([id, row]) => [id, { ...row }])) : undefined,
     layout: (life.layout ?? []).map((piece) => ({ ...piece })),
     stored: [...(life.stored ?? [])],
     transfers: (life.transfers ?? []).map((note) => ({ ...note })),
@@ -1782,6 +1786,7 @@ function checkHealth(life: Life, now: number, notes: string[]) {
       life.pantry = Math.max(0, (life.pantry ?? 0) - 1);
       notes.push("Food spoiled overnight. A fridge would have kept it.");
     }
+    ageHome(life, notes);
     if (!health.sick) {
       const { rainy, harmattan } = seasonFlags(now);
       const chance = 0.03 + (life.needs.hygiene < 25 ? 0.1 : 0) + (life.needs.energy < 15 ? 0.08 : 0) + (life.needs.hunger < 20 ? 0.06 : 0) + (rainy && !netted ? 0.12 : 0) + (harmattan ? 0.04 : 0) - life.skills.fitness * 0.006;
@@ -2056,7 +2061,8 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "sleep" || verb.sleep) {
     const cooled = after.inventory.some((id) => SHOP.find((item) => item.id === id)?.kind === "ac") ? 6 : 0;
     const netted = after.inventory.some((id) => id === "net" || id.includes("mosquito-net")) ? 4 : 0;
-    const bonus = (verb.id === "sleep" ? (after.inventory.includes("mattress") ? 14 : 0) + homeById(after.homeId).comfort : 0) + cooled + netted;
+    const bedId = ["king", "spring", "mattress", "foam"].find((id) => after.inventory.includes(id)) ?? "fix-bed";
+    const bonus = ((verb.id === "sleep" ? (after.inventory.includes("mattress") ? 14 : 0) + homeById(after.homeId).comfort : 0) + cooled + netted) * comfortOf(goodsOf(after, bedId).cond);
     if (bonus) after.needs.energy = clampNeed(after.needs.energy + bonus);
     if (verb.id === "sleep" && after.hangover) {
       after.hangover = null;
@@ -2277,6 +2283,7 @@ export function buyItem(life: Life, itemId: string): StepResult {
     next.furniture = [...(next.furniture ?? []), { id: item.id, x: spot.x, z: spot.z, rot: hung?.rot ?? 0 }];
   }
   if (hasCurrent(next.inventory)) next.dumsor = false;
+  if (canWear(item)) next.goods = { ...(next.goods ?? {}), [item.id]: { cond: "new", dust: 0, since: next.minutes } };
   pushLog(next, `Bought ${item.name}.`);
   const landed = item.kind === "floor" ? `${item.name} is down.` : item.size === "yard" ? `${item.name} is in the compound.` : `Bought ${item.name}.`;
   return { life: next, notes: [landed] };
@@ -2341,12 +2348,17 @@ export function storePiece(life: Life, id: string): StepResult {
 export function sellPiece(life: Life, id: string): StepResult {
   const item = SHOP.find((entry) => entry.id === id);
   if (!item || item.consume || !life.inventory.includes(id)) return { life, notes: [], error: "Nothing there to sell." };
-  const back = sellValue(item.price);
+  const back = sellValue(askPrice(item, goodsOf(life, id).cond));
   const next = clone(life);
   next.cash += back;
   next.inventory = next.inventory.filter((owned) => owned !== id);
   next.furniture = (next.furniture ?? []).filter((piece) => piece.id !== id);
   next.stored = (next.stored ?? []).filter((owned) => owned !== id);
+  if (next.goods) {
+    const goods = { ...next.goods };
+    delete goods[id];
+    next.goods = goods;
+  }
   pushLog(next, `Sold ${item.name} for ${cedis(back)}.`);
   return { life: next, notes: [`Sold ${item.name} for ${cedis(back)}.`] };
 }

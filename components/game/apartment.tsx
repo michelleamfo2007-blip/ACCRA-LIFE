@@ -7,6 +7,8 @@ import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVa
 import { HouseGarage } from "@/components/game/house-garage";
 import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
 import { InteriorFinish, plankMap, PlasterBox, tileMap } from "@/components/game/room-finish";
+import { WearMarks } from "@/components/game/wear-marks";
+import { goodsOf } from "@/lib/game/wear";
 import { Figure } from "@/components/game/low-poly-human";
 import { garageBox } from "@/lib/game/garage";
 import { DIVIDERS, FIXTURES, fixtureAt, hangSpot, homeLook, moodOf, roomReach, SHOP, type HomeGrade, type Life, type Placed, type ShopItem } from "@/lib/game/world";
@@ -88,9 +90,11 @@ export function Apartment({
       <Door color={look.door} x={-room.halfW + 0.1} onGo={onGo} />
       <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
         <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
+        <WearMarks cond={goodsOf(life, "fix-bed").cond} dust={goodsOf(life, "fix-bed").dust} kind="bed" id="fix-bed" />
       </FixtureSpot>
       <FixtureSpot piece={spotOf(built, "fix-sofa")} active={picked === "fix-sofa"}>
         <Sofa color={sofaColor ?? look.sofa} onGo={onGo} />
+        <WearMarks cond={goodsOf(life, "fix-sofa").cond} dust={goodsOf(life, "fix-sofa").dust} kind="sofa" id="fix-sofa" />
       </FixtureSpot>
       <FixtureSpot piece={spotOf(built, "fix-fridge")} active={picked === "fix-fridge"}>
         <Fridge onGo={onGo} />
@@ -140,6 +144,7 @@ export function Apartment({
               </mesh>
             ) : null}
             <Prop item={item} />
+            <WearMarks cond={goodsOf(life, piece.id).cond} dust={goodsOf(life, piece.id).dust} kind={item.kind} id={item.id} />
           </group>
         );
       })}
