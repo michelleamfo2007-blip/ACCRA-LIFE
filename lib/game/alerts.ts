@@ -63,6 +63,11 @@ export function alertsFor(life: Life): Alert[] {
   if (life.spine?.kin.some((person) => person.need)) list.push({ id: "kin", emoji: "👨🏾‍👩🏾‍👧🏾", text: "Family needs you. Open Rival.", app: "book", urgent: true });
   if (life.spine?.rare) list.push({ id: "rare", emoji: "🌟", text: life.spine.rare, app: "book" });
   if (life.spine && life.spine.rep <= -14) list.push({ id: "name", emoji: "🗣️", text: "The city is talking about you.", app: "book" });
+  const docket = life.docket;
+  if (docket && (docket.status === "held" || docket.status === "booked" || docket.status === "court" || docket.status === "jail")) list.push({ id: "docket", emoji: "⚖️", text: docket.note, app: "law", urgent: true });
+  else if (docket?.status === "fine") list.push({ id: "fine", emoji: "⚖️", text: docket.note, app: "law", urgent: true });
+  else if (docket?.status === "service" || docket?.status === "probation" || docket?.status === "bail") list.push({ id: "sentence", emoji: "⚖️", text: docket.note, app: "law" });
+  if ((life.plots ?? []).some((plot) => plot.siteNote)) list.push({ id: "site", emoji: "🧱", text: "The building site needs you.", app: "land", urgent: true });
   if (life.health?.sick) list.push({ id: "sick", emoji: "🤒", text: "You are sick. See the clinic.", app: "health", urgent: true });
   if (hangoverActive(life)) list.push({ id: "hangover", emoji: "😵‍💫", text: "Club night hangover. Sleep it off or move slow.", app: "health" });
   const due = royaltiesDue(life);

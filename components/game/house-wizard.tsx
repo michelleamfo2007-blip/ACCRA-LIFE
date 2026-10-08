@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COMPOUNDS, FLOOR_MATS, GATES, HOUSES, PAINTS, ROOM_CHOICES, ROOF_MATS, STYLES, WALL_MATS, WINDOW_MATS, defaultPlan, designQuote, landOf } from "@/lib/game/estate";
+import { COMPOUNDS, FLOOR_MATS, GARAGE_KINDS, GATES, HOUSES, PAINTS, ROOM_CHOICES, ROOF_MATS, STYLES, WALL_MATS, WINDOW_MATS, defaultPlan, landOf, layoutOf, materialsOf } from "@/lib/game/estate";
 import { cedis, type HousePlan } from "@/lib/game/world";
 
 const STEPS = ["Type", "Bedrooms", "Rooms", "Style", "Materials", "Colours", "Compound", "Confirm"];
@@ -32,7 +32,8 @@ export function HouseWizard({ area, initial, onCancel, onSave }: { area: string;
   const land = landOf(area);
   const [step, setStep] = useState(0);
   const [plan, setPlan] = useState<HousePlan>(initial ?? defaultPlan("two"));
-  const quote = designQuote(area, plan);
+  const quote = materialsOf(area, plan);
+  const cells = layoutOf(plan);
   const set = (patch: Partial<HousePlan>) => setPlan((current) => ({ ...current, ...patch }));
 
   function toggleRoom(id: string) {
@@ -83,6 +84,7 @@ export function HouseWizard({ area, initial, onCancel, onSave }: { area: string;
           })}
         </div>
       ) : null}
+      {step === 2 ? <PlotBoard cells={cells} onMove={(id, x, y) => set({ layout: cells.map((cell) => (cell.id === id ? { ...cell, x, y } : cell)) })} /> : null}
       {step === 3 ? (
         <div className="flex flex-wrap gap-2">
           {STYLES.map((style) => (
@@ -111,14 +113,30 @@ export function HouseWizard({ area, initial, onCancel, onSave }: { area: string;
         <div className="space-y-2 text-xs">
           <Pick label="Compound" value={plan.compound} options={COMPOUNDS} onPick={(compound) => set({ compound })} />
           <Pick label="Gate" value={plan.gate} options={GATES} onPick={(gate) => set({ gate })} />
+          {plan.rooms.includes("garage") ? (
+            <>
+              <Pick label="Garage" value={plan.garageKind ?? "attached"} options={GARAGE_KINDS} onPick={(garageKind) => set({ garageKind })} />
+              <div className="flex flex-wrap gap-1">
+                {[1, 2, 3, 4].map((count) => (
+                  <button key={count} type="button" onClick={() => set({ garageBay: count })} className={`rounded-full px-2.5 py-1 font-bold ${(plan.garageBay ?? 1) === count ? "bg-[#121212] text-white" : "bg-[#f6f1ea]"}`}>
+                    {count} bay{count === 1 ? "" : "s"}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
       {step === 7 ? (
         <ul className="space-y-1 text-sm">
-          <li>{HOUSES.find((item) => item.id === plan.house)?.label} · {plan.bedrooms} bedroom{plan.bedrooms === 1 ? "" : "s"}</li>
-          <li>{plan.rooms.length} spaces, including the hall and kitchen</li>
-          <li>Build {cedis(quote.build)}. Permit {cedis(quote.permit)} is inside the first crew payment.</li>
-          <li>About {quote.days} in-game days if you fund every stage.</li>
+          <li>{HOUSES.find((item) => item.id === plan.house)?.label} · {plan.bedrooms} bedroom{plan.bedrooms === 1 ? "" : "s"} · {quote.metres} m²</li>
+          <li>{plan.rooms.length} spaces, including the hall and kitchen{plan.rooms.includes("garage") ? ` · ${plan.garageBay ?? 1}-car ${plan.garageKind ?? "attached"} garage` : ""}</li>
+          {quote.lines.map((line) => (
+            <li key={line.label}>
+              {line.label} · {cedis(line.cost)}
+            </li>
+          ))}
+          <li>Build {cedis(quote.build)}. About {quote.days} in-game days once a crew is on the plot. The days pass in the city, not as a short wait.</li>
           <li>Once you move in, Saturday rent stops. Upkeep is about {cedis(quote.upkeep)}.</li>
         </ul>
       ) : null}
@@ -136,6 +154,35 @@ export function HouseWizard({ area, initial, onCancel, onSave }: { area: string;
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function PlotBoard({ cells, onMove }: { cells: { id: string; x: number; y: number }[]; onMove: (id: string, x: number, y: number) => void }) {
+  return (
+    <div
+      className="relative h-40 rounded-xl bg-[#d7dece]"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        const id = event.dataTransfer.getData("text/plain");
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const x = Math.max(0, Math.min(3, Math.floor(((event.clientX - bounds.left) / bounds.width) * 4)));
+        const y = Math.max(0, Math.min(3, Math.floor(((event.clientY - bounds.top) / bounds.height) * 4)));
+        if (id) onMove(id, x, y);
+      }}
+    >
+      {cells.map((cell) => (
+        <button
+          key={cell.id}
+          type="button"
+          draggable
+          onDragStart={(event) => event.dataTransfer.setData("text/plain", cell.id)}
+          className="absolute rounded-lg bg-white px-1.5 py-1 text-[10px] font-bold shadow"
+          style={{ left: `${8 + cell.x * 22}%`, top: `${8 + cell.y * 22}%` }}
+        >
+          {cell.id}
+        </button>
+      ))}
     </div>
   );
 }

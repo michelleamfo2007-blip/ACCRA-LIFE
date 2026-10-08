@@ -1,4 +1,5 @@
 import { crossedTownNote, type TownId } from "@/lib/game/towns";
+import { custodyBlock } from "@/lib/game/justice";
 import { bump, cedis, cloneLife, collectStamp, logLine, passTime, spotById, type Life, type StepResult } from "@/lib/game/world";
 
 export type Cabin = "economy" | "business" | "first";
@@ -105,6 +106,9 @@ export function canBoard(life: Life, routeId: string, cabinId: string) {
   if (wait > 0) return `The plane is turning around. Next boarding in ${boardingWaitLabel(wait)}.`;
   if (life.cash < cabin.cost) return `You need ${cedis(cabin.cost)} for ${cabin.label.toLowerCase()}.`;
   if (life.needs.energy < 15) return "Too tired to fly. Rest first.";
+  const held = custodyBlock(life);
+  if (held) return held;
+  if (cabinId === "first" && life.spine?.barred.includes("record")) return "First class checked your record and closed the desk.";
   return null;
 }
 
@@ -122,6 +126,8 @@ export function jetFuel(life: Life) {
 export function flyOwnJet(life: Life, routeId: string): StepResult {
   const jet = ownedJet(life);
   if (!jet) return { life, notes: [], error: "You do not have a jet in the yard." };
+  const held = custodyBlock(life);
+  if (held) return { life, notes: [], error: held };
   const route = routeOf(routeId);
   if (!route) return { life, notes: [], error: "That hop is not on your chart." };
   const fromTown = (life.town ?? "accra") as TownId;

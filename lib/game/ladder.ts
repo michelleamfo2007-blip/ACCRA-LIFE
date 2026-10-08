@@ -1,5 +1,6 @@
 import { BIG_HOMES, HOMES, JOBS, JOB_RANKS, RANK_CAREER, RANK_SHIFTS, cedis, cloneLife, homeById, logLine, passTime, rankOf, spotById, type Home, type Life, type StepResult } from "@/lib/game/world";
 import { STAGES, landOf } from "@/lib/game/estate";
+import { custodyBlock } from "@/lib/game/justice";
 import { jobBlocked } from "@/lib/game/spine";
 
 export const ASK_GAP = 1440;
@@ -25,6 +26,8 @@ export function promoteOdds(life: Life) {
 export function askPromotion(life: Life, jobId: string): StepResult {
   const job = JOBS.find((item) => item.id === jobId);
   if (!job) return { life, notes: [], error: "That job is gone." };
+  const held = custodyBlock(life);
+  if (held) return { life, notes: [], error: held };
   const barred = jobBlocked(life, jobId);
   if (barred) return { life, notes: [], error: barred };
   const next = nextRank(life, jobId);

@@ -1,11 +1,11 @@
-import { FUEL_PER_TRIP, cedis, cloneLife, logLine, passTime, type Life, type Ride, type StepResult } from "@/lib/game/world";
+import { FUEL_PER_TRIP, cedis, cloneLife, logLine, passTime, type CarState, type Life, type Ride, type StepResult } from "@/lib/game/world";
 
 export const CARS = [
-  { id: "vitz", label: "Used Toyota Vitz", short: "Vitz", emoji: "🚗", price: 18000, minutes: 12, hail: 25, paint: "#f2f5f8", suv: false, scale: 0.86 },
-  { id: "corolla", label: "Toyota Corolla", short: "Corolla", emoji: "🚙", price: 38000, minutes: 11, hail: 40, paint: "#b7c3ce", suv: false, scale: 1 },
-  { id: "rav4", label: "Toyota RAV4", short: "RAV4", emoji: "🚙", price: 85000, minutes: 10, hail: 60, paint: "#2c4638", suv: true, scale: 1 },
-  { id: "benz", label: "Mercedes C-Class", short: "Benz", emoji: "🚘", price: 170000, minutes: 9, hail: 90, paint: "#16181c", suv: false, scale: 1.04 },
-  { id: "cruiser", label: "Land Cruiser V8", short: "Cruiser", emoji: "🛻", price: 420000, minutes: 9, hail: 140, paint: "#efe6d4", suv: true, scale: 1.14 },
+  { id: "vitz", label: "Used Toyota Vitz", short: "Vitz", emoji: "🚗", price: 18000, minutes: 12, hail: 25, paint: "#f2f5f8", suv: false, scale: 0.86, speed: 1, seats: 4, cargo: 1, style: 1 },
+  { id: "corolla", label: "Toyota Corolla", short: "Corolla", emoji: "🚙", price: 38000, minutes: 11, hail: 40, paint: "#b7c3ce", suv: false, scale: 1, speed: 2, seats: 5, cargo: 2, style: 2 },
+  { id: "rav4", label: "Toyota RAV4", short: "RAV4", emoji: "🚙", price: 85000, minutes: 10, hail: 60, paint: "#2c4638", suv: true, scale: 1, speed: 2, seats: 5, cargo: 3, style: 3 },
+  { id: "benz", label: "Mercedes C-Class", short: "Benz", emoji: "🚘", price: 170000, minutes: 9, hail: 90, paint: "#16181c", suv: false, scale: 1.04, speed: 3, seats: 5, cargo: 2, style: 4 },
+  { id: "cruiser", label: "Land Cruiser V8", short: "Cruiser", emoji: "🛻", price: 420000, minutes: 9, hail: 140, paint: "#efe6d4", suv: true, scale: 1.14, speed: 3, seats: 7, cargo: 4, style: 5 },
 ] as const;
 
 export const INSURANCE = 150;
@@ -67,28 +67,93 @@ export function tradeIn(life: Life) {
   return car ? Math.round(car.price * 0.6) : 0;
 }
 
-export function buyCar(life: Life, carId: string): StepResult {
+const motorKey = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+export function bayCount(life: Life) {
+  const finished = (life.plots ?? []).find((plot) => plot.stage >= 5 && plot.plan?.rooms.includes("garage"));
+  const bays = finished?.plan?.garageBay ?? (finished ? 2 : 1);
+  return Math.max(1, Math.min(6, bays));
+}
+
+export function motorsOf(life: Life): CarState[] {
+  if (life.motors?.length) return life.motors;
+  if (!life.car) return [];
+  return [{ ...life.car, key: life.car.key ?? "primary" }];
+}
+
+function stick(life: Life) {
+  if (!life.car) {
+    life.motors = life.motors ?? [];
+    return;
+  }
+  const key = life.car.key ?? "primary";
+  const car = { ...life.car, key };
+  life.car = car;
+  const others = (life.motors ?? []).filter((item) => item.key !== key);
+  life.motors = [...others, car];
+}
+
+export function buyCar(life: Life, carId: string, finance = false): StepResult {
   const car = carOf(carId);
   if (!car) return { life, notes: [], error: "That car is gone." };
-  if (life.car?.id === car.id) return { life, notes: [], error: "You already drive that." };
-  const credit = tradeIn(life);
-  const due = car.price - credit;
-  if (life.cash < due) return { life, notes: [], error: `You need ${cedis(due)}${credit ? ` after the trade-in` : ""}.` };
+  const owned = motorsOf(life);
+  if (owned.length >= bayCount(life)) return { life, notes: [], error: `The garage holds ${bayCount(life)}. Sell one, or add bays when you design the house.` };
+  const due = finance ? Math.round(car.price * 0.4) : car.price;
+  if (life.cash < due) return { life, notes: [], error: finance ? `The deposit is ${cedis(due)}.` : `You need ${cedis(due)}.` };
+  const motor: CarState = {
+    id: car.id,
+    key: motorKey(),
+    fuel: 60,
+    insuredUntil: 0,
+    condition: 100,
+    broken: false,
+    color: car.paint,
+    speed: car.speed,
+    seats: car.seats,
+    cargo: car.cargo,
+    style: car.style,
+    tires: 100,
+    registeredUntil: life.minutes + 30 * 1440,
+    driver: null,
+    hire: "parked",
+    financeLeft: finance ? car.price - due : 0,
+    financePay: finance ? Math.max(1, Math.round((car.price - due) / 8)) : 0,
+    security: 0,
+  };
   const next = cloneLife(life);
   next.cash -= due;
-  next.car = { id: car.id, fuel: 60, insuredUntil: life.car?.insuredUntil ?? 0, condition: 100, broken: false, color: car.paint };
-  const line = `You drove a ${car.label} off the lot at Abossey Okai.`;
+  next.motors = [...owned.map((item) => ({ ...item, key: item.key ?? motorKey() })), motor];
+  next.car = motor;
+  const line = finance
+    ? `${car.label} is yours. Deposit ${cedis(due)}. ${cedis(motor.financePay ?? 0)} comes off the wallet each week until ${cedis(motor.financeLeft ?? 0)} is cleared.`
+    : `You drove a ${car.label} off the lot at Abossey Okai. It is the car you leave in.`;
   logLine(next, line);
   return { life: next, notes: [line] };
 }
 
-export function sellCar(life: Life): StepResult {
-  const value = tradeIn(life);
-  if (!value) return { life, notes: [], error: "No car to sell." };
+export function sellCar(life: Life, key?: string): StepResult {
+  const owned = motorsOf(life);
+  const motor = owned.find((item) => item.key === (key ?? life.car?.key)) ?? owned.find((item) => !key && item.id === life.car?.id) ?? (key ? null : owned[0]);
+  if (!motor) return { life, notes: [], error: "No car to sell." };
+  const plan = carOf(motor.id);
+  const gross = Math.round((plan?.price ?? 0) * 0.55 * (motor.broken ? 0.65 : 0.55 + (motor.condition ?? 100) / 250));
+  const value = Math.max(0, gross - (motor.financeLeft ?? 0));
+  const rest = owned.filter((item) => item.key !== motor.key);
   const next = cloneLife(life);
   next.cash += value;
-  next.car = null;
-  return { life: next, notes: [`Sold the car for ${cedis(value)}.`] };
+  next.motors = rest;
+  next.car = rest[0] ? { ...rest[0] } : null;
+  return { life: next, notes: [`Sold the ${plan?.short ?? "car"} for ${cedis(value)}${motor.financeLeft ? " after the finance" : ""}.`] };
+}
+
+export function setPrimary(life: Life, key: string): StepResult {
+  const motor = motorsOf(life).find((item) => item.key === key);
+  if (!motor) return { life, notes: [], error: "That car is not in the garage." };
+  if (motor.broken || (motor.condition ?? 100) <= 0) return { life, notes: [], error: "That one is spoilt. Fix it before you drive it out." };
+  const next = cloneLife(life);
+  next.motors = motorsOf(life).map((item) => ({ ...item }));
+  next.car = { ...motor };
+  return { life: next, notes: [`You leave home in ${motor.name || carOf(motor.id)?.short || "that car"}.`] };
 }
 
 export function fillUp(life: Life): StepResult {
@@ -99,6 +164,7 @@ export function fillUp(life: Life): StepResult {
   const next = passTime(cloneLife(life), 10).life;
   next.cash -= cost;
   next.car = { ...life.car, fuel: 100 };
+  stick(next);
   return { life: next, notes: [`Full tank at the filling station on the corner: ${cedis(cost)}.`] };
 }
 
@@ -108,6 +174,7 @@ export function insureCar(life: Life): StepResult {
   const next = cloneLife(life);
   next.cash -= INSURANCE;
   next.car = { ...life.car, insuredUntil: Math.max(life.car.insuredUntil, life.minutes) + WEEK };
+  stick(next);
   return { life: next, notes: ["Insured for 7 days. The sticker is on the windscreen."] };
 }
 
@@ -117,6 +184,7 @@ export function nameCar(life: Life, raw: string): StepResult {
   if (name.length < 2) return { life, notes: [], error: "Give the car a real name." };
   const next = cloneLife(life);
   next.car = { ...life.car, name };
+  stick(next);
   return { life: next, notes: [`The car answers to ${name} now.`] };
 }
 
@@ -129,6 +197,7 @@ export function plateCar(life: Life, raw: string): StepResult {
   const next = cloneLife(life);
   next.cash -= PLATE_FEE;
   next.car = { ...life.car, plate };
+  stick(next);
   return { life: next, notes: [`DVLA plate ${plate} is on the car. ${cedis(PLATE_FEE)}.` ] };
 }
 
@@ -142,6 +211,7 @@ export function repaintCar(life: Life, hex: string): StepResult {
   const next = cloneLife(life);
   next.cash -= RESPRAY;
   next.car = { ...life.car, color: hex };
+  stick(next);
   const name = CAR_PAINTS.find((paint) => paint.hex === hex)?.label.toLowerCase() ?? "new";
   return { life: next, notes: [`Resprayed the ${car.short} ${name}. ${cedis(RESPRAY)}.`] };
 }
@@ -157,6 +227,7 @@ export function repairCar(life: Life, mechanicId: string): StepResult {
   const timed = passTime(cloneLife(life), 15).life;
   timed.cash -= mechanic.cost;
   timed.car = { ...life.car, condition: mechanic.to, broken: false };
+  stick(timed);
   const line = `${mechanic.name} finished the job. The car is back to ${mechanic.to}%. ${cedis(mechanic.cost)}.`;
   logLine(timed, line);
   return { life: timed, notes: [line] };
@@ -175,6 +246,7 @@ export function driveHail(life: Life): StepResult {
   timed.cash += pay;
   const condition = Math.max(0, (life.car.condition ?? 100) - 12);
   timed.car = { ...life.car, fuel: life.car.fuel - FUEL_PER_TRIP * 2, lastHail: timed.minutes, condition, broken: condition <= 0 };
+  stick(timed);
   timed.needs.energy = Math.max(0, timed.needs.energy - 10);
   timed.needs.social = Math.min(100, timed.needs.social + 6);
   const notes = [`Three ride-app trips across town. ${cedis(pay)} after commission.`];
@@ -187,4 +259,83 @@ export function driveHail(life: Life): StepResult {
     }
   }
   return { life: timed, notes };
+}
+
+const YARD_NAMES = ["Kwesi", "Abena", "Kojo", "Esi"];
+
+export function assignDriver(life: Life, key: string): StepResult {
+  const owned = motorsOf(life);
+  const motor = owned.find((item) => item.key === key);
+  if (!motor) return { life, notes: [], error: "That car is not in the garage." };
+  const taken = new Set(owned.map((item) => item.driver).filter(Boolean));
+  const name = life.yard?.driver && !taken.has(life.yard.driver) ? life.yard.driver : YARD_NAMES.find((person) => !taken.has(person)) ?? "Kwame";
+  const next = cloneLife(life);
+  next.motors = owned.map((item) => (item.key === key ? { ...item, driver: name } : { ...item }));
+  if (next.car?.key === key) next.car = { ...next.car, driver: name };
+  next.yard = { driver: name, guard: next.yard?.guard ?? null };
+  return { life: next, notes: [`${name} has the keys to ${motor.name || carOf(motor.id)?.short || "the car"}.`] };
+}
+
+export function rentMotor(life: Life, key: string, hire: "parked" | "taxi" | "private"): StepResult {
+  const owned = motorsOf(life);
+  if (!owned.some((item) => item.key === key)) return { life, notes: [], error: "That car is not in the garage." };
+  const next = cloneLife(life);
+  next.motors = owned.map((item) => (item.key === key ? { ...item, hire } : { ...item }));
+  if (next.car?.key === key) next.car = { ...next.car, hire };
+  const line = hire === "parked" ? "The car stays in the bay." : hire === "taxi" ? "It is out as a taxi when the driver is on it." : "Private hire. The driver waits for a call.";
+  return { life: next, notes: [line] };
+}
+
+export function washCar(life: Life, key: string): StepResult {
+  const owned = motorsOf(life);
+  const motor = owned.find((item) => item.key === key);
+  if (!motor) return { life, notes: [], error: "That car is not in the garage." };
+  const timed = passTime(cloneLife(life), 20).life;
+  timed.motors = motorsOf(life).map((item) => (item.key === key ? { ...item, condition: Math.min(100, (item.condition ?? 100) + 2) } : { ...item }));
+  if (timed.car?.key === key && timed.motors) timed.car = { ...timed.car, condition: Math.min(100, (timed.car.condition ?? 100) + 2) };
+  const who = life.yard?.guard ?? life.yard?.driver ?? "You";
+  return { life: timed, notes: [`${who} washed ${motor.name || carOf(motor.id)?.short || "the car"}.`] };
+}
+
+export function hireGuard(life: Life): StepResult {
+  if (life.yard?.guard) return { life, notes: [], error: `${life.yard.guard} is already at the gate.` };
+  if ((life.cash ?? 0) < 100) return { life, notes: [], error: "A guard wants ₵100 to start." };
+  const next = cloneLife(life);
+  next.cash -= 100;
+  next.yard = { driver: next.yard?.driver ?? null, guard: "Uncle Yaw" };
+  next.security = Math.max(next.security ?? 0, 2);
+  return { life: next, notes: ["Uncle Yaw is at the gate. The house is harder to walk into."] };
+}
+
+export function pulseMotors(life: Life, notes: string[]) {
+  const owned = life.motors ?? [];
+  if (!owned.length) return;
+  const day = Math.floor(life.minutes / 1440);
+  let pay = 0;
+  life.motors = owned.map((motor) => {
+    if (motor.financeDay === day) return motor;
+    const week = day % 7 === 5;
+    let financeLeft = motor.financeLeft ?? 0;
+    if (week && financeLeft > 0) {
+      const cut = Math.min(financeLeft, motor.financePay ?? 0, Math.max(0, life.cash));
+      life.cash -= cut;
+      financeLeft -= cut;
+      if (cut > 0) notes.push(`Car finance: ${cedis(cut)} left the wallet.`);
+      else notes.push("Car finance was due and the wallet was short.");
+    }
+    let earned = 0;
+    if ((motor.hire === "taxi" || motor.hire === "private") && motor.driver && !motor.broken && (motor.fuel ?? 0) > 10) {
+      earned = motor.hire === "taxi" ? 35 + (motor.style ?? 1) * 8 : 55 + (motor.style ?? 1) * 10;
+      pay += earned;
+    }
+    return { ...motor, financeLeft, financeDay: day, fuel: Math.max(0, (motor.fuel ?? 0) - (earned ? 4 : 0)) };
+  });
+  if (pay > 0) {
+    life.cash += pay;
+    notes.push(`Drivers brought ${cedis(pay)} in from the cars.`);
+  }
+  if (life.car?.key) {
+    const fresh = life.motors.find((item) => item.key === life.car?.key);
+    if (fresh) life.car = { ...life.car, ...fresh };
+  }
 }

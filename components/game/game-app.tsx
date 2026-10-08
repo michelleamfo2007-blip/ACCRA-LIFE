@@ -12,6 +12,9 @@ import { RoomView } from "@/components/game/room-view";
 import { Payday, ShiftFloor, StreetRide, FlightRide } from "@/components/game/life-scenes";
 import { Soundtrack, tuneFor } from "@/components/game/soundtrack";
 import { TourCoach } from "@/components/game/tour-coach";
+import { FeatureBulletin } from "@/components/game/bulletin";
+import { GarageYard } from "@/components/game/garage-yard";
+import { BULLETIN_ID, seenBulletin } from "@/lib/game/bulletin";
 import { useInbox, type InboxPing } from "@/components/game/use-inbox";
 import { QUIET_CITY, cityNow, eventSpot, eventVerbs, rideIn, type Weather } from "@/lib/game/city";
 import { CLUB_IDS } from "@/lib/game/accra-spots";
@@ -1226,6 +1229,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           }}
         />
       ) : tab === "home" && life.where === "home" ? (
+        <>
+        <GarageYard life={life} onApply={apply} />
         <RoomView
           life={life}
           errand={errand}
@@ -1268,6 +1273,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           startArrange={arrangeHome}
           onArrangeSeen={() => setArrangeHome(false)}
         />
+        </>
       ) : tab === "home" ? (
         <VenueFloor
           key={life.where}
@@ -1602,6 +1608,21 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                 if (next.tab) setTab(next.tab);
                 if (next.id === "phone") setPhoneApp(null);
                 setTourStep(next.id);
+              }}
+            />
+          ) : null}
+          {!touring && life.bulletin !== BULLETIN_ID ? (
+            <FeatureBulletin
+              onClose={() => apply(seenBulletin(life))}
+              onShop={() => {
+                apply(seenBulletin(life));
+                setPhoneApp("biz");
+                setTab("phone");
+              }}
+              onRival={() => {
+                apply(seenBulletin(life));
+                setPhoneApp("book");
+                setTab("phone");
               }}
             />
           ) : null}

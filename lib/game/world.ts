@@ -9,6 +9,9 @@ import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night"
 import { foodFromOffer, menuFor } from "@/lib/game/foods";
 import { weatherAt, weatherStress } from "@/lib/game/sky";
 import { cityArrival, copySpine, doorBlocked, noteRep, pulseSpine, type Spine } from "@/lib/game/spine";
+import { custodyBlock, pulseJustice } from "@/lib/game/justice";
+import { pulseMotors } from "@/lib/game/garage";
+import { pulseSites } from "@/lib/game/estate";
 
 export type NeedKey = "hunger" | "energy" | "fun" | "social" | "hygiene" | "bladder";
 
@@ -161,6 +164,17 @@ export type Life = {
   pets?: Pet[];
   community?: Community;
   guide?: string[];
+  /** Last city-desk bulletin the player closed. */
+  bulletin?: string;
+  /** Open case: custody, bail, court, jail, or a sentence being served. */
+  docket?: Docket | null;
+  /** Personal cars. The one you drive is also `car`. */
+  motors?: CarState[];
+  /** Saved house drawings. */
+  prints?: Blueprint[];
+  /** Home security, 0 to 6. */
+  security?: number;
+  yard?: Yard;
   seenParcels?: string[];
   stamps?: string[];
   flewAt?: number;
@@ -220,13 +234,89 @@ export type HousePlan = {
   accent: string;
   compound: string;
   gate: string;
+  layout?: { id: string; x: number; y: number }[];
+  garageBay?: number;
+  garageKind?: string;
 };
-export type Plot = { id: string; area: string; stage: number; stageAt: number; spent: number; guard?: "waiting" | "court" | null; guardUntil?: number; tenants: number; lastRent: number; lastAdvert?: number; readyAt?: number; house?: string; rentAsk?: number; people?: Tenant[]; plan?: HousePlan };
+export type Plot = {
+  id: string;
+  area: string;
+  stage: number;
+  stageAt: number;
+  spent: number;
+  guard?: "waiting" | "court" | null;
+  guardUntil?: number;
+  tenants: number;
+  lastRent: number;
+  lastAdvert?: number;
+  readyAt?: number;
+  house?: string;
+  rentAsk?: number;
+  people?: Tenant[];
+  plan?: HousePlan;
+  crew?: string | null;
+  busyUntil?: number;
+  siteLog?: string[];
+  siteNote?: string;
+  siteDay?: number;
+  quality?: number;
+  paused?: boolean;
+  hold?: number;
+  pendingRoom?: string;
+  rated?: boolean;
+  specs?: string[];
+};
+export type Docket = {
+  status: "held" | "booked" | "bail" | "court" | "jail" | "service" | "probation" | "fine";
+  crime: string;
+  approach: string;
+  security: number;
+  caughtBy: string;
+  station: string;
+  bail: number;
+  bailable: boolean;
+  lawyer: boolean;
+  evidence: number;
+  until: number;
+  fine: number;
+  serviceLeft: number;
+  skips: number;
+  note: string;
+  curfew?: number;
+  suspended?: boolean;
+  appealed?: boolean;
+  help?: string;
+};
+export type Blueprint = { id: string; name: string; plan: HousePlan };
+export type Yard = { driver: string | null; guard: string | null };
 export type Kid = { id: string; name: string; dayName: string; girl: boolean; born: number; outdoored: boolean; school: boolean; care: number };
 export type Song = { id: string; title: string; at: number; quality: number; paid: number; video?: boolean };
 export type Music = { songs: Song[]; fans: number; lastRecord?: number; lastGig?: number; lastShow?: number; shows?: number };
 export type Schooling = { certs: string[]; course?: string | null; done?: number; lastClass?: number };
-export type CarState = { id: string; fuel: number; insuredUntil: number; lastHail?: number; color?: string; condition?: number; broken?: boolean; name?: string; plate?: string };
+export type CarState = {
+  id: string;
+  fuel: number;
+  insuredUntil: number;
+  lastHail?: number;
+  color?: string;
+  condition?: number;
+  broken?: boolean;
+  name?: string;
+  plate?: string;
+  key?: string;
+  speed?: number;
+  seats?: number;
+  cargo?: number;
+  style?: number;
+  tires?: number;
+  registeredUntil?: number;
+  driver?: string | null;
+  hire?: "parked" | "taxi" | "private" | null;
+  financeLeft?: number;
+  financePay?: number;
+  financeDay?: number;
+  security?: number;
+};
 export type FarmBed = { crop: string; plantedAt: number; waters: number; lastWater: number };
 export type SickKind = "malaria" | "flu" | "tummy" | "burnout";
 export type Health = { sick?: { kind: SickKind; since: number } | null; nhisUntil?: number; day?: number };
@@ -278,6 +368,8 @@ export type Business = {
   pulsedDay?: number;
   branches?: number;
   heir?: string;
+  /** 0–6. Any level above 0 stops a robbery and holds the person who tried. */
+  security?: number;
 };
 
 export type PurseNote = { id: string; delta: number; note: string };
@@ -1386,11 +1478,21 @@ function clone(life: Life): Life {
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },
-    plots: (life.plots ?? []).map((plot) => ({ ...plot, people: plot.people?.map((person) => ({ ...person })), plan: plot.plan ? { ...plot.plan, rooms: [...plot.plan.rooms] } : undefined })),
+    plots: (life.plots ?? []).map((plot) => ({
+      ...plot,
+      people: plot.people?.map((person) => ({ ...person })),
+      siteLog: plot.siteLog ? [...plot.siteLog] : plot.siteLog,
+      specs: plot.specs ? [...plot.specs] : plot.specs,
+      plan: plot.plan ? { ...plot.plan, rooms: [...plot.plan.rooms], layout: plot.plan.layout?.map((cell) => ({ ...cell })) } : undefined,
+    })),
     kids: (life.kids ?? []).map((kid) => ({ ...kid })),
     music: life.music ? { ...life.music, songs: life.music.songs.map((song) => ({ ...song })) } : undefined,
     school: life.school ? { ...life.school, certs: [...life.school.certs] } : undefined,
     car: life.car ? { ...life.car } : life.car,
+    motors: (life.motors ?? []).map((motor) => ({ ...motor })),
+    prints: (life.prints ?? []).map((print) => ({ ...print, plan: { ...print.plan, rooms: [...print.plan.rooms], layout: print.plan.layout?.map((cell) => ({ ...cell })) } })),
+    docket: life.docket ? { ...life.docket } : life.docket,
+    yard: life.yard ? { ...life.yard } : life.yard,
     farm: (life.farm ?? []).map((bed) => (bed ? { ...bed } : null)),
     health: life.health ? { ...life.health, sick: life.health.sick ? { ...life.health.sick } : life.health.sick } : undefined,
     tailor: life.tailor ? { orders: life.tailor.orders.map((order) => ({ ...order })), wardrobe: life.tailor.wardrobe.map((fit) => ({ ...fit })) } : undefined,
@@ -1571,6 +1673,9 @@ export function passTime(life: Life, minutes: number, mode: "awake" | "sleep" = 
   checkHealth(next, clockTo, notes);
   checkPets(next, clockTo, notes);
   pulseShops(next, notes);
+  pulseSites(next, notes);
+  pulseMotors(next, notes);
+  pulseJustice(next, notes);
   pulseSpine(next, notes);
   tickPhone(next, minutes, notes);
   return { life: next, notes };
@@ -1730,6 +1835,8 @@ export function goTo(life: Life, placeId: string, base: Ride = RIDES[1]): StepRe
   }
   const shut = doorBlocked(life, placeId);
   if (shut) return { life, notes: [], error: shut };
+  const held = custodyBlock(life, placeId);
+  if (held) return { life, notes: [], error: held };
   const ride = farRide(base, life.where, placeId);
   if (ride.blocked) return { life, notes: [], error: ride.blocked };
   const fuel = ride.fuel ?? FUEL_PER_TRIP;

@@ -156,6 +156,74 @@ export function defaultPlan(houseId = "two"): HousePlan {
 }
 const STAGE_COST = [0.3, 0.45, 0.3, 0.25, 0.2];
 export const STAGE_SECONDS = 8;
+
+export const CREWS = [
+  { id: "self", name: "You, on the weekends", rating: 3, price: 0.45, pace: 1.8, scam: 0, line: "Slower and cheaper. Your back does the carrying." },
+  { id: "ebo", name: "Cousin Ebo", rating: 2, price: 0.62, pace: 1.35, scam: 0.34, line: "A family price. The street already has a story." },
+  { id: "kofi", name: "Kofi Blocks", rating: 3, price: 0.85, pace: 1, scam: 0.12, line: "Known at the timber market." },
+  { id: "ama", name: "Ama and Sons", rating: 4, price: 1, pace: 0.85, scam: 0.04, line: "A referral. They finish what they start." },
+  { id: "mensah", name: "Mensah Estates", rating: 5, price: 1.5, pace: 0.7, scam: 0, line: "Expensive. The compound matches the drawing." },
+] as const;
+
+export const SPECS = [
+  { id: "electrician", label: "Electrician", cost: 0.06 },
+  { id: "plumber", label: "Plumber", cost: 0.06 },
+  { id: "carpenter", label: "Carpenter", cost: 0.05 },
+  { id: "tiler", label: "Tiler", cost: 0.05 },
+  { id: "painter", label: "Painter", cost: 0.04 },
+] as const;
+
+export const GARAGE_KINDS = [
+  { id: "attached", label: "Attached" },
+  { id: "detached", label: "Detached" },
+  { id: "carport", label: "Carport" },
+  { id: "under", label: "Under the house" },
+] as const;
+
+export function crewOf(id?: string | null) {
+  return CREWS.find((item) => item.id === id) ?? null;
+}
+
+export function layoutOf(plan: HousePlan) {
+  return plan.rooms.map((id, index) => plan.layout?.find((cell) => cell.id === id) ?? { id, x: index % 4, y: Math.floor(index / 4) });
+}
+
+export function materialsOf(area: string, plan: HousePlan) {
+  const quote = designQuote(area, plan);
+  const metres = 36 + plan.bedrooms * 16 + plan.rooms.length * 5 + (plan.rooms.includes("garage") ? (plan.garageBay ?? 1) * 12 : 0);
+  const labor = Math.round(quote.build * 0.34);
+  const blocks = Math.round(quote.build * 0.22);
+  const cement = Math.round(quote.build * 0.1);
+  const roof = Math.round(quote.build * 0.12);
+  const finish = Math.max(0, quote.build - labor - blocks - cement - roof);
+  return {
+    ...quote,
+    metres,
+    lines: [
+      { label: "Blocks and sand", cost: blocks },
+      { label: "Cement", cost: cement },
+      { label: "Roofing", cost: roof },
+      { label: "Tiles, paint, wiring, plumbing", cost: finish },
+      { label: "Labour", cost: labor },
+      { label: "Permit", cost: quote.permit },
+    ],
+  };
+}
+
+export function siteLeft(life: Life, plot: Plot) {
+  if (!plot.busyUntil) return 0;
+  if (plot.stage >= STAGES.length - 1 && !plot.pendingRoom) return 0;
+  if (plot.paused) return plot.hold ?? Math.max(0, plot.busyUntil - life.minutes);
+  return Math.max(0, plot.busyUntil - life.minutes);
+}
+
+export function stageMinutes(plot: Plot) {
+  const crew = crewOf(plot.crew);
+  const plan = plot.plan ?? defaultPlan(plot.house);
+  const days = designQuote(plot.area, plan).days;
+  const share = days / (STAGES.length - 1);
+  return Math.max(480, Math.round(share * 1440 * (crew?.pace ?? 1)));
+}
 export const MAX_PLOTS = 3;
 const RENT_DAYS_CAP = 14;
 
@@ -328,32 +396,196 @@ export function evictTenant(life: Life, plotId: string, tenantId: string): StepR
   return { life: next, notes: [line] };
 }
 
+export function hireCrew(life: Life, plotId: string, crewId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  const crew = crewOf(crewId);
+  if (!plot || !crew) return { life, notes: [], error: "Pick a crew that is still taking work." };
+  if (plot.stage >= STAGES.length - 1) return { life, notes: [], error: "The house is already handed over." };
+  if (plot.guard) return { life, notes: [], error: "Clear the land guards before a crew will stand on the plot." };
+  const next = withPlot(life, plotId, (item) => ({ ...item, crew: crew.id }));
+  const line = `${crew.name} will build in ${landOf(plot.area).label}. ${crew.line}`;
+  logLine(next, line);
+  return { life: next, notes: [line] };
+}
+
+export function hireSpec(life: Life, plotId: string, specId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  const spec = SPECS.find((item) => item.id === specId);
+  if (!plot || !spec) return { life, notes: [], error: "That trade is not on the list." };
+  if ((plot.specs ?? []).includes(spec.id)) return { life, notes: [], error: `${spec.label} is already on the job.` };
+  const next = withPlot(life, plotId, (item) => ({ ...item, specs: [...(item.specs ?? []), spec.id] }));
+  return { life: next, notes: [`${spec.label} is booked. Their fee sits inside the next stage payment.`] };
+}
+
 export function buildNext(life: Life, plotId: string): StepResult {
   const plot = plotsOf(life).find((item) => item.id === plotId);
   if (!plot) return { life, notes: [], error: "That plot is gone." };
   if (plot.guard) return { life, notes: [], error: plot.guard === "court" ? "Wait for the court to clear the land guards." : "Deal with the land guards first." };
-  if (plot.stage >= STAGES.length - 1) return { life, notes: [], error: "The house is finished." };
+  if (plot.stage >= STAGES.length - 1 && !plot.pendingRoom) return { life, notes: [], error: "The house is finished. Add a room if you want the crew back." };
   if (plot.stage === 0 && !plot.house) return { life, notes: [], error: "Choose the house first. Single room, chamber and hall, or something bigger." };
-  const wait = buildWait(plot);
-  if (wait > 0) return { life, notes: [], error: `The builders are still on ${STAGES[plot.stage].toLowerCase()}. ${wait}s left.` };
-  const cost = stageCost(plot);
-  if (life.cash < cost) return { life, notes: [], error: `${STAGES[plot.stage + 1]} costs ${cedis(cost)}.` };
-  const done = plot.stage + 1 === STAGES.length - 1;
-  const rain = !done && Math.random() < 0.25;
+  if (!plot.crew) return { life, notes: [], error: "Hire a crew first. Cheap, recommended, or yourself." };
+  const legacy = (plot.readyAt ?? 0) > 1e11 ? buildWait(plot) : 0;
+  if (legacy > 0) return { life, notes: [], error: `The last crew is still on site. ${legacy}s left on the old clock.` };
+  if (siteLeft(life, plot) > 0) return { life, notes: [], error: "The crew is already on the plot. Visit them, or pay overtime." };
+  const crew = crewOf(plot.crew);
+  const spec = (plot.specs ?? []).reduce((sum, id) => sum + (SPECS.find((item) => item.id === id)?.cost ?? 0), 0);
+  const cost = Math.round(stageCost(plot) * (crew?.price ?? 1) * (1 + spec));
+  if (life.cash < cost) return { life, notes: [], error: `${STAGES[Math.min(plot.stage + 1, STAGES.length - 1)]} costs ${cedis(cost)} with this crew.` };
+  const minutes = stageMinutes(plot);
   const next = withPlot(life, plotId, (item) => ({
     ...item,
-    stage: item.stage + 1,
+    busyUntil: life.minutes + minutes,
+    paused: false,
+    hold: undefined,
     stageAt: life.minutes,
-    readyAt: done ? undefined : Date.now() + STAGE_SECONDS * (rain ? 2 : 1) * 1000,
+    readyAt: undefined,
     spent: item.spent + cost,
-    lastRent: life.minutes,
+    siteLog: [`Paid for ${STAGES[Math.min(item.stage + 1, STAGES.length - 1)].toLowerCase()}. The crew starts in the morning.`, ...(item.siteLog ?? [])].slice(0, 12),
   }));
   next.cash -= cost;
-  const line = done
-    ? `Your house in ${landOf(plot.area).label} is finished. Furnish a bed, a seat, and the kitchen, then move in. Extra rooms can be let.`
-    : `${STAGE_LINES[plot.stage] ?? `Builders started ${STAGES[plot.stage + 1].toLowerCase()}.`}${rain ? " Rain slowed the crew." : ""}`;
+  const line = `${crew?.name ?? "The crew"} started ${STAGES[Math.min(plot.stage + 1, STAGES.length - 1)].toLowerCase()} in ${landOf(plot.area).label}. About ${Math.ceil(minutes / 60)} hours of city time. Go and look.`;
   logLine(next, line);
   return { life: next, notes: [line] };
+}
+
+export function visitSite(life: Life, plotId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot) return { life, notes: [], error: "That plot is gone." };
+  if (!plot.busyUntil && plot.stage >= STAGES.length - 1) return { life, notes: [], error: "Nothing is being built. The house is standing." };
+  if (!plot.busyUntil) return { life, notes: [], error: "Pay a stage before there is anything to inspect." };
+  const timed = passTime(cloneLife(life), 30).life;
+  const current = plotsOf(timed).find((item) => item.id === plotId) ?? plot;
+  const left = siteLeft(timed, current);
+  const crew = crewOf(current.crew);
+  let line = left > 0 ? `${crew?.name ?? "The crew"} is on ${STAGES[Math.min(current.stage + 1, STAGES.length - 1)].toLowerCase()}. About ${Math.ceil(left / 60)}h left.` : `${STAGES[current.stage]} is standing. Pay the next stage when you are ready.`;
+  if (current.crew === "self" && left > 0) {
+    const bumped = withPlot(timed, plotId, (item) => ({ ...item, busyUntil: Math.max(timed.minutes, (item.busyUntil ?? timed.minutes) - 90) }));
+    bumped.needs.energy = Math.max(0, bumped.needs.energy - 8);
+    line = "You worked a stretch yourself. The stage moved, and your back knows it.";
+    logLine(bumped, line);
+    return { life: bumped, notes: [line] };
+  }
+  logLine(timed, line);
+  return { life: timed, notes: [line] };
+}
+
+export function rushSite(life: Life, plotId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot?.busyUntil) return { life, notes: [], error: "Nothing is in progress." };
+  const cost = Math.max(40, Math.round(stageCost(plot) * 0.08));
+  if (life.cash < cost) return { life, notes: [], error: `Overtime is ${cedis(cost)}.` };
+  const next = withPlot(life, plotId, (item) => ({ ...item, paused: false, busyUntil: Math.max(life.minutes, (item.busyUntil ?? life.minutes) - 360) }));
+  next.cash -= cost;
+  const line = `Overtime paid, ${cedis(cost)}. The crew stays late.`;
+  logLine(next, line);
+  return { life: next, notes: [line] };
+}
+
+export function pauseSite(life: Life, plotId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot?.busyUntil) return { life, notes: [], error: "Nothing is in progress." };
+  if (plot.paused) {
+    const next = withPlot(life, plotId, (item) => ({ ...item, paused: false, busyUntil: life.minutes + (item.hold ?? 0), hold: undefined }));
+    return { life: next, notes: ["The crew is back in the morning."] };
+  }
+  const next = withPlot(life, plotId, (item) => ({ ...item, paused: true, hold: Math.max(0, (item.busyUntil ?? life.minutes) - life.minutes) }));
+  return { life: next, notes: ["Work is paused. The days do not count until you call them back."] };
+}
+
+export function answerSite(life: Life, plotId: string, yes: boolean): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot?.siteNote) return { life, notes: [], error: "Nothing is waiting on you at the site." };
+  const next = withPlot(life, plotId, (item) => ({ ...item, siteNote: undefined }));
+  if (plot.siteNote === "inspector" && yes) {
+    const cost = 80;
+    if (life.cash < cost) return { life, notes: [], error: "The inspector's drink is ₵80." };
+    next.cash -= cost;
+    const line = "You paid the inspector. The visit ended.";
+    logLine(next, line);
+    return { life: next, notes: [line] };
+  }
+  if (plot.siteNote === "cement" && yes) {
+    const cost = 60;
+    if (life.cash < cost) return { life, notes: [], error: "Another bag run is ₵60." };
+    next.cash -= cost;
+    return { life: next, notes: ["Cement is on the way again."] };
+  }
+  if (plot.siteNote === "gone") return { life: next, notes: ["The crew is already gone. Hire someone else."] };
+  const line = yes ? "You dealt with it on the plot." : "You left it. The crew will talk about that.";
+  return { life: next, notes: [line] };
+}
+
+export function addRoom(life: Life, plotId: string, roomId: string): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot || plot.stage < STAGES.length - 1) return { life, notes: [], error: "Finish the house before you add to it." };
+  if (!plot.plan) return { life, notes: [], error: "File a plan first." };
+  if (plot.plan.rooms.includes(roomId)) return { life, notes: [], error: "That room is already on the plan." };
+  if (plot.busyUntil && siteLeft(life, plot) > 0) return { life, notes: [], error: "The crew is still on the last job." };
+  const cost = Math.max(80, Math.round(landOf(plot.area).price * 0.04));
+  if (life.cash < cost) return { life, notes: [], error: `Adding that costs ${cedis(cost)}.` };
+  const next = withPlot(life, plotId, (item) => ({ ...item, pendingRoom: roomId, busyUntil: life.minutes + 720, spent: item.spent + cost }));
+  next.cash -= cost;
+  const line = `The crew is adding a ${roomId.replace("-", " ")}. Half a day, then it is yours.`;
+  logLine(next, line);
+  return { life: next, notes: [line] };
+}
+
+export function rateCrew(life: Life, plotId: string, stars: number): StepResult {
+  const plot = plotsOf(life).find((item) => item.id === plotId);
+  if (!plot || plot.stage < STAGES.length - 1) return { life, notes: [], error: "Rate them after handover." };
+  if (plot.rated) return { life, notes: [], error: "You already left a rating." };
+  const next = withPlot(life, plotId, (item) => ({ ...item, rated: true, quality: stars }));
+  return { life: next, notes: [`You gave the crew ${stars} star${stars === 1 ? "" : "s"}.`] };
+}
+
+export function keepPrint(life: Life, name: string, plan: HousePlan): StepResult {
+  const title = name.trim().slice(0, 24);
+  if (title.length < 2) return { life, notes: [], error: "Name the drawing." };
+  const next = cloneLife(life);
+  next.prints = [...(next.prints ?? []), { id: id(), name: title, plan: { ...plan, rooms: [...plan.rooms], layout: plan.layout?.map((cell) => ({ ...cell })) } }].slice(-8);
+  return { life: next, notes: [`${title} is saved with your drawings.`] };
+}
+
+const SITE_EVENTS = [
+  { id: "cement", line: "The crew is out of cement." },
+  { id: "rain", line: "Rain stopped the blocks. The day is lost." },
+  { id: "injury", line: "A worker is hurt. The site is quiet." },
+  { id: "theft", line: "Materials walked off the plot overnight." },
+  { id: "neighbours", line: "The neighbours say the work starts too early." },
+  { id: "inspector", line: "An inspector is at the gate and wants a drink." },
+  { id: "late", line: "The delivery is late. The crew is standing around." },
+  { id: "quality", line: "A wall is out of true. They will redo it." },
+  { id: "gossip", line: "The compound is talking about your house." },
+] as const;
+
+export function pulseSites(life: Life, notes: string[]) {
+  const day = Math.floor(life.minutes / 1440);
+  life.plots = plotsOf(life).map((plot) => {
+    if (plot.pendingRoom && plot.busyUntil && !plot.paused && life.minutes >= plot.busyUntil && plot.plan) {
+      const rooms = plot.plan.rooms.includes(plot.pendingRoom) ? plot.plan.rooms : [...plot.plan.rooms, plot.pendingRoom];
+      notes.push(`The new ${plot.pendingRoom.replace("-", " ")} is done.`);
+      return { ...plot, plan: { ...plot.plan, rooms }, pendingRoom: undefined, busyUntil: undefined };
+    }
+    if (!plot.busyUntil || plot.paused || plot.stage >= STAGES.length - 1) return plot;
+    if (life.minutes >= plot.busyUntil) {
+      const stage = plot.stage + 1;
+      const done = stage >= STAGES.length - 1;
+      notes.push(done ? `Handover in ${landOf(plot.area).label}. The house is empty and yours. Rate the crew, move in, or let the rooms.` : `${STAGES[stage]} is done in ${landOf(plot.area).label}. Pay the next stage when you want them back.`);
+      return { ...plot, stage, busyUntil: undefined, stageAt: life.minutes, lastRent: done ? life.minutes : plot.lastRent, siteLog: [`${STAGES[stage]} standing.`, ...(plot.siteLog ?? [])].slice(0, 12) };
+    }
+    if (plot.siteDay === day) return plot;
+    const crew = crewOf(plot.crew);
+    if (crew && crew.scam > 0 && Math.random() < crew.scam * 0.15) {
+      notes.push(`${crew.name} has not been seen. The money for this stage is gone. Hire again.`);
+      return { ...plot, crew: null, busyUntil: undefined, siteDay: day, siteNote: "gone", siteLog: [`${crew.name} disappeared.`, ...(plot.siteLog ?? [])].slice(0, 12) };
+    }
+    const event = Math.random() < 0.35 ? SITE_EVENTS[Math.floor(Math.random() * SITE_EVENTS.length)] : null;
+    let busyUntil = plot.busyUntil;
+    if (event?.id === "rain" || event?.id === "injury" || event?.id === "late" || event?.id === "quality") busyUntil += 180;
+    if (event) notes.push(event.line);
+    else notes.push(`${STAGES[Math.min(plot.stage + 1, STAGES.length - 1)]} is underway in ${landOf(plot.area).label}.`);
+    return { ...plot, busyUntil, siteDay: day, siteNote: event?.id ?? plot.siteNote, siteLog: [event?.line ?? "A normal day on the plot.", ...(plot.siteLog ?? [])].slice(0, 12) };
+  });
 }
 
 export function advertRooms(life: Life, plotId: string): StepResult {

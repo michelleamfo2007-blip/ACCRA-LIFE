@@ -3,9 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BADGES, earnedBadges, claimDaily, streakState } from "@/lib/game/badges";
 import { COURSES, SHOW_CUT, STUDIO_FEE, TICKETS, VENUES, VIDEO_FEE, attendClass, classWait, collectRoyalties, courseOf, crowdFor, enrolCourse, gigWait, holdShow, nextMusicMove, playGig, recordSong, recordWait, royaltiesDue, shootVideo, showWait, streamsOf, tierOf } from "@/lib/game/career";
-import { CROPS, HOUSES, MAX_PLOTS, ROOM_CHOICES, STAGES, advertRooms, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, cropOf, designQuote, evictTenant, farmSize, goToCourt, harvestBed, houseOf, landOf, payGuards, plantCrop, plotsOf, rentDue, rentRate, roomsOf, saveDesign, sellPlot, setRentAsk, stageCost, waterBeds } from "@/lib/game/estate";
+import { CREWS, CROPS, HOUSES, MAX_PLOTS, ROOM_CHOICES, SPECS, STAGES, addRoom, advertRooms, answerSite, bedState, buildNext, buildWait, buyLand, chooseHouse, collectRent, crewOf, cropOf, designQuote, evictTenant, farmSize, goToCourt, harvestBed, hireCrew, hireSpec, houseOf, landOf, pauseSite, payGuards, plantCrop, plotsOf, rateCrew, rentDue, rentRate, roomsOf, rushSite, saveDesign, sellPlot, setRentAsk, siteLeft, stageCost, visitSite, waterBeds } from "@/lib/game/estate";
 import { ANTENATAL, GROWN_AGE, MAX_KIDS, OUTDOORING, SCHOOL_AGE, careForKid, careWait, dayNameFor, enrolKid, expectBaby, holdOutdooring, inheritWorth, kidAge, passOn, welcomeBaby } from "@/lib/game/family";
-import { CARS, CAR_PAINTS, INSURANCE, PLATE_FEE, RESPRAY, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, insureCar, nameCar, plateCar, repaintCar, sellCar, tradeIn } from "@/lib/game/garage";
+import { CARS, CAR_PAINTS, INSURANCE, PLATE_FEE, RESPRAY, assignDriver, bayCount, buyCar, carCondition, carOf, carPaint, carSpoilt, driveHail, fillCost, fillUp, hailWait, hireGuard, insureCar, motorsOf, nameCar, plateCar, rentMotor, repaintCar, sellCar, setPrimary, washCar } from "@/lib/game/garage";
 import { CLINIC_FEE, CLINIC_NHIS, MEDS_FEE, NHIS_FEE, buyNhis, hasNhis, restSick, seeClinic, selfMedicate, sickness } from "@/lib/game/health";
 import { MAX_ORDERS, STYLES, TAILOR_COLORS, collectOrder, orderStyle, styleOf, wearFit } from "@/lib/game/tailor";
 import { moveHome } from "@/lib/game/ladder";
@@ -100,7 +100,8 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
       {here.map((plot) => {
         const land = landOf(plot.area);
         const finished = plot.stage >= STAGES.length - 1;
-        const left = buildWait(plot, now);
+        const left = (plot.readyAt ?? 0) > 1e11 ? buildWait(plot, now) : siteLeft(life, plot);
+        const crew = crewOf(plot.crew);
         const due = rentDue(life, plot);
         return (
           <Card key={plot.id} tone={plot.guard === "waiting" ? "warn" : finished ? "good" : undefined}>
@@ -110,7 +111,8 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
                 <span className="block font-semibold">{land.label}</span>
                 <span className="block text-xs text-[#5c6b82]">
                   {STAGES[plot.stage]}
-                  {left > 0 && !finished ? ` · ${left}s` : ""}
+                  {crew ? ` · ${crew.name}` : ""}
+                  {left > 0 && !finished ? ` · ${left > 180 ? `${Math.ceil(left / 60)}h` : `${left}m`}` : ""}
                 </span>
               </span>
             </div>
@@ -158,9 +160,18 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
                   ))}
                 </div>
                 {plot.house ? (
-                  <Btn kind="green" onClick={() => onApply(buildNext(life, plot.id))}>
-                    Pay the crew · {cedis(stageCost(plot))}
-                  </Btn>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1">
+                      {CREWS.map((item) => (
+                        <Btn key={item.id} kind={plot.crew === item.id ? "dark" : "light"} onClick={() => onApply(hireCrew(life, plot.id, item.id))}>
+                          {item.name}
+                        </Btn>
+                      ))}
+                    </div>
+                    <Btn kind="green" onClick={() => onApply(buildNext(life, plot.id))}>
+                      Pay the crew · {cedis(Math.round(stageCost(plot) * (crew?.price ?? 1)))}
+                    </Btn>
+                  </div>
                 ) : null}
               </div>
             ) : finished ? (
@@ -214,15 +225,66 @@ export function LandApp({ life, onBack, onApply, onArrange }: { life: Life; onBa
                     Move into this house · ₵60
                   </Btn>
                 )}
+                <div className="flex flex-wrap gap-1">
+                  {ROOM_CHOICES.filter((room) => !("locked" in room && room.locked) && !(plot.plan?.rooms ?? []).includes(room.id))
+                    .sort((a, b) => (a.id === "garage" ? -1 : b.id === "garage" ? 1 : 0))
+                    .slice(0, 4)
+                    .map((room) => (
+                    <Btn key={room.id} kind="light" onClick={() => onApply(addRoom(life, plot.id, room.id))}>
+                      Add {room.label}
+                    </Btn>
+                  ))}
+                  {plot.rated ? null : [1, 2, 3, 4, 5].map((star) => (
+                    <Btn key={star} kind="gold" onClick={() => onApply(rateCrew(life, plot.id, star))}>
+                      {star}★
+                    </Btn>
+                  ))}
+                </div>
                 <Btn kind="green" onClick={() => onArrange?.()}>
                   Arrange the inside
                 </Btn>
               </div>
             ) : (
-              <div className="mt-3">
-                <Btn kind="dark" disabled={left > 0} onClick={() => onApply(buildNext(life, plot.id))}>
-                  {left > 0 ? `Building… ${left}s` : `Start ${STAGES[plot.stage + 1].toLowerCase()} · ${cedis(stageCost(plot))}`}
-                </Btn>
+              <div className="mt-3 space-y-2">
+                <p className="text-sm">{plot.siteLog?.[0] ?? "The plot is waiting on the next payment."}</p>
+                {plot.siteNote ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Btn kind="dark" onClick={() => onApply(answerSite(life, plot.id, true))}>
+                      Deal with it
+                    </Btn>
+                    <Btn kind="light" onClick={() => onApply(answerSite(life, plot.id, false))}>
+                      Leave it
+                    </Btn>
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-1">
+                  {CREWS.map((item) => (
+                    <Btn key={item.id} kind={plot.crew === item.id ? "dark" : "light"} onClick={() => onApply(hireCrew(life, plot.id, item.id))}>
+                      {item.name}
+                    </Btn>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {SPECS.map((item) => (
+                    <Btn key={item.id} kind={(plot.specs ?? []).includes(item.id) ? "gold" : "light"} onClick={() => onApply(hireSpec(life, plot.id, item.id))}>
+                      {item.label}
+                    </Btn>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Btn kind="dark" disabled={left > 0} onClick={() => onApply(buildNext(life, plot.id))}>
+                    {left > 0 ? `On site · ${Math.ceil(left / 60)}h` : `Pay ${STAGES[plot.stage + 1].toLowerCase()} · ${cedis(Math.round(stageCost(plot) * (crew?.price ?? 1)))}`}
+                  </Btn>
+                  <Btn kind="light" onClick={() => onApply(visitSite(life, plot.id))}>
+                    Visit the site
+                  </Btn>
+                  <Btn kind="gold" onClick={() => onApply(rushSite(life, plot.id))}>
+                    Overtime
+                  </Btn>
+                  <Btn kind="light" onClick={() => onApply(pauseSite(life, plot.id))}>
+                    {plot.paused ? "Call them back" : "Pause"}
+                  </Btn>
+                </div>
               </div>
             )}
             <div className="mt-2 text-right">
@@ -542,15 +604,38 @@ export function SchoolApp({ life, onBack, onApply }: { life: Life; onBack: () =>
 
 export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () => void; onApply: Apply }) {
   const car = carOf(life.car?.id);
-  const credit = tradeIn(life);
   const hail = hailWait(life);
+  const owned = motorsOf(life);
+  const bays = bayCount(life);
+  const driveKey = life.car?.key ?? (life.car ? owned[0]?.key : undefined);
   const insured = (life.car?.insuredUntil ?? 0) > life.minutes;
   const [selling, setSelling] = useState(false);
   const [nick, setNick] = useState(life.car?.name ?? "");
   const [plate, setPlate] = useState(life.car?.plate ?? "");
   return (
     <Screen title="Garage" life={life} color="#243044" onBack={onBack}>
-      <p className="text-xs text-[#5c6b82]">Buy a car, name it, put your plate on it, drive it, or let it work the ride app. A finished house is where it sleeps.</p>
+      <p className="text-xs text-[#5c6b82]">
+        {owned.length}/{bays} bays. The marked car is the one you drive out. A garage on a finished house adds bays.
+      </p>
+      {owned.length > 1 ? (
+        <div className="flex flex-wrap gap-1">
+          {owned.map((motor) => (
+            <Btn key={motor.key} kind={motor.key === life.car?.key ? "dark" : "light"} onClick={() => motor.key && onApply(setPrimary(life, motor.key))}>
+              {motor.name || carOf(motor.id)?.short}
+            </Btn>
+          ))}
+        </div>
+      ) : null}
+      <div className="grid grid-cols-2 gap-2">
+        <Btn kind="light" onClick={() => onApply(hireGuard(life))}>
+          {life.yard?.guard ? life.yard.guard : "Hire a guard · ₵100"}
+        </Btn>
+        {driveKey ? (
+          <Btn kind="light" onClick={() => onApply(assignDriver(life, driveKey))}>
+            {life.car?.driver ? life.car.driver : "Assign a driver"}
+          </Btn>
+        ) : null}
+      </div>
       {car && life.car ? (
         <Card tone={insured ? "good" : "warn"}>
           <div className="flex items-center gap-3">
@@ -604,12 +689,22 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
             <Btn kind="light" onClick={() => onApply(insureCar(life))}>
               Insure 7 days {cedis(INSURANCE)}
             </Btn>
+            {driveKey ? (
+              <Btn kind="light" onClick={() => onApply(washCar(life, driveKey))}>
+                Wash
+              </Btn>
+            ) : null}
+            {driveKey ? (
+              <Btn kind="light" onClick={() => onApply(rentMotor(life, driveKey, life.car?.hire === "taxi" ? "parked" : "taxi"))}>
+                {life.car?.hire === "taxi" ? "Park it" : "Rent as taxi"}
+              </Btn>
+            ) : null}
             <Btn kind="green" disabled={hail > 0} onClick={() => onApply(driveHail(life))}>
               {hail > 0 ? `Ride-app · ${wait(hail)}` : "Drive for the ride app"}
             </Btn>
             {selling ? (
-              <Btn kind="red" onClick={() => onApply(sellCar(life))}>
-                Sell for {cedis(credit)}
+              <Btn kind="red" onClick={() => onApply(sellCar(life, life.car?.key))}>
+                Sell this car
               </Btn>
             ) : (
               <Btn kind="red" onClick={() => setSelling(true)}>
@@ -622,25 +717,24 @@ export function GarageApp({ life, onBack, onApply }: { life: Life; onBack: () =>
       ) : null}
       <Label>ABOSSEY OKAI CAR LOT</Label>
       {CARS.map((item) => {
-        const due = item.price - credit;
-        const mine = item.id === life.car?.id;
+        const full = owned.length >= bays;
         return (
           <div key={item.id} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#e7edf5] text-xl">{item.emoji}</span>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-xl" style={{ background: item.paint }}>{item.emoji}</span>
             <span className="min-w-0 flex-1">
               <span className="block font-semibold">{item.label}</span>
               <span className="block text-xs text-[#5c6b82]">
-                {item.minutes} min across town · ride-app trips pay ~{cedis(item.hail)}
+                Speed {item.speed} · {item.seats} seats · cargo {item.cargo} · style {item.style}
               </span>
-              {credit && !mine ? <span className="block text-xs text-[#006B3F]">{cedis(due)} after trade-in</span> : null}
             </span>
-            {mine ? (
-              <span className="text-xs font-bold text-[#006B3F]">Yours</span>
-            ) : (
-              <Btn kind="dark" disabled={life.cash < due} onClick={() => onApply(buyCar(life, item.id))}>
+            <span className="flex flex-col gap-1">
+              <Btn kind="dark" disabled={full || life.cash < item.price} onClick={() => onApply(buyCar(life, item.id))}>
                 {cedis(item.price)}
               </Btn>
-            )}
+              <Btn kind="light" disabled={full || life.cash < Math.round(item.price * 0.4)} onClick={() => onApply(buyCar(life, item.id, true))}>
+                Deposit {cedis(Math.round(item.price * 0.4))}
+              </Btn>
+            </span>
           </div>
         );
       })}
