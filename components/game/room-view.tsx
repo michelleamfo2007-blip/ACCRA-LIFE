@@ -356,7 +356,7 @@ export function RoomView({
   useEffect(() => {
     const id = window.setInterval(() => {
       if (busy.current || seated.current) return;
-      if (localStorage.getItem("accralife-freewill") === "0") return;
+      if (localStorage.getItem("accralife-freewill") !== "1") return;
       const roam = ["roamA", "roamB", "roamC"][Math.floor(Math.random() * 3)] as keyof ReturnType<typeof spotsFor>;
       walkTo(spots[roam], null);
     }, 8000);

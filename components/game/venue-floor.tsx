@@ -149,45 +149,6 @@ export function VenueFloor({
   const stands = npcAt.map((spot) => ({ left: `${spot.left}%`, top: `${spot.top}%` }));
   const open = people.find((person) => person.username === who) ?? null;
 
-  useEffect(() => {
-    const placeId = spot.id;
-    const id = window.setInterval(() => {
-      const floor = stage.current;
-      if (!floor) return;
-      const taken: Pt[] = [youWorld.current];
-      let openDoor = false;
-      setNpcAt((current) =>
-        current.map((at, index) => {
-          const from = percentToWorld(at.left, at.top, floor) ?? { x: 0, z: 10 };
-          let path = npcPaths.current[index] ?? [];
-          if (!path.length) {
-            const goal = { x: from.x + (Math.random() - 0.5) * 26, z: from.z + (Math.random() - 0.5) * 16 };
-            const closed = indexSolids(venueSolids(kind, placeId, night, entryRef.current), 6);
-            path = route(from, goal, closed, VENUE_BODY, VENUE_BOUNDS);
-            if (!path.length && !entryRef.current) {
-              const opened = indexSolids(venueSolids(kind, placeId, night, true), 6);
-              const via = route(from, goal, opened, VENUE_BODY, VENUE_BOUNDS);
-              if (via.length) {
-                entryRef.current = true;
-                openDoor = true;
-                path = via;
-              }
-            }
-            npcPaths.current[index] = path;
-          }
-          if (!path.length) return at;
-          const step = path[0];
-          if (crowded(step, taken, VENUE_BODY * 2)) return at;
-          path.shift();
-          taken.push(step);
-          const screen = worldToPercent(step, floor);
-          return { left: screen.left, top: screen.top };
-        }),
-      );
-      if (openDoor) setEntryOpen(true);
-    }, 700);
-    return () => window.clearInterval(id);
-  }, [kind, spot.id, night]);
 
   useEffect(() => {
     moveRef.current = onMove;
@@ -262,13 +223,13 @@ export function VenueFloor({
       return ms;
     }
     let door = entryRef.current;
-    let index = indexSolids(bodies(door), 6);
+    let index = indexSolids(bodies(door), 2.5);
     let path = route(from, goal, index, VENUE_BODY, VENUE_BOUNDS);
     if (!path.length && !door && kind !== "shore" && kind !== "garden") {
       door = true;
       entryRef.current = true;
       setEntryOpen(true);
-      index = indexSolids(bodies(true), 6);
+      index = indexSolids(bodies(true), 2.5);
       path = route(from, goal, index, VENUE_BODY, VENUE_BOUNDS);
     }
     if (!path.length) {
@@ -1055,10 +1016,10 @@ function ClubCrowd({
       const world = percentToWorld(npc.left, npc.top, floor);
       if (!world) return npc;
       const from = at.current.get(npc.id) ?? world;
-      let index = indexSolids(venueSolids(kind, spotId, night, doorOpen), 6);
+      let index = indexSolids(venueSolids(kind, spotId, night, doorOpen), 2.5);
       let path = route(from, world, index, VENUE_BODY, VENUE_BOUNDS);
       if (!path.length && !doorOpen) {
-        index = indexSolids(venueSolids(kind, spotId, night, true), 6);
+        index = indexSolids(venueSolids(kind, spotId, night, true), 2.5);
         path = route(from, world, index, VENUE_BODY, VENUE_BOUNDS);
         if (path.length) openRef.current();
       }
@@ -1669,8 +1630,8 @@ function blocksToSolids(blocks: Block[]): Solid[] {
   const out: Solid[] = [];
   for (const block of blocks) {
     if (block.y < 0 || block.y > 6 || block.h < 5) continue;
-    const insetX = Math.min(1.2, block.w * 0.08);
-    const insetZ = Math.min(1.2, block.d * 0.08);
+    const insetX = Math.min(0.35, block.w * 0.04);
+    const insetZ = Math.min(0.35, block.d * 0.04);
     const minX = block.x + insetX;
     const maxX = block.x + block.w - insetX;
     const minZ = block.z + insetZ;

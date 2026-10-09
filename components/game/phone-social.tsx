@@ -600,7 +600,7 @@ export function SettingsApp({
 type Prefs = { data: "auto" | "on" | "off"; sound: boolean; music: boolean; freeWill: boolean; notifications: boolean };
 
 function readPrefs(): Prefs {
-  const fallback: Prefs = { data: "auto", sound: true, music: true, freeWill: true, notifications: false };
+  const fallback: Prefs = { data: "auto", sound: true, music: true, freeWill: false, notifications: false };
   if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem("accralife-phone");

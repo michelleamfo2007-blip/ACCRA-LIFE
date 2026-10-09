@@ -1,5 +1,6 @@
 import { bayCount, baySpot, garageBox, motorsOf } from "@/lib/game/garage";
 import { circleSolid, type Bounds, type Solid } from "@/lib/game/nav";
+import { openHouseDress } from "@/lib/game/room-sets";
 import { DIVIDERS, FIXTURES, fixtureAt, roomReach, SHOP, type Life } from "@/lib/game/world";
 
 /** Player capsule radius in metres. Smaller than the figure so corners do not snag. */
@@ -10,12 +11,12 @@ const PASS_ID = new Set(["pillow", "net", "pan", "book", "speaker", "transistor"
 
 /** Half-width, half-depth. Kept inside the visible mesh. */
 const FOOT: Record<string, [number, number]> = {
-  bed: [0.62, 0.38],
-  sofa: [0.72, 0.26],
-  chair: [0.26, 0.24],
-  table: [0.5, 0.36],
-  fridge: [0.36, 0.32],
-  stove: [0.34, 0.3],
+  bed: [0.95, 0.72],
+  sofa: [0.88, 0.48],
+  chair: [0.36, 0.34],
+  table: [0.55, 0.4],
+  fridge: [0.46, 0.36],
+  stove: [0.42, 0.36],
   sink: [0.42, 0.3],
   toilet: [0.24, 0.28],
   shower: [0.38, 0.36],
@@ -35,12 +36,12 @@ const FOOT: Record<string, [number, number]> = {
 };
 
 const FIXTURE_FOOT: Record<string, [number, number]> = {
-  "fix-bed": [0.62, 0.38],
-  "fix-sofa": [0.7, 0.26],
-  "fix-fridge": [0.36, 0.32],
-  "fix-stove": [0.34, 0.3],
-  "fix-toilet": [0.24, 0.28],
-  "fix-shower": [0.38, 0.36],
+  "fix-bed": [0.95, 0.72],
+  "fix-sofa": [0.88, 0.48],
+  "fix-fridge": [0.46, 0.36],
+  "fix-stove": [0.42, 0.36],
+  "fix-toilet": [0.28, 0.34],
+  "fix-shower": [0.46, 0.42],
 };
 
 export function homeBounds(life: Life): Bounds {
@@ -133,6 +134,16 @@ export function homeSolids(life: Life, opts: { doorOpen?: boolean; garageShut?: 
     const along = piece.rot % 2 === 1 ? (wall.along === "x" ? "z" : "x") : wall.along;
     addDivider(add, wall.id, piece.x, piece.z, along, wall.length, wall.id === "fix-wall-side" ? 1.05 : 0);
   }
+
+  const dress = openHouseDress(span);
+  const chair = dress.accents[0];
+  const side = dress.accents[1];
+  if (chair) add(box("dress-chair", chair.x, chair.z, 0.38, 0.36));
+  if (side) add(box("dress-side", side.x, side.z, 0.28, 0.28));
+  add(box("dress-plant", -3.45, -3.55, 0.24, 0.24));
+  add(box("dress-tv", 0.85, -hd + 0.72, 0.46, 0.22));
+  add(box("dress-sink", -3.95, 4.05, 0.34, 0.3));
+  add(box("dress-box", dress.box.x, dress.box.z, 0.24, 0.22));
 
   for (const fixture of FIXTURES) {
     const foot = FIXTURE_FOOT[fixture.id];
