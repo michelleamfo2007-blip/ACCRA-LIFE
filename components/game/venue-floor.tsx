@@ -23,6 +23,7 @@ import { ShopFloor } from "@/components/game/shop-floor";
 import { EstateStreet } from "@/components/game/estate-street";
 import { roomLine, roomOf, staffOf } from "@/lib/game/place-kit";
 import { CauseList } from "@/components/game/cause-list";
+import { PlaceDesk } from "@/components/game/place-desk";
 import { robPerson } from "@/lib/game/justice";
 import { rivalHere } from "@/lib/game/spine";
 import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
@@ -496,6 +497,7 @@ export function VenueFloor({
     >
       {nightLife && onPurse ? <ClubSpray life={life} name={sprayName || me || "You"} onPurse={onPurse} lifted={panel} /> : null}
       {(spot.id === "court" || /court|tribunal/i.test(spot.id)) && onApply ? <CauseList life={life} you={me} court={spot.id} onApply={onApply} /> : null}
+      {onApply && !(spot.id === "court" || /court|tribunal/i.test(spot.id)) ? <PlaceDesk life={life} spot={spot} onApply={onApply} /> : null}
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div
           ref={stage}

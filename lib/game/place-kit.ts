@@ -1,4 +1,5 @@
 import { CLUB_IDS } from "@/lib/game/accra-spots";
+import { deskNpc } from "@/lib/game/place-desk";
 import { isNightlife } from "@/lib/game/club-night";
 import { SPOT_HOURS } from "@/lib/game/food-spots";
 import { accraHour, type Spot, type Verb } from "@/lib/game/world";
@@ -369,7 +370,9 @@ export function roomLine(spot: Spot, hour = accraHour()) {
 
 export function staffOf(spot: Spot) {
   const room = roomProfile(spot);
-  return room.staff.map((person, index) => ({
+  const lead = deskNpc(spot);
+  const staff = lead ? [{ role: lead.role, name: lead.name, line: lead.line, shirt: room.staff[0]?.shirt ?? "#1c1917" }, ...room.staff.slice(1)] : room.staff;
+  return staff.map((person, index) => ({
     role: person.role,
     line: `${person.name}: ${person.line}`,
     style: index === 0 ? { left: "22%", top: "44%" } : { left: "70%", top: "38%" },
