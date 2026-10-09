@@ -245,6 +245,7 @@ export const COURSES: Course[] = [
   { id: "electrical", label: "Electrical installation", fee: 700, sessions: 5, needs: "wassce", perk: "+2 Hustle, +10% job pay", skill: "hustle" },
   { id: "bootcamp", label: "Coding bootcamp", fee: 1500, sessions: 5, needs: "wassce", perk: "+2 Coding, +15% job pay", skill: "coding" },
   { id: "degree", label: "University degree (Legon)", fee: 2500, sessions: 8, needs: "wassce", perk: "+30% job pay", skill: "career" },
+  { id: "llb", label: "LLB", fee: 3200, sessions: 8, needs: "degree", perk: "You can take a brief in court", skill: "career" },
   { id: "masters", label: "Master's degree", fee: 6000, sessions: 8, needs: "degree", perk: "+20% more job pay", skill: "career" },
 ];
 

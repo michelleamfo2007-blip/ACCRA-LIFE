@@ -22,6 +22,8 @@ import { BoutiqueFloor } from "@/components/game/boutique-floor";
 import { ShopFloor } from "@/components/game/shop-floor";
 import { EstateStreet } from "@/components/game/estate-street";
 import { roomLine, roomOf, staffOf } from "@/lib/game/place-kit";
+import { CauseList } from "@/components/game/cause-list";
+import { robPerson } from "@/lib/game/justice";
 import { rivalHere } from "@/lib/game/spine";
 import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
@@ -493,6 +495,7 @@ export function VenueFloor({
       }}
     >
       {nightLife && onPurse ? <ClubSpray life={life} name={sprayName || me || "You"} onPurse={onPurse} lifted={panel} /> : null}
+      {(spot.id === "court" || /court|tribunal/i.test(spot.id)) && onApply ? <CauseList life={life} you={me} court={spot.id} onApply={onApply} /> : null}
       <div ref={scroller} className="venue-scroll absolute inset-x-0 top-[4.25rem] bottom-36 z-0 isolate overflow-x-auto overflow-y-hidden overscroll-x-contain">
         <div
           ref={stage}
@@ -709,6 +712,7 @@ export function VenueFloor({
           onChat={() => onOpenChat(open.username)}
           onPick={(talk) => speak(open.name, talk)}
           onPay={(amount) => onPay(open.name, amount, open.username)}
+          onRob={onApply ? () => onApply(robPerson(life, open.name)) : undefined}
         />
       ) : !panel ? (
         <button
@@ -1178,6 +1182,7 @@ function TalkSheet({
   onChat,
   onPick,
   onPay,
+  onRob,
 }: {
   person: string;
   place: string;
@@ -1187,6 +1192,7 @@ function TalkSheet({
   onChat: () => void;
   onPick: (talk: TalkKind) => void;
   onPay: (amount: number) => string | null | Promise<string | null>;
+  onRob?: () => void;
 }) {
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState("20");
@@ -1242,6 +1248,7 @@ function TalkSheet({
         <TalkCard icon="💬" title="Gist" meta="+Fun +Social" onClick={() => onPick("gist")} />
         <TalkCard icon="😄" title="Crack a joke" meta="+Fun +Social" onClick={() => onPick("joke")} />
         <TalkCard icon="😏" title="Throw shade" meta="+Fun" onClick={() => onPick("shade")} />
+        {onRob ? <TalkCard icon="⚠️" title="Rob · risky" meta="Can end in court" onClick={onRob} /> : null}
       </div>
     </div>
   );
@@ -1929,10 +1936,33 @@ function furniture(kind: Kind, night: boolean, spotId: string): Block[] {
   }
   if (kind === "court") {
     return [
-      { x: 0, y: 0, z: -10, w: 40, h: 8, d: 14, color: "#5c3a2e" },
-      { x: -40, y: 0, z: 30, w: 16, h: 6, d: 10, color: "#1c1917" },
-      { x: 40, y: 0, z: 30, w: 16, h: 6, d: 10, color: "#1c1917" },
-      { x: 0, y: 0, z: 55, w: 50, h: 4, d: 12, color: "#8a623c" },
+      { x: 0, y: 0, z: -36, w: 70, h: 16, d: 18, color: "#5c3a2e" },
+      { x: 0, y: 16, z: -34, w: 64, h: 4, d: 14, color: "#8a623c" },
+      { x: 0, y: 28, z: -42, w: 18, h: 12, d: 2, color: "#FCD116" },
+      { x: -5, y: 31, z: -41, w: 3, h: 7, d: 1, color: "#CE1126" },
+      { x: 0, y: 31, z: -41, w: 3, h: 7, d: 1, color: "#FCD116" },
+      { x: 5, y: 31, z: -41, w: 3, h: 7, d: 1, color: "#006B3F" },
+      { x: 18, y: 20, z: -30, w: 8, h: 2, d: 2, color: "#3b2415" },
+      { x: 0, y: 20, z: -28, w: 16, h: 3, d: 2, color: "#f4efe6" },
+      { x: -48, y: 0, z: -8, w: 14, h: 12, d: 12, color: "#6b4a32" },
+      { x: 0, y: 0, z: 8, w: 46, h: 8, d: 14, color: "#4a3428" },
+      { x: -36, y: 0, z: 6, w: 14, h: 10, d: 12, color: "#1c1917" },
+      { x: 36, y: 0, z: 6, w: 14, h: 10, d: 12, color: "#1c1917" },
+      { x: 0, y: 0, z: 32, w: 16, h: 12, d: 12, color: "#8a623c" },
+      { x: 58, y: 0, z: -6, w: 16, h: 8, d: 12, color: "#5c3a2e" },
+      { x: 60, y: 8, z: -4, w: 8, h: 2, d: 6, color: "#121212" },
+      { x: -24, y: 0, z: 56, w: 34, h: 6, d: 8, color: "#6b4a32" },
+      { x: 24, y: 0, z: 56, w: 34, h: 6, d: 8, color: "#6b4a32" },
+      { x: -24, y: 0, z: 70, w: 34, h: 6, d: 8, color: "#5c3a2e" },
+      { x: 24, y: 0, z: 70, w: 34, h: 6, d: 8, color: "#5c3a2e" },
+      { x: -90, y: 0, z: -16, w: 3, h: 26, d: 3, color: "#d5d0c8" },
+      { x: -86, y: 20, z: -16, w: 10, h: 6, d: 1, color: "#CE1126" },
+      { x: 0, y: 42, z: 8, w: 10, h: 2, d: 10, color: "#9aa4b2" },
+      { x: 82, y: 22, z: -8, w: 4, h: 6, d: 4, color: "#f6efe4" },
+      { x: -16, y: 0, z: 82, w: 10, h: 20, d: 3, color: "#6b4423" },
+      { x: 16, y: 0, z: 82, w: 10, h: 20, d: 3, color: "#6b4423" },
+      { x: -98, y: 0, z: 8, w: 4, h: 28, d: 70, color: "#c4a574" },
+      { x: 98, y: 0, z: 8, w: 4, h: 28, d: 70, color: "#e7d3b0" },
     ];
   }
   if (kind === "market") {

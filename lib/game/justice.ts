@@ -175,7 +175,22 @@ export function rob(life: Life, targetId: string, approachId: string): StepResul
     if (card.mark.id === "rival" && timed.spine) timed.spine.rival.cash = Math.max(0, timed.spine.rival.cash - haul);
     timed.stats = { ...(timed.stats ?? {}), heat: (timed.stats?.heat ?? 0) + 1 };
     stain(timed, `A ${card.approach.label.toLowerCase()} in the city. People are not sure it was you.`);
-    const line = `You came away with ${cedis(haul)}. The street is already telling a version of it.`;
+    let line = `You came away with ${cedis(haul)}. The street is already telling a version of it.`;
+    if (!timed.docket && Math.random() < 0.4) {
+      timed.docket = book(timed, {
+        status: "bail",
+        bail: 0,
+        until: timed.minutes + DAY,
+        hearingAt: timed.minutes + DAY,
+        crime: card.mark.label,
+        approach: card.approach.label,
+        security: card.security,
+        caughtBy: "a report",
+        evidence: 55,
+        note: "A report was filed. Your name is on the cause list. Appear, or the charge grows.",
+      });
+      line = `${line} A report was filed. The cause list has your name.`;
+    }
     logLine(timed, line);
     if (repeat) {
       timed.docket = book(timed, {
@@ -222,6 +237,53 @@ export function rob(life: Life, targetId: string, approachId: string): StepResul
   if (response + damage > 0) bits.push(`Response and damage: ${cedis(response + damage)}.`);
   logLine(timed, bits[0]);
   return { life: timed, notes: bits };
+}
+
+export function robPerson(life: Life, name: string): StepResult {
+  const held = custodyBlock(life);
+  if (held) return { life, notes: [], error: held };
+  if (!name) return { life, notes: [], error: "There is nobody there to try." };
+  const timed = passTime(cloneLife(life), 15).life;
+  const skill = Math.min(0.2, (timed.skills.fitness + timed.skills.hustle) * 0.015);
+  const caught = Math.random() > 0.46 + skill;
+  if (!caught) {
+    const haul = 20 + Math.round(Math.random() * 60);
+    timed.cash += haul;
+    timed.stats = { ...(timed.stats ?? {}), heat: (timed.stats?.heat ?? 0) + 1 };
+    stain(timed, `A try on ${name}. People are not sure it was you.`);
+    let line = `You came away with ${cedis(haul)}. ${name} has not got it back.`;
+    if (!timed.docket && Math.random() < 0.45) {
+      timed.docket = book(timed, {
+        status: "bail",
+        bail: 0,
+        until: timed.minutes + DAY,
+        hearingAt: timed.minutes + DAY,
+        crime: name,
+        approach: "Rob on the street",
+        security: 0,
+        caughtBy: name,
+        evidence: 60,
+        note: `${name} reported it. Your name is on the cause list.`,
+      });
+      line = `${line} They reported it. Court has the file.`;
+    }
+    logLine(timed, line);
+    return { life: timed, notes: [line] };
+  }
+  timed.where = "police";
+  timed.docket = book(timed, {
+    status: "booked",
+    crime: name,
+    approach: "Rob on the street",
+    security: 0,
+    caughtBy: name,
+    bail: 220,
+    evidence: 70,
+    note: `${name} held on and called it in. You are booked.`,
+  });
+  stain(timed, `Caught trying ${name}.`);
+  logLine(timed, timed.docket.note);
+  return { life: timed, notes: [timed.docket.note] };
 }
 
 export function offerCut(life: Life): StepResult {
@@ -311,7 +373,7 @@ export function toCourt(life: Life): StepResult {
   if (!docket || (docket.status !== "booked" && docket.status !== "bail")) return { life, notes: [], error: "Court is not sitting for you yet." };
   const next = cloneLife(life);
   next.where = "court";
-  next.docket = { ...docket, status: "court", note: "You are in front of the court. Guilty is faster. A trial can free you, or add years to the story." };
+  next.docket = { ...docket, status: "court", hearingAt: next.minutes, note: "You are in the dock. Guilty is faster. A trial can free you, or add years to the story." };
   return { life: next, notes: [next.docket.note] };
 }
 

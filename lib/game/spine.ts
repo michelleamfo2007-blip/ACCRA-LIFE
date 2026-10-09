@@ -1,5 +1,5 @@
 import { seasonOf } from "@/lib/game/sky";
-import { cedis, cloneLife, logLine, passTime, spotById, type Life, type StepResult } from "@/lib/game/world";
+import { cedis, cloneLife, homeById, logLine, passTime, spotById, type Life, type StepResult } from "@/lib/game/world";
 
 export type Mark = { line: string; at: number };
 export type Rival = {
@@ -19,6 +19,8 @@ export type Moment = { id: string; line: string; a: string; b: string };
 export type Kin = { id: string; name: string; role: string; need: string };
 export type Aim = { id: string; label: string; detail: string };
 export type Memory = { year: number; line: string };
+export type Circle = "friends" | "family" | "work" | "church" | "club";
+export type Circles = Record<Circle, number>;
 export type Spine = {
   rep: number;
   stress: number;
@@ -38,6 +40,10 @@ export type Spine = {
   arc: string;
   pulsedDay: number;
   drunkDay: number;
+  circles?: Circles;
+  /** How a neighbourhood or city sees you. Keyed by area name or town id. */
+  areas?: Record<string, number>;
+  celebrated?: string[];
 };
 
 const RIVAL_SPOTS = ["buka", "makola", "mall", "beach", "office", "gym", "kejetia", "salon", "republic"];
@@ -60,7 +66,32 @@ const MOMENTS: Moment[] = [
   { id: "rent-up", line: "The landlord is raising the rent next month. The note is on the door.", a: "Accept it", b: "Argue in the compound" },
   { id: "schoolmate", line: "An old schoolmate is doing well. They asked if the house is open.", a: "Invite them", b: "Say you are busy" },
   { id: "sweets", line: "A neighbour's child is selling sweets at the gate.", a: "Buy one", b: "Wave them on" },
+  { id: "fuel", line: "Fuel prices jumped this morning. The trotro fare is already arguing.", a: "Pay the new fare", b: "Trek it" },
+  { id: "bloom", line: "There's a party at Bloom Bar tonight. Your name is on somebody's list.", a: "Go", b: "Stay home" },
+  { id: "baby", line: "Ama is having a baby. The family chat will not calm down.", a: "Send something", b: "A prayer emoji" },
 ];
+
+const HEARD: Record<keyof Life["skills"], string> = {
+  cooking: "Chale, you can cook o",
+  charm: "You dey talk. People stay",
+  music: "The song sat properly",
+  fitness: "You are getting strong",
+  career: "The office is starting to trust you",
+  hustle: "You know how to price a thing",
+  coding: "The thing you built actually runs",
+};
+
+export function circlesOf(spine?: Spine | null): Circles {
+  return { friends: 0, family: 0, work: 0, church: 0, club: 0, ...(spine?.circles ?? {}) };
+}
+
+export function circleLabel(score: number) {
+  if (score >= 25) return "They want you there";
+  if (score >= 8) return "Warm";
+  if (score >= -7) return "Ordinary";
+  if (score >= -24) return "Cooling";
+  return "They are done with you";
+}
 
 export const CITY_VOICE: Record<string, { voice: string; outsider: string; food: string; music: string; slang: string }> = {
   accra: {
@@ -147,6 +178,9 @@ export function copySpine(spine?: Spine): Spine | undefined {
     kin: spine.kin.map((person) => ({ ...person })),
     aims: spine.aims.map((aim) => ({ ...aim })),
     journal: spine.journal.map((memory) => ({ ...memory })),
+    circles: circlesOf(spine),
+    areas: { ...(spine.areas ?? {}) },
+    celebrated: [...(spine.celebrated ?? [])],
   };
 }
 
@@ -199,8 +233,11 @@ function blank(life: Life): Spine {
     rare: "",
     season: seasonOf().id,
     arc: arcOf()?.id ?? "",
-    pulsedDay: dayOf(life.minutes),
+    pulsedDay: -1,
     drunkDay: -1,
+    circles: { friends: 0, family: 0, work: 0, church: 0, club: 0 },
+    areas: {},
+    celebrated: [],
   };
 }
 
@@ -285,7 +322,88 @@ export function rivalHere(life: Life) {
 
 function remember(spine: Spine, minutes: number, line: string) {
   if (spine.journal.some((memory) => memory.line === line)) return;
-  spine.journal = [...spine.journal, { year: yearOf(minutes), line }].slice(-24);
+  spine.journal = [...spine.journal, { year: yearOf(minutes), line }].slice(-40);
+}
+
+function prepare(spine: Spine) {
+  spine.circles = circlesOf(spine);
+  spine.areas = spine.areas ?? {};
+  spine.celebrated = spine.celebrated ?? [];
+}
+
+function nudge(spine: Spine, circle: Circle, delta: number) {
+  const circles = circlesOf(spine);
+  circles[circle] = Math.max(-100, Math.min(100, circles[circle] + delta));
+  spine.circles = circles;
+}
+
+function shift(spine: Spine, circle: Circle, delta: number, line: string, at: number) {
+  nudge(spine, circle, delta);
+  stamp(spine, line, at, Math.max(-8, Math.min(8, Math.round(delta / 2))));
+}
+
+export function nudgeCircle(life: Life, circle: Circle, delta: number) {
+  if (!life.spine || !delta) return;
+  nudge(life.spine, circle, delta);
+  bumpArea(life, delta > 0 ? 1 : -1);
+}
+
+export function fileMemory(life: Life, name: string, line: string) {
+  if (!name || !line) return;
+  const person = life.relations.find((item) => item.name === name);
+  if (person) {
+    const memories = person.memories ?? [];
+    if (!memories.includes(line)) person.memories = [line, ...memories].slice(0, 6);
+    person.seen = life.minutes;
+  }
+  if (life.spine) remember(life.spine, life.minutes, `${name}: ${line}`);
+}
+
+export function recall(life: Life, name: string) {
+  const line = life.relations.find((person) => person.name === name)?.memories?.[0];
+  if (!line) return null;
+  return `${name}: "Remember when ${line}?"`;
+}
+
+export function noticeSkill(life: Life, skill: keyof Life["skills"], before: number, after: number) {
+  const spine = life.spine;
+  if (!spine) return null;
+  const rung = [3, 6, 8].find((level) => before < level && after >= level);
+  if (!rung) return null;
+  const heard = `${HEARD[skill]}.`;
+  remember(spine, life.minutes, heard);
+  const circle: Circle = skill === "career" || skill === "hustle" || skill === "coding" ? "work" : skill === "music" || skill === "fitness" ? "club" : "friends";
+  shift(spine, circle, 4, heard, life.minutes);
+  return heard;
+}
+
+export function standingPrice(life: Life, cost: number, tag?: string) {
+  if (!cost || !life.spine) return cost;
+  const circles = circlesOf(life.spine);
+  const area = life.where === "home" ? homeById(life.homeId).area : (life.town ?? "accra");
+  const local = life.spine.areas?.[area] ?? 0;
+  let factor = 1;
+  if (tag === "party") factor += circles.club >= 20 ? -0.1 : circles.club <= -15 ? 0.15 : 0;
+  if (tag === "food") {
+    factor += local >= 12 ? -0.1 : local <= -12 ? 0.12 : 0;
+    if (life.skills.cooking >= 4) factor -= 0.08;
+  }
+  if (tag === "church" && circles.church >= 12) factor -= 0.1;
+  return Math.max(0, Math.round(cost * factor));
+}
+
+function bumpArea(life: Life, delta: number) {
+  const spine = life.spine;
+  if (!spine) return;
+  const area = life.where === "home" ? homeById(life.homeId).area : (life.town ?? "accra");
+  const areas = spine.areas ?? {};
+  areas[area] = Math.max(-100, Math.min(100, (areas[area] ?? 0) + delta));
+  spine.areas = areas;
+}
+
+export function noteCircle(life: Life, circle: Circle, delta: number, line: string) {
+  if (!life.spine) return;
+  shift(life.spine, circle, delta, line, life.minutes);
 }
 
 function growRival(spine: Spine, life: Life, day: number) {
@@ -299,7 +417,20 @@ function growRival(spine: Spine, life: Life, day: number) {
   rival.where = RIVAL_SPOTS[day % RIVAL_SPOTS.length];
   const crush = life.relations[0]?.name;
   if (crush) rival.crush = crush;
-  if (rival.stance === "rival" && day - rival.touched >= 2) {
+  const aim = spine.aims[0];
+  if (aim?.id === "save" || aim?.id === "million") {
+    if (life.cash >= rival.cash) rival.cash += 500;
+    rival.line = `${rival.name} heard you are saving. He is spending so he still looks ahead. ${cedis(rival.cash)}.`;
+  } else if (aim?.id === "shops" && (life.businesses ?? []).length) {
+    rival.biz = "A shop on your street";
+    rival.where = life.where === "home" ? rival.where : life.where;
+    rival.line = `${rival.name} opened near your trade. Same customers, louder voice.`;
+  } else if (aim?.id === "married" && crush) {
+    rival.line = `${rival.name} is still around ${crush}. He will not leave that story alone.`;
+  } else if (aim?.id === "club") {
+    rival.where = "republic";
+    rival.line = `${rival.name} is at the club, telling people the night belongs to him.`;
+  } else if (rival.stance === "rival" && day - rival.touched >= 2) {
     stamp(spine, `${rival.name} is telling people you stalled. The rumour is moving.`, life.minutes, -4);
     rival.line = crush ? `${rival.name} asked ${crush} out, and he is talking about you.` : `${rival.name} is spending. People are starting to believe him.`;
   } else if (rival.where === life.where) {
@@ -310,8 +441,14 @@ function growRival(spine: Spine, life: Life, day: number) {
 }
 
 export function pulseSpine(life: Life, notes: string[]) {
+  if (!life.spine) {
+    life.spine = blank(life);
+    const line = `${life.spine.rival.name} is keeping pace. ${cedis(life.spine.rival.cash)} in his pocket.`;
+    notes.push(line);
+    push(life, line);
+  }
   const spine = life.spine;
-  if (!spine) return;
+  prepare(spine);
   const day = dayOf(life.minutes);
   if (spine.pulsedDay === day) return;
   spine.pulsedDay = day;
@@ -375,7 +512,7 @@ export function pulseSpine(life: Life, notes: string[]) {
     }
   }
 
-  if (!spine.moment && hash(`moment-${day}`) > 0.55) {
+  if (!spine.moment && hash(`moment-${day}`) > 0.28) {
     spine.moment = MOMENTS[day % MOMENTS.length];
     notes.push(spine.moment.line);
   }
@@ -406,6 +543,26 @@ export function pulseSpine(life: Life, notes: string[]) {
     }
     notes.push(spine.rare);
     remember(spine, life.minutes, spine.rare);
+  }
+
+  for (const aim of spine.aims) {
+    const progress = aimProgress(life, aim.id);
+    if (progress.current < progress.max || spine.celebrated?.includes(aim.id)) continue;
+    spine.celebrated = [...(spine.celebrated ?? []), aim.id];
+    const line = `You did it: ${aim.label}. Friends are posting it.`;
+    notes.push(line);
+    push(life, line);
+    remember(spine, life.minutes, line);
+    shift(spine, "friends", 6, line, life.minutes);
+  }
+
+  const quiet = life.relations.find((person) => person.seen != null && person.score >= 20 && day - dayOf(person.seen) >= 12);
+  if (quiet && hash(`drift-${quiet.name}-${day}`) > 0.45) {
+    quiet.score = Math.max(0, quiet.score - 4);
+    const memory = quiet.memories?.[0];
+    const line = memory ? `${quiet.name} has gone quiet. They still talk about when ${memory}.` : `${quiet.name} has gone quiet.`;
+    notes.push(line);
+    shift(spine, "friends", -3, line, life.minutes);
   }
 
   if (spine.rep <= -40 && !spine.barred.includes("record")) {
@@ -443,6 +600,23 @@ export function answerMoment(life: Life, pick: "a" | "b"): StepResult {
     next.needs.social = Math.min(100, next.needs.social + 8);
     stamp(bookNext, "An old schoolmate came over. The house has a story now.", next.minutes, 2);
   } else if (moment.id === "rent-up" && pick === "b") stamp(bookNext, "You argued with the landlord in front of the compound.", next.minutes, -2);
+  else if (moment.id === "fuel" && pick === "a") {
+    if (next.cash < 8) return { life, notes: [], error: "The new fare is ₵8." };
+    next.cash -= 8;
+    stamp(bookNext, "You paid the new fare and kept moving.", next.minutes, 0);
+  } else if (moment.id === "fuel") {
+    next.needs.energy = Math.max(0, next.needs.energy - 6);
+    stamp(bookNext, "You trekked it. The fare can argue without you.", next.minutes, 0);
+  } else if (moment.id === "bloom" && pick === "a") {
+    next.needs.fun = Math.min(100, next.needs.fun + 10);
+    next.needs.social = Math.min(100, next.needs.social + 8);
+    shift(bookNext, "club", 4, "You showed up at Bloom Bar. The list was real.", next.minutes);
+  } else if (moment.id === "bloom") shift(bookNext, "club", -2, "You stayed home. Bloom Bar went on without you.", next.minutes);
+  else if (moment.id === "baby" && pick === "a") {
+    if (next.cash < 20) return { life, notes: [], error: "A proper send is ₵20." };
+    next.cash -= 20;
+    shift(bookNext, "family", 6, "You sent something for Ama's baby. The family chat saw it.", next.minutes);
+  } else if (moment.id === "baby") shift(bookNext, "family", -3, "A prayer emoji. Ama's people noticed the silence around it.", next.minutes);
   else stamp(bookNext, pick === "a" ? "You stayed in it." : "You stepped away.", next.minutes, pick === "a" ? 1 : 0);
   const line = bookNext.marks[0]?.line ?? "The city filed that.";
   logLine(next, line);
@@ -494,9 +668,9 @@ export function helpKin(life: Life, id: string, yes: boolean): StepResult {
   kin.need = "";
   if (yes) {
     next.cash -= 80;
-    stamp(bookNext, `You covered ${kin.name}. The family will say your name properly.`, next.minutes, 5);
+    shift(bookNext, "family", 8, `You covered ${kin.name}. The family will say your name properly.`, next.minutes);
     remember(bookNext, next.minutes, `Helped ${kin.name}.`);
-  } else stamp(bookNext, `You told ${kin.name} not this time. They will remember the no.`, next.minutes, -4);
+  } else shift(bookNext, "family", -6, `You told ${kin.name} not this time. They will remember the no.`, next.minutes);
   const line = bookNext.marks[0]?.line ?? "Family filed it.";
   logLine(next, line);
   return { life: next, notes: [line] };

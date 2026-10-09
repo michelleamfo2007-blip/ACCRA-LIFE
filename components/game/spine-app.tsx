@@ -9,6 +9,8 @@ import {
   answerMoment,
   arcOf,
   chooseAim,
+  circleLabel,
+  circlesOf,
   dismissRare,
   faceRival,
   helpKin,
@@ -54,6 +56,25 @@ export function SpineApp({ life, onBack, onApply }: { life: Life; onBack: () => 
               <span className="block font-semibold">{repLabel(spine.rep)}</span>
               <span className="text-xs text-[#5c6b82]">City score {spine.rep}. Help travels. A cheat travels faster.</span>
             </p>
+            {(
+              [
+                ["friends", "Friends"],
+                ["family", "Family"],
+                ["work", "Work"],
+                ["church", "Church"],
+                ["club", "Club"],
+              ] as const
+            ).map(([id, label]) => {
+              const score = circlesOf(spine)[id];
+              return (
+                <p key={id} className="rounded-2xl bg-white px-3 py-2 text-sm shadow-sm">
+                  <span className="font-semibold">{label}</span>
+                  <span className="mt-0.5 block text-xs text-[#5c6b82]">
+                    {circleLabel(score)} · {score}
+                  </span>
+                </p>
+              );
+            })}
             {spine.marks.map((mark) => (
               <p key={`${mark.at}-${mark.line}`} className="rounded-2xl bg-white px-3 py-2 text-sm shadow-sm">
                 {mark.line}

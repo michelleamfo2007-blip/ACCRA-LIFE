@@ -8,7 +8,7 @@ import { pulseShops } from "@/lib/game/shop-run";
 import { isNightlife, sessionAfterVerb, sessionOf } from "@/lib/game/club-night";
 import { foodFromOffer, menuFor } from "@/lib/game/foods";
 import { weatherAt, weatherStress } from "@/lib/game/sky";
-import { cityArrival, copySpine, doorBlocked, noteRep, pulseSpine, type Spine } from "@/lib/game/spine";
+import { circlesOf, cityArrival, copySpine, doorBlocked, fileMemory, noticeSkill, nudgeCircle, noteRep, pulseSpine, standingPrice, type Spine } from "@/lib/game/spine";
 import { custodyBlock, pulseJustice } from "@/lib/game/justice";
 import { pulseMotors } from "@/lib/game/garage";
 import { pulseSites } from "@/lib/game/estate";
@@ -93,7 +93,7 @@ export type Life = {
   inventory: string[];
   log: string[];
   inbox: string[];
-  relations: { name: string; score: number; visits?: number }[];
+  relations: { name: string; score: number; visits?: number; memories?: string[]; seen?: number }[];
   /** Friends currently at your place (home loop) or seated at your restaurant table. */
   guests?: {
     name: string;
@@ -285,6 +285,7 @@ export type Docket = {
   lawyer: boolean;
   evidence: number;
   until: number;
+  hearingAt?: number;
   fine: number;
   serviceLeft: number;
   skips: number;
@@ -1520,7 +1521,7 @@ export function clone(life: Life): Life {
     inventory: [...life.inventory],
     log: [...life.log],
     inbox: [...life.inbox],
-    relations: life.relations.map((person) => ({ ...person })),
+    relations: life.relations.map((person) => ({ ...person, memories: person.memories ? [...person.memories] : undefined })),
     guests: (life.guests ?? []).map((guest) => ({ ...guest })),
     furniture: (life.furniture ?? []).map((piece) => ({ ...piece })),
     goods: life.goods ? Object.fromEntries(Object.entries(life.goods).map(([id, row]) => [id, { ...row }])) : undefined,
@@ -1837,6 +1838,7 @@ function settleBills(life: Life, from: number, to: number) {
 }
 
 function gainSkill(life: Life, skill: keyof Skills, verb: Verb) {
+  const before = life.skills[skill];
   let amount = 1;
   if (life.traits.includes("musical") && skill === "music") amount += 1;
   if (life.traits.includes("foodie") && skill === "cooking") amount += 1;
@@ -1847,6 +1849,7 @@ function gainSkill(life: Life, skill: keyof Skills, verb: Verb) {
   if (life.learn > 1 && Math.random() < life.learn - 1) amount += 1;
   life.skills[skill] = Math.min(10, life.skills[skill] + amount);
   if (verb.job && skill !== "career") life.skills.career = Math.min(10, life.skills.career + 1);
+  return noticeSkill(life, skill, before, life.skills[skill]);
 }
 
 export function careerLevel(life: Life) {
@@ -2003,7 +2006,7 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id.startsWith("club-need-table")) {
     return { life, notes: [], error: "Take a table first. Then bottle service can land." };
   }
-  let cost = verb.cost;
+  let cost = standingPrice(next, verb.cost, verb.tag);
   if (verb.tag === "food" && next.birthId === "market") cost = Math.round(cost * 0.7);
   if (verb.tag === "party" && seasonFlags(next.minutes).detty) cost = Math.round(cost * 1.3);
   if (verb.draw && (next.cupboard?.[verb.draw] ?? 0) < 1) {
@@ -2048,6 +2051,11 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
     earn = Math.round(earn * 0.5);
     notes.push("Working sick. Half the pay.");
   }
+  if (verb.job) {
+    const work = circlesOf(after.spine).work;
+    if (work >= 20) earn = Math.round(earn * 1.08);
+    else if (work <= -20) earn = Math.round(earn * 0.9);
+  }
   after.cash += earn;
   const boost = actionBoost(after, verb);
   (Object.keys(verb.effects) as NeedKey[]).forEach((key) => {
@@ -2077,7 +2085,10 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.id === "cook" && after.inventory.includes("pan")) after.needs.hunger = clampNeed(after.needs.hunger + 12);
   if (verb.id === "radio" && after.inventory.includes("speaker")) after.needs.fun = clampNeed(after.needs.fun + 12);
   if (verb.id === "kenkey") after.needs.hunger = clampNeed(after.needs.hunger + 34);
-  if (verb.skill) gainSkill(after, verb.skill, verb);
+  if (verb.skill) {
+    const heard = gainSkill(after, verb.skill, verb);
+    if (heard) notes.push(heard);
+  }
   if (verb.job) bump(after, "shifts");
   if (verb.id.startsWith("hustle-")) bump(after, "hustles");
   turfPoint(after, verb.job ? 3 : verb.tag === "party" ? 2 : verb.social ? 1 : 0);
@@ -2088,11 +2099,21 @@ export function runVerb(life: Life, verb: Verb, placeId = life.where, withName?:
   if (verb.tag === "gym" || verb.skill === "fitness") bump(after, "workouts");
   if (verb.social) {
     const name = withName || (placeId === "home" ? homeById(after.homeId).neighbor : peopleAt(placeId)[0]);
-    const bump = after.traits.includes("smooth") ? 16 : 12;
+    const friends = circlesOf(after.spine).friends;
+    const warm = after.traits.includes("smooth") ? 16 : 12;
+    const bump = friends <= -20 ? 4 : friends >= 25 ? warm + 4 : warm;
     const known = after.relations.find((person) => person.name === name);
     if (known) known.score = Math.min(100, known.score + bump);
     else after.relations.push({ name, score: bump });
+    const place = placeId === "home" ? "the house" : spotById(placeId).name;
+    fileMemory(after, name, `we ${verb.label.toLowerCase()} at ${place}`);
+    nudgeCircle(after, "friends", friends <= -20 ? -1 : 2);
+    if (friends <= -20) notes.push(`${name} is polite. The warmth is gone.`);
+    if ((after.relations.find((person) => person.name === name)?.score ?? 0) >= 80) fileMemory(after, name, `it got serious between you`);
   }
+  if (verb.tag === "party") nudgeCircle(after, "club", 2);
+  if (verb.tag === "church") nudgeCircle(after, "church", 3);
+  if (verb.job) nudgeCircle(after, "work", 1);
   if (verb.special === "pitch") {
     if (after.funded) notes.push("You already have a term sheet. Go build the thing.");
     else if (after.skills.coding < 4) notes.push("They liked the story. They want a prototype. Build the skill at the hub.");

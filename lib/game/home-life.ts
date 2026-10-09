@@ -1,3 +1,4 @@
+import { circlesOf, fileMemory, nudgeCircle, recall } from "@/lib/game/spine";
 import { travelFactor, weatherAt } from "@/lib/game/sky";
 import { homeWearTalk } from "@/lib/game/wear";
 import { cloneLife, homeById, hourOf, type Life, type StepResult, type Verb } from "@/lib/game/world";
@@ -412,6 +413,9 @@ export function inviteHome(life: Life, name: string, username?: string) {
   if (life.where !== "home") {
     return { life, notes: [] as string[], error: "Head home first. Then call them over." };
   }
+  if (circlesOf(life.spine).friends <= -25) {
+    return { life, notes: [] as string[], error: "Word has travelled. They are not coming over." };
+  }
   const known = life.relations.find((person) => person.name === name || person.name === username || person.name === `@${username}`);
   if (known && known.score < 8 && !username) {
     return { life, notes: [] as string[], error: "They barely know you yet. Gist more outside first." };
@@ -439,9 +443,14 @@ export function hangWithGuest(life: Life, name: string, kind: "chat" | "tv" | "g
     next.needs.bladder = Math.max(0, next.needs.bladder - 8);
     bump(next, name, 6);
   } else bump(next, name, kind === "game" ? 8 : 6);
+  const remembered = recall(next, name);
+  const memory =
+    kind === "chat" ? "we gisted at the house" : kind === "tv" ? "we watched the box together" : kind === "game" ? "we played ludo and somebody cheated" : "we had a small drink";
+  fileMemory(next, name, memory);
+  nudgeCircle(next, "friends", 2);
   const line =
     kind === "chat"
-      ? `You gist with ${name} until the story gets loud.`
+      ? remembered ?? `You gist with ${name} until the story gets loud.`
       : kind === "tv"
         ? `You and ${name} watch whatever is on.`
         : kind === "game"
@@ -473,7 +482,9 @@ export function cookAtHome(life: Life, recipeId: string, shareWith?: string): { 
     bump(next, shareWith, recipe.shareBonus);
     const g = next.guests!.find((guest) => guest.name === shareWith)!;
     g.doing = "eat";
-    line = `You cooked ${recipe.label} with ${shareWith}. Plates clean.`;
+    line = next.skills.cooking >= 3 ? `${shareWith}: "Chale, you can cook o!"` : `You cooked ${recipe.label} with ${shareWith}. Plates clean.`;
+    fileMemory(next, shareWith, `you cooked ${recipe.label}`);
+    nudgeCircle(next, "friends", 2);
   }
   // Burn chance if cooking skill low
   if (next.skills.cooking < 2 && Math.random() < 0.12) {
@@ -542,6 +553,8 @@ export function guestHomeReact(life: Life): string | null {
   const hasAc = life.inventory.includes("ac");
   const hour = hourOf(life.minutes);
   if (life.needs.hygiene < 35) return `${name}: "You no dey clean? Hmm."`;
+  const remembered = recall(life, name);
+  if (remembered) return remembered;
   const worn = homeWearTalk(life, name);
   if (worn) return worn;
   if (visits > 1) return `${name}: "Same seat as last time. I remember."`;
