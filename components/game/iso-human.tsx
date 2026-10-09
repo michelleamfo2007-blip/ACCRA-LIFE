@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 export type BodyPose = "idle" | "walk" | "act" | "sit" | "dance" | "drink" | "watch" | "lean" | "dj";
 export type FaceExtra = "none" | "glasses" | "beard" | "earrings" | "chain" | "print";
 
@@ -31,67 +33,93 @@ export function IsoHuman({
   const shirtShade = mix(shirt, 0.22);
   const pantsShade = mix(pants, 0.2);
   const skinShade = mix(skin, 0.16);
+  const clip = useId().replace(/:/g, "");
+  const kente = hash(shirt + hair) % 2 === 0;
   return (
     <div className={`sim sim-tall sim-${pose} ${className}`} style={{ transform: face < 0 ? "scaleX(-1)" : undefined, ["--beat" as string]: `${beat}s` }} aria-hidden>
       <svg viewBox="18 4 64 164" className="h-full w-auto overflow-visible">
-        <ellipse cx="50" cy="160" rx="16" ry="4.5" fill="rgba(0,0,0,.22)" />
+        <defs>
+          <clipPath id={`${clip}-shirt`}>
+            <path d="M34 52 C40 46 60 46 66 52 L63 78 C68 84 66 98 62 104 L38 104 C34 98 32 84 37 78 Z" />
+          </clipPath>
+        </defs>
+        <ellipse cx="50" cy="158" rx="18" ry="5" fill="rgba(0,0,0,.28)" />
         <g className="sim-bob">
           {crown ? <path d="M30 18 L36 6 L44 16 L50 2 L56 16 L64 6 L70 18 Z" fill="#f5c542" stroke="#c9842a" strokeWidth="1.2" /> : null}
           <g className="arm arm-back">
-            <rect x="24" y="62" width="9" height="28" rx="4" fill={skinShade} />
+            <rect x="24" y="58" width="10" height="26" rx="5" fill={skinShade} />
             <g className="forearm">
-              <rect x="25" y="86" width="8" height="26" rx="4" fill={skinShade} />
+              <rect x="25" y="80" width="9" height="24" rx="4.5" fill={skinShade} />
+              <circle cx="29.5" cy="106" r="4.2" fill={skinShade} />
             </g>
           </g>
           <g className="leg leg-l">
-            <rect x="38" y="96" width="10" height="32" rx="4" fill={pants} />
+            <path d="M40 100 C38 112 38 124 40 132 L48 132 C50 124 50 112 48 100 Z" fill={pants} />
             <g className="shin">
-              <rect x="39" y="124" width="8" height="30" rx="3.5" fill={pants} />
-              <rect x="36" y="150" width="14" height="6" rx="2" fill="#14110f" />
+              <path d="M40 130 C39 140 39 148 41 154 L48 154 C50 148 50 140 48 130 Z" fill={pants} />
+              <path d="M36 152 H52 L54 158 H34 Z" fill="#14110f" />
             </g>
           </g>
           <g className="leg leg-r">
-            <rect x="52" y="96" width="10" height="32" rx="4" fill={pantsShade} />
+            <path d="M52 100 C50 112 50 124 52 132 L60 132 C62 124 62 112 60 100 Z" fill={pantsShade} />
             <g className="shin">
-              <rect x="53" y="124" width="8" height="30" rx="3.5" fill={pantsShade} />
-              <rect x="50" y="150" width="14" height="6" rx="2" fill="#14110f" />
+              <path d="M52 130 C51 140 51 148 53 154 L60 154 C62 148 62 140 60 130 Z" fill={pantsShade} />
+              <path d="M48 152 H64 L66 158 H46 Z" fill="#1c1814" />
             </g>
           </g>
-          <path className="torso" d="M32 58 H68 L64 100 H36 Z" fill={shirt} />
-          <path d="M54 58 H68 L64 100 H54 Z" fill={shirtShade} />
+          <path className="torso" d="M34 52 C40 46 60 46 66 52 L63 78 C68 84 66 98 62 104 L38 104 C34 98 32 84 37 78 Z" fill={shirt} />
+          <g clipPath={`url(#${clip}-shirt)`}>
+            {kente ? (
+              <g>
+                {["#FCD116", "#006B3F", "#CE1126"].map((band, index) => (
+                  <rect key={band} x="34" y={70 + index * 8} width="32" height="3.2" fill={band} opacity="0.9" />
+                ))}
+              </g>
+            ) : (
+              <g fill="#fff6e8" opacity="0.45">
+                {[0, 1, 2].map((row) =>
+                  [0, 1].map((col) => <circle key={`${row}-${col}`} cx={42 + col * 12} cy={66 + row * 12} r="2.4" />),
+                )}
+              </g>
+            )}
+          </g>
+          <path d="M54 52 C58 48 64 50 66 54 L64 78 C66 86 64 98 62 104 L54 104 Z" fill={shirtShade} opacity="0.45" />
           {extra === "print" ? (
             <g stroke="#FCD116" strokeWidth="2.2" fill="none">
-              <path d="M36 68 H64" />
-              <path d="M36 78 H62" />
-              <path d="M37 88 H60" />
+              <path d="M38 68 H62" />
+              <path d="M38 78 H60" />
+              <path d="M39 88 H58" />
             </g>
           ) : null}
-          {extra === "chain" ? <path d="M42 64 Q50 74 58 64" stroke="#e6c15a" strokeWidth="1.6" fill="none" /> : null}
+          {extra === "chain" ? <path d="M42 62 Q50 74 58 62" stroke="#e6c15a" strokeWidth="1.6" fill="none" /> : null}
           <g className="arm arm-front">
-            <rect x="66" y="62" width="9" height="28" rx="4" fill={skin} />
+            <rect x="64" y="58" width="10" height="26" rx="5" fill={skin} />
             <g className="forearm">
-              <rect x="67" y="86" width="8" height="26" rx="4" fill={skin} />
-              {pose === "drink" ? <rect x="70" y="96" width="5" height="8" rx="1.4" fill="#d7f4ff" stroke="#9ad" strokeWidth="0.6" /> : null}
+              <rect x="65" y="80" width="9" height="24" rx="4.5" fill={skin} />
+              <circle cx="69.5" cy="106" r="4.2" fill={skin} />
+              {pose === "drink" ? <rect x="72" y="92" width="5" height="8" rx="1.4" fill="#d7f4ff" stroke="#9ad" strokeWidth="0.6" /> : null}
             </g>
           </g>
           <g className="head">
             <Hair hair={hair} cloth={cloth} />
-            <rect x="46" y="50" width="8" height="10" rx="3" fill={skin} />
-            <circle cx="50" cy="40" r="14" fill={skin} />
-            <path d="M62 36 H68 L66 52 H60 Z" fill={skinShade} />
-            <ellipse className="eye" cx="44.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
-            <ellipse className="eye" cx="55.5" cy="39" rx="2.4" ry="2.8" fill="#1a140f" />
-            <ellipse cx="45.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
-            <ellipse cx="56.2" cy="38.2" rx="0.8" ry="1" fill="#fff8ee" />
-            <path d="M42.2 34.6 H47.6" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
-            <path d="M52.4 34.6 H57.8" stroke="#1a140f" strokeWidth="1.1" strokeLinecap="round" />
-            <path d="M45.5 46.2 Q50 50 54.5 46.2" stroke="#6a3030" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-            {extra === "beard" ? <path d="M42 46 Q50 56 58 46 Q54 52 50 52 Q46 52 42 46 Z" fill="#1c140f" opacity="0.85" /> : null}
+            <path d="M45 52 Q50 58 55 52 L56 62 Q50 66 44 62 Z" fill={skin} />
+            <ellipse cx="50" cy="38" rx="13.2" ry="15.2" fill={skin} />
+            <ellipse cx="36.2" cy="40" rx="2.4" ry="3.4" fill={skinShade} />
+            <ellipse cx="63.6" cy="40" rx="2.6" ry="3.6" fill={skinShade} />
+            <ellipse className="eye" cx="44.6" cy="37.6" rx="1.7" ry="2.05" fill="#1a140f" />
+            <ellipse className="eye" cx="55.4" cy="37.6" rx="1.7" ry="2.05" fill="#1a140f" />
+            <ellipse cx="45.1" cy="37" rx="0.55" ry="0.7" fill="#fff8ee" />
+            <ellipse cx="55.9" cy="37" rx="0.55" ry="0.7" fill="#fff8ee" />
+            <path d="M42.4 33.6 H47.2" stroke="#1a140f" strokeWidth="1.15" strokeLinecap="round" />
+            <path d="M52.8 33.6 H57.6" stroke="#1a140f" strokeWidth="1.15" strokeLinecap="round" />
+            <path d="M49.2 39.2 Q50.2 43.2 48.4 44.4" stroke={skinShade} strokeWidth="1.15" fill="none" strokeLinecap="round" />
+            {extra === "beard" ? <path d="M40 43 Q41 54 50 56.5 Q59 54 60 43 Q55 50 50 51 Q45 50 40 43 Z" fill="#1c140f" opacity="0.9" /> : null}
+            <path d="M46.2 47.2 Q50 49.6 53.8 47.2" stroke={extra === "beard" ? "#c4a090" : "#6a3030"} strokeWidth="1.25" fill="none" strokeLinecap="round" />
             {extra === "glasses" ? (
               <g fill="none" stroke="#1a140f" strokeWidth="1.1">
-                <circle cx="45" cy="39" r="4.2" />
-                <circle cx="56" cy="39" r="4.2" />
-                <path d="M49.2 39 H51.8" />
+                <circle cx="44.6" cy="37.6" r="3.6" />
+                <circle cx="55.4" cy="37.6" r="3.6" />
+                <path d="M48.2 37.6 H51.8" />
               </g>
             ) : null}
             {extra === "earrings" ? (
@@ -148,6 +176,12 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
     );
   }
   return <path d="M34 44 C34 24 66 24 66 46 C62 56 38 56 34 44 Z" fill="#1c140f" />;
+}
+
+function hash(text: string) {
+  let n = 0;
+  for (let i = 0; i < text.length; i += 1) n = (n * 33 + text.charCodeAt(i)) >>> 0;
+  return n;
 }
 
 function mix(hex: string, amount: number) {

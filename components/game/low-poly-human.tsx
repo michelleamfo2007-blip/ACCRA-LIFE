@@ -100,7 +100,7 @@ export function Figure({
   outfit: string;
   body: "woman" | "man";
   crown?: boolean;
-  pose: "idle" | "walk" | "act" | "sit" | "drive";
+  pose: "idle" | "walk" | "act" | "sit" | "drive" | "dance";
   turn: number;
 }) {
   const woman = body === "woman";
@@ -128,6 +128,7 @@ export function Figure({
     const sitting = pose === "sit" || pose === "drive";
     const driving = pose === "drive";
     const walking = pose === "walk";
+    const dancing = pose === "dance";
     const t = clock.elapsedTime + phase;
     const step = Math.sin(t * 6.4);
     const knee = Math.max(0, -Math.cos(t * 6.4));
@@ -146,17 +147,15 @@ export function Figure({
     }
     if (torso.current) {
       torso.current.scale.y += (breath - torso.current.scale.y) * ease;
-      aim(torso.current, sitting ? 0.16 : walking ? 0.1 : pose === "act" ? 0.08 : shift * 0.02, 0, walking ? -step * 0.03 : -shift * 0.03);
       torso.current.position.z += ((sitting ? 0.06 : 0) - torso.current.position.z) * ease;
+      aim(torso.current, sitting ? 0.16 : dancing ? 0.05 + Math.sin(t * 5.5) * 0.08 : walking ? 0.1 : pose === "act" ? 0.08 : shift * 0.02, dancing ? Math.sin(t * 2.2) * 0.2 : 0, walking ? -step * 0.03 : dancing ? Math.sin(t * 5.5) * 0.12 : -shift * 0.03);
     }
-    aim(thighL.current, sitting ? -1.28 : walking ? step * 0.72 : shift > 0 ? 0.12 : 0);
-    aim(thighR.current, sitting ? -1.28 : walking ? -step * 0.72 : shift < 0 ? 0.12 : 0);
-    aim(shinL.current, sitting ? 1.45 : walking ? Math.max(0, step) * 1.15 : 0.04);
-    aim(shinR.current, sitting ? 1.45 : walking ? Math.max(0, -step) * 1.15 : 0.04);
-    aim(armL.current, driving ? -1.15 : sitting ? -0.45 : walking ? -step * 0.48 : pose === "act" ? -0.7 : 0.08 + shift * 0.05, 0, driving ? 0.4 : 0.08);
-    aim(armR.current, driving ? -1.15 : sitting ? -0.35 : walking ? step * 0.48 : pose === "act" ? -0.25 : 0.05, 0, driving ? -0.4 : -0.08);
-    aim(foreL.current, driving ? -0.4 : walking ? 0.25 + knee * 0.35 : pose === "act" ? 0.8 : 0.18);
-    aim(foreR.current, driving ? -0.4 : walking ? 0.25 + (1 - knee) * 0.2 : 0.15);
+    aim(thighL.current, sitting ? -1.28 : dancing ? -0.35 + Math.sin(t * 5.5) * 0.4 : walking ? step * 0.72 : shift > 0 ? 0.12 : 0);
+    aim(thighR.current, sitting ? -1.28 : dancing ? -0.2 + Math.cos(t * 5.5) * 0.4 : walking ? -step * 0.72 : shift < 0 ? 0.12 : 0);
+    aim(shinL.current, sitting ? 1.45 : dancing ? 0.4 : walking ? Math.max(0, step) * 1.15 : 0.04);
+    aim(shinR.current, sitting ? 1.45 : dancing ? 0.25 : walking ? Math.max(0, -step) * 1.15 : 0.04);
+    aim(armL.current, driving ? -1.15 : dancing ? -1.15 + Math.sin(t * 6.2) * 0.55 : sitting ? -0.45 : walking ? -step * 0.48 : pose === "act" ? -0.7 : 0.08 + shift * 0.05, 0, driving ? 0.4 : dancing ? 0.25 : 0.08);
+    aim(armR.current, driving ? -1.15 : dancing ? -0.45 + Math.cos(t * 6.2) * 0.7 : sitting ? -0.35 : walking ? step * 0.48 : pose === "act" ? -0.25 : 0.05, 0, driving ? -0.4 : dancing ? -0.2 : -0.08);
     aim(head.current, walking ? -0.06 : Math.sin(t * 0.33) * 0.06, walking ? step * 0.04 : Math.sin(t * 0.27) * 0.14);
     if (hairSway.current) hairSway.current.rotation.z += ((walking ? step * 0.06 : Math.sin(t * 1.3) * 0.03) - hairSway.current.rotation.z) * ease;
     if (lids.current) {
@@ -191,27 +190,23 @@ export function Figure({
       </group>
       <group ref={torso}>
       {clothes.skirt ? (
-        <mesh position={[0, 0.86, 0]}>
-          <cylinderGeometry args={[0.2, 0.3, 0.36, 8]} />
-          <meshLambertMaterial color={clothes.bottom} flatShading />
+        <mesh position={[0, 0.84, 0]}>
+          <cylinderGeometry args={[0.15, 0.27, 0.42, 20]} />
+          <meshStandardMaterial color={clothes.bottom} roughness={0.62} />
         </mesh>
       ) : (
-        <mesh position={[0, 0.9, 0.01]}>
-          <boxGeometry args={[woman ? 0.28 : 0.32, 0.06, 0.15]} />
-          <meshLambertMaterial color={mix(clothes.bottom, 0.15)} flatShading />
+        <mesh position={[0, 0.9, 0.01]} scale={[1, 0.55, 0.85]}>
+          <sphereGeometry args={[woman ? 0.15 : 0.17, 18, 14]} />
+          <meshStandardMaterial color={mix(clothes.bottom, 0.15)} roughness={0.62} />
         </mesh>
       )}
-      <mesh position={[0, 1.08, 0]}>
-        <boxGeometry args={[woman ? 0.3 : 0.36, 0.16, 0.16]} />
-        <meshLambertMaterial color={clothes.top} map={map} flatShading />
+      <mesh position={[0, 1.16, 0.01]} scale={[woman ? 0.86 : 1.02, 0.78, 0.58]}>
+        <sphereGeometry args={[0.22, 22, 16]} />
+        <meshStandardMaterial color={clothes.top} map={map} roughness={0.58} />
       </mesh>
-      <mesh position={[0, 1.24, 0]}>
-        <boxGeometry args={[woman ? 0.32 : 0.4, 0.2, 0.18]} />
-        <meshLambertMaterial color={clothes.top} map={map} flatShading />
-      </mesh>
-      <mesh position={[0, 1.34, 0.02]}>
-        <boxGeometry args={[woman ? 0.16 : 0.18, 0.04, 0.04]} />
-        <meshLambertMaterial color={mix(clothes.top, 0.2)} flatShading />
+      <mesh position={[0, 1.32, 0.03]} scale={[woman ? 1 : 1.08, 0.45, 0.7]}>
+        <sphereGeometry args={[0.09, 16, 12]} />
+        <meshStandardMaterial color={mix(clothes.top, 0.12)} roughness={0.58} />
       </mesh>
       <group ref={armL} position={[-shoulder, 1.28, 0]}>
         <Limb color={clothes.top} length={0.24} radius={0.05} />
@@ -219,7 +214,7 @@ export function Figure({
           <Limb color={skin} length={0.22} radius={0.04} />
           <mesh position={[0, -0.24, 0.02]}>
             <boxGeometry args={[0.06, 0.04, 0.07]} />
-            <meshLambertMaterial color={skin} flatShading />
+            <meshStandardMaterial color={skin} roughness={0.48} />
           </mesh>
         </group>
       </group>
@@ -229,18 +224,18 @@ export function Figure({
           <Limb color={skin} length={0.22} radius={0.04} />
           <mesh position={[0, -0.24, 0.02]}>
             <boxGeometry args={[0.06, 0.04, 0.07]} />
-            <meshLambertMaterial color={skin} flatShading />
+            <meshStandardMaterial color={skin} roughness={0.48} />
           </mesh>
         </group>
       </group>
       <mesh position={[0, 1.42, 0]}>
-        <cylinderGeometry args={[0.05, 0.06, 0.08, 8]} />
-        <meshLambertMaterial color={skin} flatShading />
+        <cylinderGeometry args={[0.045, 0.055, 0.08, 12]} />
+        <meshStandardMaterial color={skin} roughness={0.48} />
       </mesh>
-      <group ref={head} position={[0, 1.58, 0]}>
-        <mesh>
-          <sphereGeometry args={[0.155, 12, 10]} />
-          <meshLambertMaterial color={skin} flatShading />
+      <group ref={head} position={[0, 1.6, 0]}>
+        <mesh scale={[0.96, 1.05, 0.98]}>
+          <sphereGeometry args={[0.158, 28, 22]} />
+          <meshStandardMaterial color={skin} roughness={0.46} />
         </mesh>
         <Face skin={skin} lids={lids} mouth={mouth} />
         <group ref={hairSway}>
@@ -256,17 +251,17 @@ export function Figure({
 function Limb({ color, length, radius }: { color: string; length: number; radius: number }) {
   return (
     <mesh position={[0, -length / 2, 0]}>
-      <cylinderGeometry args={[radius * 0.86, radius, length, 6]} />
-      <meshLambertMaterial color={color} flatShading />
+      <cylinderGeometry args={[radius * 0.92, radius, length, 14]} />
+      <meshStandardMaterial color={color} roughness={0.55} />
     </mesh>
   );
 }
 
 function Shoe({ woman }: { woman: boolean }) {
   return (
-    <mesh position={[0, -0.34, 0.04]}>
-      <boxGeometry args={[0.09, 0.04, 0.16]} />
-      <meshLambertMaterial color={woman ? "#7a3030" : "#1a1816"} flatShading />
+    <mesh position={[0, -0.34, 0.045]} scale={[1, 0.42, 1.55]}>
+      <sphereGeometry args={[0.055, 14, 10]} />
+      <meshStandardMaterial color={woman ? "#6e2c2c" : "#1a1816"} roughness={0.5} />
     </mesh>
   );
 }
@@ -277,46 +272,46 @@ function Face({ skin, lids, mouth }: { skin: string; lids: { current: Group | nu
     <group position={[0, 0.01, 0.12]}>
       <mesh position={[-0.045, 0.02, 0]}>
         <sphereGeometry args={[0.016, 8, 6]} />
-        <meshLambertMaterial color="#f4efe6" />
+        <meshStandardMaterial color="#f4efe6" />
       </mesh>
       <mesh position={[0.045, 0.02, 0]}>
         <sphereGeometry args={[0.016, 8, 6]} />
-        <meshLambertMaterial color="#f4efe6" />
+        <meshStandardMaterial color="#f4efe6" />
       </mesh>
       <mesh position={[-0.045, 0.02, 0.008]}>
         <sphereGeometry args={[0.008, 6, 5]} />
-        <meshLambertMaterial color="#1a140f" />
+        <meshStandardMaterial color="#1a140f" />
       </mesh>
       <mesh position={[0.045, 0.02, 0.008]}>
         <sphereGeometry args={[0.008, 6, 5]} />
-        <meshLambertMaterial color="#1a140f" />
+        <meshStandardMaterial color="#1a140f" />
       </mesh>
       <group ref={lids} position={[0, 0.028, 0.012]}>
         <mesh position={[-0.045, 0, 0]}>
           <boxGeometry args={[0.03, 0.012, 0.008]} />
-          <meshLambertMaterial color={skin} />
+          <meshStandardMaterial color={skin} />
         </mesh>
         <mesh position={[0.045, 0, 0]}>
           <boxGeometry args={[0.03, 0.012, 0.008]} />
-          <meshLambertMaterial color={skin} />
+          <meshStandardMaterial color={skin} />
         </mesh>
       </group>
       <mesh position={[-0.045, 0.042, 0.004]}>
         <boxGeometry args={[0.03, 0.006, 0.008]} />
-        <meshLambertMaterial color="#1a140f" />
+        <meshStandardMaterial color="#1a140f" />
       </mesh>
       <mesh position={[0.045, 0.042, 0.004]}>
         <boxGeometry args={[0.03, 0.006, 0.008]} />
-        <meshLambertMaterial color="#1a140f" />
+        <meshStandardMaterial color="#1a140f" />
       </mesh>
       <mesh position={[0, -0.01, 0.012]} rotation={[0.5, 0, 0]}>
         <boxGeometry args={[0.02, 0.03, 0.016]} />
-        <meshLambertMaterial color={mix(skin, 0.08)} flatShading />
+        <meshStandardMaterial color={mix(skin, 0.08)} roughness={0.62} />
       </mesh>
       <group ref={mouth} position={[0, -0.055, 0.01]}>
         <mesh>
           <boxGeometry args={[0.046, 0.012, 0.012]} />
-          <meshLambertMaterial color={lip} flatShading />
+          <meshStandardMaterial color={lip} roughness={0.62} />
         </mesh>
       </group>
     </group>
@@ -328,8 +323,8 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
   if (hair === "Afro") {
     return (
       <mesh>
-        <sphereGeometry args={[0.175, 8, 6]} />
-        <meshLambertMaterial color={dark} flatShading />
+        <sphereGeometry args={[0.19, 18, 14]} />
+        <meshStandardMaterial color={dark} roughness={0.62} />
       </mesh>
     );
   }
@@ -337,8 +332,8 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
   if (hair === "Low cut" || hair === "Fade") {
     return (
       <mesh position={[0, 0.04, -0.01]} scale={[1.02, hair === "Fade" ? 0.28 : 0.42, 1.05]}>
-        <sphereGeometry args={[0.14, 8, 6]} />
-        <meshLambertMaterial color={dark} flatShading />
+        <sphereGeometry args={[0.14, 16, 12]} />
+        <meshStandardMaterial color={dark} roughness={0.62} />
       </mesh>
     );
   }
@@ -348,7 +343,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
         <Cap />
         <mesh position={[0.02, -0.16, -0.04]} rotation={[0.35, 0, 0.1]}>
           <cylinderGeometry args={[0.09, 0.05, 0.34, 6]} />
-          <meshLambertMaterial color={dark} flatShading />
+          <meshStandardMaterial color={dark} roughness={0.62} />
         </mesh>
       </group>
     );
@@ -359,7 +354,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
         <Cap />
         <mesh position={[0, 0.15, -0.01]}>
           <sphereGeometry args={[0.055, 7, 6]} />
-          <meshLambertMaterial color={dark} flatShading />
+          <meshStandardMaterial color={dark} roughness={0.62} />
         </mesh>
       </group>
     );
@@ -367,8 +362,8 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
   if (hair === "Headwrap") {
     return (
       <mesh position={[0, 0.05, 0]} scale={[1.16, 0.72, 1.16]}>
-        <sphereGeometry args={[0.15, 8, 6]} />
-        <meshLambertMaterial color={cloth} flatShading />
+        <sphereGeometry args={[0.16, 18, 14]} />
+        <meshStandardMaterial color={cloth} roughness={0.62} />
       </mesh>
     );
   }
@@ -378,7 +373,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
         <Cap />
         <mesh position={[0, -0.02, -0.12]} rotation={[0.5, 0, 0]}>
           <cylinderGeometry args={[0.02, 0.04, 0.32, 5]} />
-          <meshLambertMaterial color={dark} flatShading />
+          <meshStandardMaterial color={dark} roughness={0.62} />
         </mesh>
       </group>
     );
@@ -389,7 +384,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
         <Cap />
         <mesh position={[0, -0.14, -0.01]}>
           <cylinderGeometry args={[0.12, 0.07, 0.32, 7]} />
-          <meshLambertMaterial color={dark} flatShading />
+          <meshStandardMaterial color={dark} roughness={0.62} />
         </mesh>
       </group>
     );
@@ -401,7 +396,7 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
       {[-0.11, 0.11].map((x) => (
         <mesh key={x} position={[x, -0.08, 0.02]}>
           <cylinderGeometry args={[locs ? 0.016 : 0.012, 0.01, 0.18, 4]} />
-          <meshLambertMaterial color={dark} flatShading />
+          <meshStandardMaterial color={dark} roughness={0.62} />
         </mesh>
       ))}
     </group>
@@ -411,8 +406,8 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
 function Cap() {
   return (
     <mesh position={[0, 0.035, -0.01]} scale={[1.06, 0.58, 1.08]}>
-      <sphereGeometry args={[0.14, 8, 6]} />
-      <meshLambertMaterial color="#1a120e" flatShading />
+      <sphereGeometry args={[0.14, 16, 12]} />
+      <meshStandardMaterial color="#1a120e" roughness={0.62} />
     </mesh>
   );
 }
@@ -423,7 +418,7 @@ function Crown() {
       {[-0.06, 0, 0.06].map((x) => (
         <mesh key={x} position={[x, 0.02, 0]}>
           <coneGeometry args={[0.028, 0.07, 4]} />
-          <meshLambertMaterial color="#f5c542" flatShading />
+          <meshStandardMaterial color="#f5c542" roughness={0.62} />
         </mesh>
       ))}
     </group>

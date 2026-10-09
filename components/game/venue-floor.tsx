@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { ClubRoom } from "@/components/game/club-room";
 import { ClubSpray } from "@/components/game/club-spray";
 import { IsoHuman, type BodyPose, type FaceExtra } from "@/components/game/iso-human";
 import type { SprayId } from "@/lib/game/club-spray";
@@ -505,7 +506,13 @@ export function VenueFloor({
           className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer origin-center transition-transform duration-200"
           style={{ transform: `scale(${zoom})` }}
         >
-          <VenueScene spot={spot} night={night} kind={kind} party={party} doorOpen={entryOpen} />
+          <VenueScene
+            spot={spot}
+            night={night}
+            kind={kind}
+            party={party}
+            doorOpen={entryOpen}
+          />
           {seats.map((seat) => {
             const guest = tableGuests.find((item) => item.seatId === seat.id) ?? (seatedAt === seat.id ? tableGuests[0] : null);
             return (
@@ -1107,6 +1114,7 @@ function PersonTag({
   online = false,
   bubble = null,
   quiet = false,
+  hollow = false,
   mark = false,
   onClick,
 }: {
@@ -1128,6 +1136,7 @@ function PersonTag({
   online?: boolean;
   bubble?: string | null;
   quiet?: boolean;
+  hollow?: boolean;
   mark?: boolean;
   onClick?: () => void;
 }) {
@@ -1143,7 +1152,11 @@ function PersonTag({
       )}
       <span className="relative">
         {mark ? <span className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full border-2 border-[#FCD116] shadow-[0_0_10px_rgba(252,209,22,.8)]" aria-hidden /> : null}
-        <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "dance" : pose} extra={extra} beat={beat} face={face} className={`${size} w-fit ${dance || pose === "dance" ? "venue-dance" : ""}`} />
+        {hollow ? (
+          <span className={`${size} w-10`} />
+        ) : (
+          <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "dance" : pose} extra={extra} beat={beat} face={face} className={`${size} w-fit ${dance || pose === "dance" ? "venue-dance" : ""}`} />
+        )}
         {online ? <span className="absolute bottom-2 right-0 h-3 w-3 rounded-full border-2 border-white bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,.85)]" aria-hidden /> : null}
       </span>
     </>
@@ -1633,6 +1646,8 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
   const pid = `v-${spot.id}`;
   return (
     <div className="absolute inset-0">
+      {kind === "club" ? <ClubRoom name={spot.name} /> : null}
+      {kind === "club" ? null : (
       <svg viewBox="0 0 760 480" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
         <defs>
           <pattern id={`${pid}-grime`} width="28" height="28" patternUnits="userSpaceOnUse">
@@ -1652,7 +1667,6 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
             <stop offset="100%" stopColor="#0a0806" stopOpacity={night ? 0.35 : 0.16} />
           </linearGradient>
         </defs>
-        {kind === "club" ? <ClubShadows /> : null}
         <Blocks
           items={[
             { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },
@@ -1661,11 +1675,10 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
         />
         <FloorWear kind={kind} night={night} />
         <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grime)`} pointerEvents="none" />
-        <SpotLights pools={lights} warm={!night || kind === "club"} />
+        <SpotLights pools={lights} warm={!night} />
         <PracticalLights kind={kind} night={night} party={party} />
-        {kind === "club" ? null : <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-sun)`} pointerEvents="none" />}
-        {party || kind === "club" ? <ClubGlow party={Boolean(party)} /> : null}
-        {kind === "club" ? <ClubBeams /> : null}
+        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-sun)`} pointerEvents="none" />
+        {party ? <ClubGlow party /> : null}
         {kind === "shore" ? <ShoreDress /> : null}
         {kind === "garden" || spot.id === "golf" ? <GardenDress golf={spot.id === "golf"} /> : null}
         {kind === "hotel" ? <Pool /> : null}
@@ -1682,21 +1695,13 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
             <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
             <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill="#1f4d3a" ink="white" />
           </>
-        ) : kind === "club" ? (
-          <>
-            <FaceSign axis="x" x={-72} y={40} z={-53} length={96} tall={12} text={spot.name.toUpperCase().slice(0, 16)} fill="#1a0610" ink="#FCD116" />
-            <FaceSign axis="z" x={-109} y={34} z={36} length={22} tall={9} text="BAR" fill="#12080c" ink="#ff4d9a" />
-            <FaceSign axis="z" x={-109} y={22} z={18} length={18} tall={7} text="MENU" fill="#1a1020" ink="#f4efe6" />
-            <FaceSign axis="x" x={62} y={26} z={4} length={26} tall={8} text="VIP" fill="#1a1020" ink="#FCD116" />
-            <FaceSign axis="z" x={-109} y={28} z={86} length={16} tall={8} text="WC" fill="#2a2420" ink="#f4efe6" />
-            <FaceSign axis="x" x={78} y={16} z={90} length={22} tall={8} text="EXIT" fill="#3a1218" ink="#f4efe6" />
-          </>
         ) : (
           <StandingBoard x={-72} z={6} text={title} />
         )}
         <ellipse cx="380" cy="420" rx="340" ry="80" fill="#000" opacity={night ? 0.28 : 0.12} pointerEvents="none" />
-        {kind === "club" ? <rect x="0" y="0" width="760" height="480" fill="#140818" opacity="0.28" pointerEvents="none" /> : <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grade)`} pointerEvents="none" />}
+        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grade)`} pointerEvents="none" />
       </svg>
+      )}
       <div className={`venue-haze pointer-events-none absolute inset-0 ${night ? "venue-haze-night" : "venue-haze-day"} ${kind === "club" ? "venue-haze-club" : ""}`} aria-hidden />
       {kind === "club" ? <ClubConfetti /> : null}
       <div className={`venue-dust pointer-events-none absolute inset-0 ${kind === "club" ? "venue-dust-club" : ""}`} aria-hidden>

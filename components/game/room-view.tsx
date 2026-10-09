@@ -8,7 +8,7 @@ import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
 import { activeGuests, doorGuests } from "@/lib/game/home-life";
 import { bayCount, carDust, carOf, footHere, garageBox, motorsOf, setPrimary, washCar, yardTalk } from "@/lib/game/garage";
 import { BODY, homeBounds, homeSolids } from "@/lib/game/home-solids";
-import { indexSolids, route, slide, type SolidIndex } from "@/lib/game/nav";
+import { blocked, indexSolids, nearestFree, route, slide, type SolidIndex } from "@/lib/game/nav";
 import { askPrice, condOf, goodsOf, materialOf, wearLine } from "@/lib/game/wear";
 import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
 
@@ -31,7 +31,7 @@ function spotsFor(life: Life) {
     cooler: { x: fridge.x - 0.85, z: fridge.z, action: "cooler" },
     stove: { x: stove.x - 0.9, z: stove.z - 0.45, action: "cook" },
     toilet: { x: toilet.x + 0.8, z: toilet.z - 0.6, action: "toilet" },
-    shower: { x: shower.x + 0.55, z: shower.z - 0.05, action: "shower" },
+    shower: { x: shower.x, z: shower.z, action: "shower", skip: ["fix-shower"] },
     roamA: { x: -0.2, z: 1.2, action: null },
     roamB: { x: 0.8, z: 0.2, action: null },
     roamC: { x: -1.1, z: 1.6, action: null },
@@ -215,7 +215,10 @@ export function RoomView({
   }
 
   function sitOnChair() {
-    if (seated.current && pose === "sit") return;
+    if (seated.current && pose === "sit") {
+      walkTo({ x: spots.chair.x, z: spots.chair.z + 0.95 }, null);
+      return;
+    }
     const card = fixtureCard("chair", life);
     const verb =
       card.verbs.find((item) => item.id === "home-lounge") ??
@@ -229,7 +232,8 @@ export function RoomView({
     if (fixture) {
       const spot = spots[fixture];
       setFixture(null);
-      runAt(spot, verb, fixture === "bed", fixture === "chair" ? ["fix-sofa"] : []);
+      const occupy = fixture === "chair" ? ["fix-sofa"] : fixture === "shower" ? ["fix-shower"] : fixture === "toilet" ? ["fix-toilet"] : [];
+      runAt(spot, verb, fixture === "bed", occupy);
       return;
     }
     const piece = (life.furniture ?? []).find((item) => item.id === picked);
@@ -253,7 +257,15 @@ export function RoomView({
     const here = lifeRef.current;
     const bounds = homeBounds(here);
     const index: SolidIndex = indexSolids(homeSolids(here, { doorOpen: doorRef.current, garageShut: shutRef.current, skip }), 0.36);
-    const start = { ...posRef.current };
+    let start = { ...posRef.current };
+    if (blocked(start.x, start.z, index, BODY)) {
+      const free = nearestFree(start.x, start.z, index, BODY, bounds);
+      if (free) {
+        start = free;
+        posRef.current = free;
+        setPos(free);
+      }
+    }
     let path = route(start, target, index, BODY, bounds);
     if (!path.length) {
       const nudged = slide(start, target, index, BODY, bounds);
@@ -342,7 +354,7 @@ export function RoomView({
   useEffect(() => {
     if (!errand) return;
     const spot = spots[errand.spot as keyof ReturnType<typeof spotsFor>];
-    if (spot) walkTo(spot, spot.action);
+    if (spot) walkTo(spot, spot.action, undefined, "skip" in spot ? spot.skip : []);
   }, [errand?.n]);
 
   useEffect(() => {

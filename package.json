@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.30.0",
+    "@babylonjs/loaders": "^9.30.0",
     "@react-three/fiber": "^9.8.1",
     "@supabase/supabase-js": "^2.117.2",
     "leaflet": "^1.9.4",

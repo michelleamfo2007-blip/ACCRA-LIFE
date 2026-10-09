@@ -85,7 +85,7 @@ export function Apartment({
       <color attach="background" args={[dark ? "#1a140f" : night ? "#1b2744" : look.sky]} />
       <hemisphereLight args={[night || dark ? "#ffe4c2" : "#fff6ea", "#e7d7b8", dark ? 0.16 : 0.38]} />
       <ambientLight color={night || dark ? "#ffe7c8" : "#fff8ee"} intensity={dark ? 0.2 : night ? 0.46 : 0.62} />
-      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.1 : night ? 0.26 : 0.42} />
+      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.22 : night ? 0.48 : 0.72} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
@@ -175,7 +175,17 @@ export function Apartment({
           <Box color={bedColor} position={[0, 0.6, 0.34]} size={[life.inventory.includes("king") ? 2.05 : 1.52, 0.1, 1.3]} />
         </group>
       ) : (
-        <group position={[pos.x + (recoil?.x ?? 0), 0, pos.z + (recoil?.z ?? 0)]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+        <group
+          position={[pos.x + (recoil?.x ?? 0), 0, pos.z + (recoil?.z ?? 0)]}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (pose === "sit" && onWalk) {
+              onWalk(pos.x, pos.z + 0.95);
+              return;
+            }
+            onAsk();
+          }}
+        >
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
             <circleGeometry args={[0.32, 16]} />
             <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />

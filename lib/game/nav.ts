@@ -114,7 +114,7 @@ export function slide(from: Pt, to: Pt, index: SolidIndex, radius: number, bound
   return { x: from.x, z: from.z, bumped: true };
 }
 
-function nearestFree(x: number, z: number, index: SolidIndex, radius: number, bounds: Bounds) {
+export function nearestFree(x: number, z: number, index: SolidIndex, radius: number, bounds: Bounds) {
   if (inside(x, z, bounds) && !blocked(x, z, index, radius)) return { x, z };
   const step = index.cell;
   let best: Pt | null = null;
