@@ -40,7 +40,7 @@ export function modelFor(item: ShopItem): { file: string; tall?: number; span?: 
   return null;
 }
 
-export function KitMesh({ file, tall, span }: { file: string; tall?: number; span?: number }) {
+export function KitMesh({ file, tall, span, lift = 0, quiet = false, silent = false }: { file: string; tall?: number; span?: number; lift?: number; quiet?: boolean; silent?: boolean }) {
   const gltf = useLoader(GLTFLoader, `${ROOT}${file}`);
   const object = useMemo(() => {
     const root = gltf.scene.clone(true);
@@ -55,24 +55,28 @@ export function KitMesh({ file, tall, span }: { file: string; tall?: number; spa
     root.position.x -= center.x;
     root.position.z -= center.z;
     root.position.y -= grounded.min.y;
+    root.position.y += lift;
+    if (silent) root.traverse((child) => { child.raycast = () => undefined; });
     return root;
-  }, [gltf, tall, span]);
+  }, [gltf, tall, span, lift, silent]);
   const shadow = span ?? tall ?? 0.6;
   return (
     <group>
       <primitive object={object} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
-        <circleGeometry args={[shadow * 0.42, 20]} />
-        <meshBasicMaterial color="#1a1814" transparent opacity={0.16} depthWrite={false} />
-      </mesh>
+      {quiet ? null : (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
+          <circleGeometry args={[shadow * 0.42, 20]} />
+          <meshBasicMaterial color="#1a1814" transparent opacity={0.16} depthWrite={false} />
+        </mesh>
+      )}
     </group>
   );
 }
 
-export function PlacedModel({ file, tall, span }: { file: string; tall?: number; span?: number }) {
+export function PlacedModel({ file, tall, span, lift = 0, quiet = false, silent = false }: { file: string; tall?: number; span?: number; lift?: number; quiet?: boolean; silent?: boolean }) {
   return (
     <Suspense fallback={null}>
-      <KitMesh file={file} tall={tall} span={span} />
+      <KitMesh file={file} tall={tall} span={span} lift={lift} quiet={quiet} silent={silent} />
     </Suspense>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ExtrudeGeometry, Shape, SphereGeometry, type Group, type PerspectiveCamera } from "three";
+import { ExtrudeGeometry, Shape, SphereGeometry, type Group, type Mesh, type MeshBasicMaterial, type PerspectiveCamera } from "three";
 import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
 import { HouseGarage } from "@/components/game/house-garage";
 import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
@@ -75,17 +75,17 @@ export function Apartment({
   const bedSpot = built.find((piece) => piece.id === "fix-bed") ?? fixtureAt(life, "fix-bed");
   return (
     <Canvas
-      camera={{ position: [18, 24, 20], fov: 38 }}
+      shadows="soft"
+      camera={{ position: [14, 11, 16], fov: 32 }}
       dpr={[1, 1.5]}
       gl={{ antialias: true }}
       resize={{ scroll: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
     >
       <CameraRig frozen={placing} follow={placing && focus ? focus : pos} lift={placing ? 0.85 : 0} />
-      <color attach="background" args={[dark ? "#1a140f" : night ? "#1b2744" : look.sky]} />
-      <hemisphereLight args={[night || dark ? "#ffe4c2" : "#fff6ea", "#e7d7b8", dark ? 0.16 : 0.38]} />
-      <ambientLight color={night || dark ? "#ffe7c8" : "#fff8ee"} intensity={dark ? 0.2 : night ? 0.46 : 0.62} />
-      <directionalLight position={[6, 16, 8]} color={night || dark ? "#ffd4a6" : "#fff6e8"} intensity={dark ? 0.22 : night ? 0.48 : 0.72} />
+      <RoomShadows />
+      <color attach="background" args={[dark ? "#100e0c" : night ? "#12182a" : look.sky]} />
+      <HouseLight night={night} dark={dark} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
@@ -325,10 +325,56 @@ function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x:
     const lookY = 0;
     const lookZ = soft.current.z + pan.current.z + (phone ? liftRef.current : liftRef.current * 0.45) - 3.1;
     const lens = camera as PerspectiveCamera;
-    lens.position.set(lookX + distance * (phone ? 0.36 : 0.42), lookY + distance * (phone ? 0.88 : 0.72), lookZ + distance * (phone ? 0.42 : 0.5));
+    lens.position.set(lookX + distance * (phone ? 0.46 : 0.52), lookY + distance * (phone ? 0.68 : 0.54), lookZ + distance * (phone ? 0.5 : 0.58));
     lens.fov = phone ? 38 : 30;
-    lens.lookAt(lookX, lookY + (phone ? 0.35 : 0), lookZ);
+    lens.lookAt(lookX, lookY + (phone ? 0.5 : 0.42), lookZ);
     lens.updateProjectionMatrix();
+  });
+  return null;
+}
+
+function HouseLight({ night, dark }: { night: boolean; dark: boolean }) {
+  const day = !night && !dark;
+  return (
+    <>
+      <hemisphereLight args={[day ? "#fff6ea" : dark ? "#1a2233" : "#243044", day ? "#e4d2b4" : "#14110e", day ? 0.46 : dark ? 0.05 : 0.1]} />
+      <ambientLight color={day ? "#fff8ee" : dark ? "#1a1612" : "#241c16"} intensity={day ? 0.42 : dark ? 0.04 : 0.08} />
+      <directionalLight
+        castShadow
+        position={day ? [-1.6, 10.5, -8.2] : [2.2, 8, -3.5]}
+        color={day ? "#fff3dc" : "#9aadc4"}
+        intensity={day ? 1.15 : dark ? 0.05 : 0.18}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-near={1}
+        shadow-camera-far={32}
+        shadow-camera-left={-12}
+        shadow-camera-right={12}
+        shadow-camera-top={12}
+        shadow-camera-bottom={-12}
+        shadow-bias={-0.00045}
+        shadow-normalBias={0.04}
+        shadow-radius={3}
+      />
+      {night && !dark ? <pointLight position={[4.55, 1.7, 2.3]} color="#d7e6ff" intensity={3.4} distance={5.2} decay={2} /> : null}
+    </>
+  );
+}
+
+function RoomShadows() {
+  const scene = useThree((state) => state.scene);
+  const tick = useRef(0);
+  useFrame(() => {
+    tick.current += 1;
+    if (tick.current % 12 !== 1) return;
+    scene.traverse((obj) => {
+      const mesh = obj as Mesh;
+      if (!mesh.isMesh || mesh.userData.skipShadow) return;
+      const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (list.every((item) => item && (item as MeshBasicMaterial).isMeshBasicMaterial)) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    });
   });
   return null;
 }
@@ -336,6 +382,7 @@ function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x:
 function WalkPad({ onWalk, span = 0 }: { onWalk: (x: number, z: number) => void; span?: number }) {
   return (
     <mesh
+      userData={{ skipShadow: true }}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, 0.02, 0]}
       onClick={(event) => {
@@ -356,6 +403,7 @@ function clamp(value: number, min: number, max: number) {
 function PlacePad({ onDrag, span = 0 }: { onDrag: (x: number, z: number) => void; span?: number }) {
   return (
     <mesh
+      userData={{ skipShadow: true }}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, 0.025, 0]}
       onClick={(event) => {
@@ -480,9 +528,9 @@ function Floor({ grade, floorId, span = 0 }: { grade: HomeGrade; floorId?: strin
   );
   const room = roomReach(span);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+    <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
       <planeGeometry args={[room.halfW * 2, room.halfD * 2]} />
-      <meshStandardMaterial map={map} color={map ? "#ffffff" : tileA} roughness={0.58} metalness={0.06} />
+      <meshStandardMaterial map={map} color={map ? "#ffffff" : tileA} roughness={woodFloor ? 0.72 : 0.42} metalness={woodFloor ? 0.02 : 0.08} />
     </mesh>
   );
 }
@@ -512,12 +560,6 @@ function Walls({ grade, span = 0, gap }: { grade: HomeGrade; span?: number; gap?
       <PlasterBox color={look.side} position={[halfW, y, 0]} size={[0.18, h, halfD * 2 + 0.16]} />
       <PlasterBox color={look.side} position={[-halfW, y, backCenter]} size={[0.18, h, backLen]} />
       <PlasterBox color={look.side} position={[-halfW, y, frontCenter]} size={[0.18, h, frontLen]} />
-      <Box color={look.wall} position={[0, 0.07, -halfD + 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
-      <Box color={look.wall} position={[0, 0.07, halfD - 0.12]} size={[halfW * 2, 0.12, 0.05]} flat={false} />
-      <Box color={look.side} position={[halfW - 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
-      <Box color={look.side} position={[-halfW + 0.12, 0.07, 0]} size={[0.05, 0.12, halfD * 2]} flat={false} />
-      {grade === "high" ? <Rug /> : null}
-      {grade === "hall" || grade === "mid" ? <Mat /> : null}
       {grade === "low" || grade === "mid" ? <WindowBars rusty={grade === "low"} /> : null}
     </group>
   );
@@ -664,30 +706,6 @@ function WindowBars({ rusty }: { rusty: boolean }) {
 
 function Cooler() {
   return <Box color="#d9dee6" position={[5.7, 1.35, -1.4]} size={[0.16, 0.28, 0.7]} />;
-}
-
-function Mat() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-1.35, 0.02, 0.2]}>
-      <planeGeometry args={[2.2, 1.35]} />
-      <meshStandardMaterial color="#2f6f8f" roughness={0.84} />
-    </mesh>
-  );
-}
-
-function Rug() {
-  return (
-    <group position={[-1.35, 0.02, 0.2]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[2.7, 1.75]} />
-        <meshStandardMaterial color="#8b1e3f" roughness={0.86} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]}>
-        <planeGeometry args={[2.25, 1.3]} />
-        <meshStandardMaterial color="#e7c56a" roughness={0.8} />
-      </mesh>
-    </group>
-  );
 }
 
 function roundedRect(width: number, depth: number, radius: number) {
