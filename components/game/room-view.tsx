@@ -45,6 +45,22 @@ function sitVerb(verb: Verb) {
   return /sit|rest|doze|sofa|chair|street|arm-|throne|watch|gist|scroll|chill|tea|papers/i.test(`${verb.id} ${verb.label}`);
 }
 
+function isSleep(verb: Verb) {
+  return Boolean(verb.sleep) || verb.id === "sleep";
+}
+
+/** One in-game minute is one real second, and a rest is never shorter than a minute. */
+function sleepMs(verb: Verb) {
+  return Math.max(60, verb.minutes) * 1000;
+}
+
+function formatLeft(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
 export function RoomView({
   life,
   onAct,
@@ -119,9 +135,12 @@ export function RoomView({
   const [doorOpen, setDoorOpen] = useState(false);
   const [garageShut, setGarageShut] = useState(false);
   const [recoil, setRecoil] = useState<{ x: number; z: number } | null>(null);
+  const [asleepFor, setAsleepFor] = useState<number | null>(null);
   const doorRef = useRef(false);
   const shutRef = useRef(false);
   const lifeRef = useRef(life);
+  const sleepTick = useRef(0);
+  const sleepEnded = useRef(false);
   lifeRef.current = life;
   doorRef.current = doorOpen;
   shutRef.current = garageShut;
@@ -142,6 +161,34 @@ export function RoomView({
     onArrangeSeen?.();
   }, [startArrange, onArrangeSeen]);
 
+  useEffect(() => () => window.clearInterval(sleepTick.current), []);
+
+  function finishSleep(verb: Verb | null) {
+    if (sleepEnded.current) return;
+    sleepEnded.current = true;
+    window.clearInterval(sleepTick.current);
+    setAsleepFor(null);
+    setPose("idle");
+    busy.current = false;
+    if (verb) onRunRef.current?.(verb);
+  }
+
+  function lieDown(verb: Verb, inBed: boolean) {
+    window.clearInterval(sleepTick.current);
+    sleepEnded.current = false;
+    const ends = Date.now() + sleepMs(verb);
+    setPose(inBed ? "sleep" : "sit");
+    setAsleepFor(ends - Date.now());
+    sleepTick.current = window.setInterval(() => {
+      const left = ends - Date.now();
+      if (left <= 0) {
+        finishSleep(verb);
+        return;
+      }
+      setAsleepFor(left);
+    }, 1000);
+  }
+
   function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean, skip: string[] = []) {
     walkTo(target, null, () => {
       const sitting = !inBed && sitVerb(verb);
@@ -154,15 +201,16 @@ export function RoomView({
         return;
       }
       seated.current = false;
-      setPose(inBed && (verb.sleep || verb.id === "sleep") ? "sleep" : "act");
+      if (isSleep(verb)) {
+        lieDown(verb, inBed);
+        return;
+      }
+      setPose("act");
       onRunRef.current?.(verb);
-      window.setTimeout(
-        () => {
-          setPose("idle");
-          busy.current = false;
-        },
-        inBed && (verb.sleep || verb.id === "sleep") ? 2800 : 1500,
-      );
+      window.setTimeout(() => {
+        setPose("idle");
+        busy.current = false;
+      }, 1500);
     }, inBed ? ["fix-bed"] : skip);
   }
 
@@ -408,12 +456,15 @@ export function RoomView({
         }}
         onDrag={(x, z) => setDraft((current) => (current ? { ...current, x: clampRoom(x, box.placeMinX, box.placeMaxX), z: clampRoom(z, box.placeMinZ, box.placeMaxZ) } : current))}
       />
-      {pose === "sleep" ? (
-        <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#3b6cff] shadow-lg">
-          💤 Sleeping…
+      {asleepFor != null ? (
+        <div className="absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#3b6cff] shadow-lg">
+          <span>💤 Sleeping · {formatLeft(asleepFor)}</span>
+          <button type="button" onClick={() => finishSleep(null)} className="rounded-full bg-[#f4f7fb] px-3 py-1 text-xs font-bold text-[#121212]">
+            Wake
+          </button>
         </div>
       ) : null}
-      {pose === "sit" ? (
+      {pose === "sit" && asleepFor == null ? (
         <div className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4.5rem))] z-30 -translate-x-1/2 rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-[#121212] shadow-lg">
           🪑 Sitting · tap floor to get up
         </div>
