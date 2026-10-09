@@ -27,6 +27,7 @@ import {
   turfView,
 } from "@/lib/server/play";
 import { CLOUD_COOKIE, readSessionToken } from "@/lib/server/session";
+import { deliverHome, listPlayerShops } from "@/lib/server/live";
 import { chartView, chopsAt, claimChart, eatAtChop, publishChop, weeklyView } from "@/lib/server/city";
 import {
   buyListing,
@@ -116,6 +117,7 @@ export async function GET(request: Request) {
     const spot = String(new URL(request.url).searchParams.get("spot") ?? "").slice(0, 40);
     return NextResponse.json({ spot, chops: await chopsAt(username, spot) });
   }
+  if (view === "shops") return NextResponse.json({ shops: await listPlayerShops() });
   return reply("Unknown view.");
 }
 
@@ -197,6 +199,8 @@ export async function POST(request: Request) {
       return life ? reply(await publishChop(username, life)) : reply("Log in again.");
     case "chop-eat":
       return life && HANDLE.test(handle(body?.owner)) ? done(await eatAtChop(username, handle(body?.owner), String(body?.dish ?? "").slice(0, 20), life)) : reply("That chop bar is closed.");
+    case "deliver-home":
+      return reply(await deliverHome(username, handle(body?.to), String(body?.label ?? ""), String(body?.rider ?? "")));
     default:
       return reply("Unknown action.");
   }

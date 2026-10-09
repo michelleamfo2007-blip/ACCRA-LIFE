@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { hireStaff, fireStaff, postShop } from "@/lib/game/shop-run";
 import {
   SHOP_TYPES,
@@ -13,7 +13,7 @@ import {
   filterShops,
   followShop,
   listingById,
-  messageOwner,
+  listingFromCard,
   openInCity,
   paintShop,
   priceItem,
@@ -31,6 +31,7 @@ import {
   shopStatus,
   statusLabel,
   stockLeft,
+  type ShopCard,
   type ShopCity,
   type ShopListing,
   type ShopStatus,
@@ -59,12 +60,14 @@ export function ShopsApp({
   onBack,
   onApply,
   onVisit,
+  onChat,
 }: {
   life: Life;
   username: string;
   onBack: () => void;
   onApply: (result: StepResult) => void;
   onVisit?: (spot: string) => void;
+  onChat?: (username: string) => void;
 }) {
   const known = shopCities().some((item) => item.id === life.town);
   const [city, setCity] = useState<ShopCity>(known ? (life.town as ShopCity) : "accra");
@@ -74,7 +77,29 @@ export function ShopsApp({
   const [text, setText] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
-  const shop = openId ? listingById(life, username, openId) : null;
+  const [opened, setOpened] = useState<ShopListing[]>([]);
+  const [cloudNote, setCloudNote] = useState("");
+  useEffect(() => {
+    let gone = false;
+    void fetch("/api/live/play?view=shops")
+      .then((response) => response.json())
+      .then((payload: { shops?: ShopCard[]; error?: string }) => {
+        if (gone) return;
+        if (!Array.isArray(payload.shops)) {
+          setCloudNote("Log in on this device to see shops other people have opened.");
+          return;
+        }
+        setCloudNote("");
+        setOpened(payload.shops.map((card) => listingFromCard(card, username)));
+      })
+      .catch(() => {
+        if (!gone) setCloudNote("Log in on this device to see shops other people have opened.");
+      });
+    return () => {
+      gone = true;
+    };
+  }, [username]);
+  const shop = openId ? listingById(life, username, openId, opened) : null;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f3f4f6] text-[#121212]">
@@ -102,7 +127,7 @@ export function ShopsApp({
       {manage && shop?.yours ? (
         <OwnerDesk life={life} username={username} shop={shop} onApply={onApply} />
       ) : shop ? (
-        <ShopProfile life={life} username={username} shop={shop} onApply={onApply} onManage={() => setManage(true)} onVisit={onVisit} />
+        <ShopProfile life={life} username={username} shop={shop} onApply={onApply} onManage={() => setManage(true)} onVisit={onVisit} onChat={onChat} />
       ) : (
         <Directory
           life={life}
@@ -121,6 +146,8 @@ export function ShopsApp({
           onArea={setArea}
           onText={setText}
           onOpen={setOpenId}
+          opened={opened}
+          cloudNote={cloudNote}
         />
       )}
     </div>
@@ -141,6 +168,8 @@ function Directory({
   onArea,
   onText,
   onOpen,
+  opened,
+  cloudNote,
 }: {
   life: Life;
   username: string;
@@ -155,8 +184,10 @@ function Directory({
   onArea: (area: string) => void;
   onText: (text: string) => void;
   onOpen: (id: string) => void;
+  opened: ShopListing[];
+  cloudNote: string;
 }) {
-  const rows = filterShops(life, username, { city, view, type, area, text });
+  const rows = filterShops(life, username, { city, view, type, area, text }, opened);
   const areas = areasFor(city);
   return (
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
@@ -200,6 +231,7 @@ function Directory({
         ))}
       </div>
       <p className="px-1 text-xs font-semibold text-[#6b7280]">{countLine(rows.length, city)}</p>
+      {cloudNote ? <p className="rounded-2xl bg-white px-3 py-3 text-sm text-[#6b7280]">{cloudNote}</p> : null}
       <ul className="space-y-2">
         {rows.map((shop) => {
           const status = shopStatus(life, shop);
@@ -229,7 +261,7 @@ function Directory({
           );
         })}
       </ul>
-      {rows.length ? null : <p className="rounded-2xl bg-white px-3 py-4 text-sm text-[#6b7280]">No shop matches that filter.</p>}
+      {rows.length ? null : <p className="rounded-2xl bg-white px-3 py-4 text-sm text-[#6b7280]">Shops here are the ones people have opened. None in this list yet.</p>}
     </div>
   );
 }
@@ -241,6 +273,7 @@ function ShopProfile({
   onApply,
   onManage,
   onVisit,
+  onChat,
 }: {
   life: Life;
   username: string;
@@ -248,6 +281,7 @@ function ShopProfile({
   onApply: (result: StepResult) => void;
   onManage: () => void;
   onVisit?: (spot: string) => void;
+  onChat?: (username: string) => void;
 }) {
   const [note, setNote] = useState("");
   const [stars, setStars] = useState(5);
@@ -291,7 +325,7 @@ function ShopProfile({
               <button type="button" onClick={() => onApply(followShop(life, shop.id))} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#121212]">
                 {followed ? "Following" : "Follow"}
               </button>
-              <button type="button" onClick={() => onApply(messageOwner(life, shop))} className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">
+              <button type="button" onClick={() => onChat?.(shop.owner)} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[#121212]">
                 Message owner
               </button>
             </>
@@ -324,7 +358,7 @@ function ShopProfile({
               {item.effect ? <p className="text-[11px] font-semibold text-[#006B3F]">{item.effect}</p> : null}
               <p className="text-sm font-bold text-[#006B3F]">{price === 0 ? "Free" : cedis(price)}</p>
               <p className="text-[10px] text-[#6b7280]">{sold ? "None left" : `${left} left`}</p>
-              {shop.yours ? null : (
+              {shop.yours || shop.live ? null : (
                 <button
                   type="button"
                   disabled={sold}

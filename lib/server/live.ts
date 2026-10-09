@@ -333,6 +333,85 @@ async function keepChats(username: string, chats: Record<string, Mail[]>) {
   return savePlayer({ ...player, life });
 }
 
+export async function listPlayerShops() {
+  const client = db();
+  if (!client) return [];
+  const { data } = await client.from("players").select("username, name, life").limit(80);
+  const rows = (data ?? []) as { username: string; name: string; life?: Life | null }[];
+  const shops: {
+    id: string;
+    name: string;
+    emoji: string;
+    color: string;
+    owner: string;
+    city: string;
+    area: string;
+    kind: string;
+    stars: number;
+    hours: string;
+    openedAt: number;
+    spot?: string;
+  }[] = [];
+  for (const row of rows) {
+    for (const shop of row.life?.businesses ?? []) {
+      if (!shop?.id || !shop.kind) continue;
+      shops.push({
+        id: `${row.username}:${shop.id}`,
+        name: shop.name?.trim() || shop.kind,
+        emoji: (shop.icon || "🏪").slice(0, 4),
+        color: shop.color || "#5b21b6",
+        owner: row.username,
+        city: shop.town || row.life?.town || "accra",
+        area: shop.area || "Accra",
+        kind: shop.kind,
+        stars: shop.stars ?? 3,
+        hours: shop.hours || "",
+        openedAt: shop.openedAt ?? 0,
+        spot: shop.spot,
+      });
+    }
+  }
+  return shops;
+}
+
+export async function deliverHome(from: string, to: string, label: string, rider: string) {
+  const handle = to.trim().toLowerCase().replace(/^@/, "");
+  if (!/^[a-z0-9_]{3,16}$/.test(handle)) return "That username is not in Accra.";
+  if (from === handle) return "Send it to someone else's house.";
+  const sender = await readPlayer(from);
+  const recipient = await readPlayer(handle);
+  if (!sender) return "Log in again.";
+  if (!recipient?.life) return "Nobody in Accra goes by that name.";
+  const parcel = label.trim().slice(0, 40);
+  const who = rider.trim().slice(0, 24) || "Rider";
+  if (!parcel) return "That order is not on the menu.";
+  const saved = await updateLife(handle, (life) => {
+    const minutes = life.minutes ?? 0;
+    const guests = (life.guests ?? []).filter((guest) => !(guest.purpose === "delivery" && guest.from === from && guest.gift === parcel));
+    const line = `@${from} sent ${parcel} to your house. ${who} is at the gate.`;
+    return {
+      ...life,
+      guests: [
+        ...guests,
+        {
+          name: who,
+          username: from,
+          arrivedAt: minutes,
+          until: minutes + 120,
+          doing: "door",
+          gift: parcel,
+          purpose: "delivery",
+          from,
+        },
+      ].slice(-12),
+      inbox: [line, ...(life.inbox ?? [])].slice(0, 20),
+    };
+  });
+  if (!saved) return "The rider could not find the house.";
+  await sendChat(from, handle, `${parcel} is at your gate.`);
+  return null;
+}
+
 export async function listChats(username: string) {
   const player = await readPlayer(username);
   if (!player) return [];

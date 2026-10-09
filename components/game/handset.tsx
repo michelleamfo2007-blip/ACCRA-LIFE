@@ -572,7 +572,16 @@ export function Handset({
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))} /> : null}
-              {app === "shops" ? <ShopsApp life={life} username={username} onBack={() => setApp("home")} onApply={onSocial} onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))} /> : null}
+              {app === "shops" ? (
+                <ShopsApp
+                  life={life}
+                  username={username}
+                  onBack={() => setApp("home")}
+                  onApply={onSocial}
+                  onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))}
+                  onChat={(handle) => openThread(`user:${handle.replace(/^@/, "")}`)}
+                />
+              ) : null}
               {app === "susu" ? <SusuApp me={username} life={life} social={social} cloud={cloud} onBack={() => setApp("home")} onAction={onNet} /> : null}
               {app === "people" ? (
                 <PeopleApp
@@ -589,7 +598,7 @@ export function Handset({
               ) : null}
               {app === "photos" ? <PhotosScreen life={life} onBack={() => setApp("home")} onSnap={() => onSocial(postClout(life, spotById(life.where).name))} /> : null}
               {app === "delivery" ? (
-                <DeliveryScreen life={life} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} onApply={onSocial} />
+                <DeliveryScreen life={life} username={username} onBack={() => setApp("home")} onRun={() => onSocial(doHustle(life, "hustle-delivery"))} onApply={onSocial} />
               ) : null}
               {app === "bet" ? <BetTable life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "papers" ? (
@@ -1077,12 +1086,15 @@ function PhotosScreen({ life, onBack, onSnap }: { life: Life; onBack: () => void
   );
 }
 
-function DeliveryScreen({ life, onBack, onRun, onApply }: { life: Life; onBack: () => void; onRun: () => void; onApply: (result: StepResult) => void }) {
+function DeliveryScreen({ life, username, onBack, onRun, onApply }: { life: Life; username: string; onBack: () => void; onRun: () => void; onApply: (result: StepResult) => void }) {
   const runs = life.stats?.hustles ?? 0;
   const [item, setItem] = useState<string>(MENU[0].id);
   const [rider, setRider] = useState<string>(RIDERS[0].id);
   const [speed, setSpeed] = useState("standard");
   const [address, setAddress] = useState<string>(ADDRESSES[0]);
+  const [friend, setFriend] = useState("");
+  const [notice, setNotice] = useState("");
+  const [sending, setSending] = useState(false);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!life.errand) return;
@@ -1094,6 +1106,51 @@ function DeliveryScreen({ life, onBack, onRun, onApply }: { life: Life; onBack: 
   const who = RIDERS.find((entry) => entry.id === rider) ?? RIDERS[0];
   const speedFee = speed === "same" ? 2.2 : speed === "express" ? 1.6 : 1;
   const fee = Math.round(row.price + who.fee * speedFee);
+  const toFriend = address === "Friend's place";
+  async function order() {
+    setNotice("");
+    const handle = friend.trim().toLowerCase().replace(/^@/, "");
+    if (toFriend && handle === username.replace(/^@/, "").toLowerCase()) {
+      setNotice("Send it to someone else's house.");
+      return;
+    }
+    if (toFriend && !/^[a-z0-9_]{3,16}$/.test(handle)) {
+      setNotice("Type their @handle so the rider knows which house.");
+      return;
+    }
+    if (toFriend) {
+      const found = await fetch(`/api/live/people?q=${encodeURIComponent(handle)}`)
+        .then((response) => response.json())
+        .catch(() => null) as { people?: { username: string }[]; error?: string } | null;
+      if (found?.error) {
+        setNotice("Log in so the rider can find their house.");
+        return;
+      }
+      const person = found?.people?.find((item) => item.username === handle);
+      if (!person) {
+        setNotice(`Nobody in Accra goes by @${handle}.`);
+        return;
+      }
+    }
+    const result = placeErrand(life, item, rider, speed, address, toFriend ? friend : "");
+    if (result.error) {
+      setNotice(result.error);
+      return;
+    }
+    onApply(result);
+    if (toFriend) {
+      setSending(true);
+      const sent = await fetch("/api/live/play", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "deliver-home", to: handle, label: row.label, rider: who.name }),
+      })
+        .then((response) => response.json())
+        .catch(() => null) as { error?: string } | null;
+      setSending(false);
+      if (sent?.error) setNotice(sent.error);
+    }
+  }
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#fff6df] text-[#121212]">
       <AppHeader title="Delivery" onBack={onBack} />
@@ -1142,8 +1199,20 @@ function DeliveryScreen({ life, onBack, onRun, onApply }: { life: Life; onBack: 
                 </button>
               ))}
             </div>
-            <button type="button" onClick={() => onApply(placeErrand(life, item, rider, speed, address))} className="w-full rounded-full bg-[#CE1126] py-3 text-sm font-bold text-white">
-              Order · {cedis(fee)}
+            {toFriend ? (
+              <label className="block">
+                <span className="text-sm font-semibold">Their handle</span>
+                <input
+                  value={friend}
+                  onChange={(event) => setFriend(event.target.value)}
+                  placeholder="@username"
+                  className="mt-1 h-11 w-full rounded-2xl bg-white px-4 text-sm outline-none"
+                />
+              </label>
+            ) : null}
+            {notice ? <p className="text-sm font-semibold text-[#CE1126]">{notice}</p> : null}
+            <button type="button" disabled={sending} onClick={() => void order()} className="w-full rounded-full bg-[#CE1126] py-3 text-sm font-bold text-white">
+              {sending ? "Sending the rider…" : `Order · ${cedis(fee)}`}
             </button>
           </div>
         )}

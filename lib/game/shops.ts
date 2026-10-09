@@ -66,20 +66,6 @@ const CITY_PRICE: Record<ShopCity, number> = {
   ho: 0.86,
 };
 
-const NAMES: Record<ShopType, string[]> = {
-  food: ["Auntie Esi's Pot", "Waakye House", "Light Soup Spot", "Jollof Corner", "Banku & Tilapia"],
-  salon: ["Ama's Hands", "Crown Braids", "Fade Room", "Weave & Gist", "Saturday Chair"],
-  provisions: ["Corner Provisions", "Sachet & Milo", "Mama's Shelf", "Night Kiosk", "Rice & Oil"],
-  boutique: ["Ankara Room", "Kente Rail", "Osu Fits", "Second Look", "Sunday Best"],
-  electronics: ["Circle Phones", "Glass Counter", "Charge Point", "Earphone Desk", "Screen House"],
-  service: ["Same-Day Tailor", "Okada Errands", "Key & Lock", "Home Clean", "Passport Photos"],
-  bar: ["Cold Club", "After Hours", "Speaker Spot", "Shisha Corner", "One More Round"],
-  pharmacy: ["Night Pharmacy", "Linda's Counter", "Malaria Desk", "First Aid Shelf", "Open Late"],
-  cosmetics: ["Glow Shelf", "Shea & Oil", "Tester Bar", "Scent Desk", "Face First"],
-};
-
-const OWNERS = ["ghostboy01", "amaeats", "kwesi_cuts", "efi_styles", "nana_stock", "yoofi", "serwaa_sews", "kofi_phones", "adwoa_glow", "mensah_bar"];
-
 type GoodSeed = {
   name: string;
   category: string;
@@ -166,17 +152,6 @@ const GOODS: Record<ShopType, GoodSeed[]> = {
   ],
 };
 
-const REVIEWS = [
-  "The queue moved. The thing I asked for was there.",
-  "Price was fair. I will send my cousin.",
-  "They were still setting up. I came back and it was fine.",
-  "Sold me the last one and did not argue.",
-  "Too slow, and the change was short.",
-  "Clean counter. I stayed for the gist.",
-  "Dear, but the thing lasted.",
-  "I asked twice. The second answer was the true one.",
-];
-
 export type ShelfItem = GoodSeed & { id: string; popular: boolean };
 
 export type ShopReview = { id: string; buyer: string; stars: number; text: string; day: number };
@@ -200,12 +175,55 @@ export type ShopListing = {
   reviews: ShopReview[];
   yours: boolean;
   spot?: string;
+  /** Opened by a real player, not a sample shop. */
+  live?: boolean;
 };
 
-export type ShopStatus = "open" | "closed" | "service" | "sold";
+export type ShopCard = {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  owner: string;
+  city: string;
+  area: string;
+  kind: string;
+  stars: number;
+  hours: string;
+  openedAt: number;
+  spot?: string;
+};
 
-const COLORS = ["#5b21b6", "#1d4ed8", "#006B3F", "#9f1239", "#0f766e", "#7c3aed", "#b45309", "#121212"];
-const TYPE_ORDER: ShopType[] = ["food", "salon", "provisions", "boutique", "electronics", "service", "bar", "pharmacy", "cosmetics"];
+export function listingFromCard(card: ShopCard, username: string): ShopListing {
+  const type = kindType(card.kind);
+  const city = playerCity(card.city);
+  const clock = hoursFor(type);
+  const me = username.replace(/^@/, "");
+  const items = GOODS[type].map((good, index) => ({ ...good, id: `${card.id}:${index}`, popular: index < 2 }));
+  return {
+    id: card.id,
+    name: card.name,
+    emoji: card.emoji || "🏪",
+    color: card.color || "#5b21b6",
+    owner: card.owner,
+    city,
+    area: card.area || "Accra",
+    type,
+    stars: card.stars || 3,
+    openedDay: dayIndex(card.openedAt || 0),
+    openFrom: clock.openFrom,
+    openTo: clock.openTo,
+    hours: card.hours || clock.hours,
+    service: type === "service" || type === "salon",
+    items,
+    reviews: [],
+    yours: card.owner === me,
+    spot: card.spot,
+    live: card.owner !== me,
+  };
+}
+
+export type ShopStatus = "open" | "closed" | "service" | "sold";
 
 function hash(text: string) {
   let n = 2166136261;
@@ -220,61 +238,6 @@ function hoursFor(type: ShopType): { openFrom: number; openTo: number; hours: st
   if (type === "salon") return { openFrom: 8, openTo: 19, hours: "8:00 – 19:00" };
   return { openFrom: 8, openTo: 20, hours: "8:00 – 20:00" };
 }
-
-function buildCatalog(): ShopListing[] {
-  const rows: ShopListing[] = [];
-  for (const city of SHOP_CITIES) {
-    const areas = AREAS[city.id];
-    areas.forEach((area, areaIndex) => {
-      const count = city.id === "accra" ? 4 : city.id === "kumasi" ? 3 : 2;
-      for (let n = 0; n < count; n += 1) {
-        const type = TYPE_ORDER[(areaIndex + n) % TYPE_ORDER.length];
-        const id = `${city.id}-${areaIndex}-${n}`;
-        const seed = hash(id);
-        const name = NAMES[type][seed % NAMES[type].length];
-        const owner = OWNERS[seed % OWNERS.length];
-        const clock = hoursFor(type);
-        const goods = GOODS[type].map((good, index) => {
-          const local = city.id === "kumasi" && type === "boutique" && index === 1 ? { ...good, name: "Bonwire kente", price: 480 } : good;
-          return { ...local, id: `${id}:${index}`, popular: index === 0 || index === 1 };
-        });
-        const reviews: ShopReview[] = [0, 1, 2].map((index) => {
-          const pick = hash(`${id}-r${index}`);
-          return {
-            id: `${id}-r${index}`,
-            buyer: OWNERS[(pick + index) % OWNERS.length],
-            stars: 3 + (pick % 3),
-            text: REVIEWS[pick % REVIEWS.length],
-            day: 10 + (pick % 40),
-          };
-        });
-        const stars = Math.round((reviews.reduce((sum, review) => sum + review.stars, 0) / reviews.length) * 10) / 10;
-        rows.push({
-          id,
-          name: n % 3 === 0 ? `${name} ${area.split(" ")[0]}` : name,
-          emoji: SHOP_TYPES.find((item) => item.id === type)?.icon || "🏪",
-          color: COLORS[seed % COLORS.length],
-          owner,
-          city: city.id,
-          area,
-          type,
-          stars,
-          openedDay: 400 + (seed % 800),
-          openFrom: clock.openFrom,
-          openTo: clock.openTo,
-          hours: clock.hours,
-          service: type === "service" || type === "salon",
-          items: goods,
-          reviews,
-          yours: false,
-        });
-      }
-    });
-  }
-  return rows;
-}
-
-const CATALOG = buildCatalog();
 
 export function shopCities() {
   return SHOP_CITIES;
@@ -361,27 +324,21 @@ function shopFromBusiness(life: Life, shop: Business, username: string): ShopLis
     hours: shop.hours || clock.hours,
     service: type === "service" || type === "salon",
     items,
-    reviews: [0, 1].map((index) => {
-      const pick = hash(`${shop.id}-r${index}`);
-      return {
-        id: `${shop.id}-r${index}`,
-        buyer: OWNERS[pick % OWNERS.length],
-        stars: 3 + (pick % 3),
-        text: REVIEWS[pick % REVIEWS.length],
-        day: dayIndex(shop.openedAt),
-      };
-    }),
+    reviews: [],
     yours: true,
     spot: shop.spot,
   };
 }
 
-export function listingById(life: Life, username: string, id: string) {
-  return mineShops(life, username).find((shop) => shop.id === id) ?? CATALOG.find((shop) => shop.id === id) ?? null;
+export function listingById(life: Life, username: string, id: string, extra: ShopListing[] = []) {
+  return mineShops(life, username).find((shop) => shop.id === id) ?? extra.find((shop) => shop.id === id) ?? null;
 }
 
-export function allListings(life: Life, username: string) {
-  return [...mineShops(life, username), ...CATALOG];
+export function allListings(life: Life, username: string, extra: ShopListing[] = []) {
+  const me = username.replace(/^@/, "");
+  const mine = mineShops(life, username);
+  const others = extra.filter((shop) => shop.owner !== me && !mine.some((row) => row.id === shop.id));
+  return [...mine, ...others];
 }
 
 export function shopOpen(shop: ShopListing, hour = accraHour()) {
@@ -448,9 +405,10 @@ export function filterShops(
   life: Life,
   username: string,
   query: { city: ShopCity; view: ShopView; type: string; area: string; text: string },
+  extra: ShopListing[] = [],
 ) {
   const needle = query.text.trim().toLowerCase();
-  let rows = allListings(life, username).filter((shop) => {
+  let rows = allListings(life, username, extra).filter((shop) => {
     if (shop.city !== query.city) return false;
     if (query.type !== "all" && shop.type !== query.type) return false;
     if (query.area !== "all" && shop.area !== query.area) return false;
@@ -488,7 +446,7 @@ export function followShop(life: Life, shopId: string): StepResult {
 
 export function messageOwner(life: Life, shop: ShopListing): StepResult {
   const next = cloneLife(life);
-  const line = `You wrote to @${shop.owner} about ${shop.name}. They answer when they open the phone.`;
+  const line = `Open Messages and write to @${shop.owner} about ${shop.name}.`;
   push(next, line);
   return { life: next, notes: [line] };
 }

@@ -30,7 +30,7 @@ function need(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-export function placeErrand(life: Life, itemId: string, riderId: string, speed: string, address: string): StepResult {
+export function placeErrand(life: Life, itemId: string, riderId: string, speed: string, address: string, friend = ""): StepResult {
   if (life.errand && life.errand.readyAt > Date.now()) {
     return { life, notes: [], error: "You already have an order on the road." };
   }
@@ -40,6 +40,12 @@ export function placeErrand(life: Life, itemId: string, riderId: string, speed: 
   if (item.kind === "furniture" && rider.id !== "van") {
     return { life, notes: [], error: "A chair needs the van." };
   }
+  const handle = friend.trim().toLowerCase().replace(/^@/, "");
+  const toFriend = address === "Friend's place";
+  if (toFriend && !/^[a-z0-9_]{3,16}$/.test(handle)) {
+    return { life, notes: [], error: "Type their @handle so the rider knows which house." };
+  }
+  const where = toFriend ? `Friend's place · @${handle}` : address;
   const fee = Math.round(item.price + rider.fee * (SPEED[speed] ?? 1));
   if (life.cash < fee) return { life, notes: [], error: `MoMo cannot cover ${cedis(fee)}. You have ${cedis(life.cash)}.` };
   const next = cloneLife(life);
@@ -51,13 +57,13 @@ export function placeErrand(life: Life, itemId: string, riderId: string, speed: 
     rider: rider.name,
     riderId: rider.id,
     vehicle: rider.vehicle,
-    address,
+    address: where,
     paid: fee,
     readyAt: Date.now() + (WAIT[speed] ?? WAIT.standard),
-    line: `${rider.name} is on the way.`,
+    line: toFriend ? `${rider.name} is taking it to @${handle}.` : `${rider.name} is on the way.`,
   };
   next.log = [`${rider.name} (${rider.vehicle}) has your ${item.label}.`, ...next.log].slice(0, 14);
-  return { life: next, notes: [`${rider.name} is on the ${rider.vehicle.toLowerCase()}. ${address}.`] };
+  return { life: next, notes: [toFriend ? `${rider.name} is heading to @${handle}'s house.` : `${rider.name} is on the ${rider.vehicle.toLowerCase()}. ${where}.`] };
 }
 
 export function errandLine(life: Life) {
@@ -92,6 +98,11 @@ export function collectErrand(life: Life): StepResult {
     next.drop = { riderId: job.riderId, rider: job.rider, vehicle: job.vehicle, label: job.label };
     next.log = [`${job.rider} dented the ${job.label}. ${cedis(back)} came back.`, ...next.log].slice(0, 14);
     return { life: next, notes: [`The ${job.label} arrived damaged. ${cedis(back)} refunded.`] };
+  }
+  if (job.address.startsWith("Friend's place")) {
+    next.drop = { riderId: job.riderId, rider: job.rider, vehicle: job.vehicle, label: job.label };
+    next.log = [`${job.label} reached ${job.address}.`, ...next.log].slice(0, 14);
+    return { life: next, notes: [`${job.rider} left the ${job.label} at ${job.address}.`] };
   }
   if (job.kind === "food") next.needs.hunger = need(next.needs.hunger + 28);
   if (job.kind === "medicine") next.needs.energy = need(next.needs.energy + 8);
