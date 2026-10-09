@@ -106,33 +106,66 @@ export function Figure({
   const woman = body === "woman";
   const clothes = wardrobe(outfit, woman, shirt, pants);
   const map = useMemo(() => (clothes.patterned ? clothMap(pattern, clothes.top) : null), [clothes.patterned, clothes.top, pattern]);
-  const left = useRef<Group>(null);
-  const right = useRef<Group>(null);
+  const thighL = useRef<Group>(null);
+  const thighR = useRef<Group>(null);
+  const shinL = useRef<Group>(null);
+  const shinR = useRef<Group>(null);
   const armL = useRef<Group>(null);
   const armR = useRef<Group>(null);
+  const foreL = useRef<Group>(null);
+  const foreR = useRef<Group>(null);
   const root = useRef<Group>(null);
+  const hip = useRef<Group>(null);
   const torso = useRef<Group>(null);
+  const head = useRef<Group>(null);
+  const hairSway = useRef<Group>(null);
+  const lids = useRef<Group>(null);
+  const mouth = useRef<Group>(null);
+  const phase = hashTone(skin + hair);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
+    const ease = Math.min(1, dt * 9);
     const sitting = pose === "sit" || pose === "drive";
     const driving = pose === "drive";
-    const swing = pose === "walk" ? Math.sin(clock.elapsedTime * 7) * 0.42 : 0;
-    const bob = pose === "act" ? Math.sin(clock.elapsedTime * 5) * 0.08 : 0;
-    if (root.current) root.current.position.y = sitting ? 0.42 : 0;
+    const walking = pose === "walk";
+    const t = clock.elapsedTime + phase;
+    const step = Math.sin(t * 6.4);
+    const knee = Math.max(0, -Math.cos(t * 6.4));
+    const breath = 1 + Math.sin(t * 1.7) * (walking ? 0.008 : 0.02);
+    const shift = Math.sin(t * 0.65);
+    const aim = (group: Group | null, x: number, y = 0, z = 0) => {
+      if (!group) return;
+      group.rotation.x += (x - group.rotation.x) * ease;
+      group.rotation.y += (y - group.rotation.y) * ease;
+      group.rotation.z += (z - group.rotation.z) * ease;
+    };
+    if (root.current) root.current.position.y += ((sitting ? 0.38 : walking ? Math.abs(step) * 0.035 : 0) - root.current.position.y) * ease;
+    if (hip.current) {
+      hip.current.rotation.z += ((walking ? step * 0.05 : shift * 0.04) - hip.current.rotation.z) * ease;
+      hip.current.rotation.y += ((walking ? step * 0.07 : 0) - hip.current.rotation.y) * ease;
+    }
     if (torso.current) {
-      torso.current.position.y = sitting ? 0.08 : 0;
-      torso.current.position.z = sitting ? 0.08 : 0;
-      torso.current.rotation.x = sitting ? 0.12 : bob;
+      torso.current.scale.y += (breath - torso.current.scale.y) * ease;
+      aim(torso.current, sitting ? 0.16 : walking ? 0.1 : pose === "act" ? 0.08 : shift * 0.02, 0, walking ? -step * 0.03 : -shift * 0.03);
+      torso.current.position.z += ((sitting ? 0.06 : 0) - torso.current.position.z) * ease;
     }
-    if (left.current) left.current.rotation.x = sitting ? -1.45 : swing;
-    if (right.current) right.current.rotation.x = sitting ? -1.45 : -swing;
-    if (armL.current) {
-      armL.current.rotation.x = driving ? -1.2 : sitting ? -0.55 : pose === "act" ? -0.55 + bob : -swing * 0.65;
-      armL.current.rotation.z = driving ? 0.42 : 0;
+    aim(thighL.current, sitting ? -1.28 : walking ? step * 0.72 : shift > 0 ? 0.12 : 0);
+    aim(thighR.current, sitting ? -1.28 : walking ? -step * 0.72 : shift < 0 ? 0.12 : 0);
+    aim(shinL.current, sitting ? 1.45 : walking ? Math.max(0, step) * 1.15 : 0.04);
+    aim(shinR.current, sitting ? 1.45 : walking ? Math.max(0, -step) * 1.15 : 0.04);
+    aim(armL.current, driving ? -1.15 : sitting ? -0.45 : walking ? -step * 0.48 : pose === "act" ? -0.7 : 0.08 + shift * 0.05, 0, driving ? 0.4 : 0.08);
+    aim(armR.current, driving ? -1.15 : sitting ? -0.35 : walking ? step * 0.48 : pose === "act" ? -0.25 : 0.05, 0, driving ? -0.4 : -0.08);
+    aim(foreL.current, driving ? -0.4 : walking ? 0.25 + knee * 0.35 : pose === "act" ? 0.8 : 0.18);
+    aim(foreR.current, driving ? -0.4 : walking ? 0.25 + (1 - knee) * 0.2 : 0.15);
+    aim(head.current, walking ? -0.06 : Math.sin(t * 0.33) * 0.06, walking ? step * 0.04 : Math.sin(t * 0.27) * 0.14);
+    if (hairSway.current) hairSway.current.rotation.z += ((walking ? step * 0.06 : Math.sin(t * 1.3) * 0.03) - hairSway.current.rotation.z) * ease;
+    if (lids.current) {
+      const blink = Math.sin(t * 1.15) > 0.985 ? 0.08 : 1;
+      lids.current.scale.y += (blink - lids.current.scale.y) * Math.min(1, dt * 22);
     }
-    if (armR.current) {
-      armR.current.rotation.x = driving ? -1.2 : sitting ? -0.4 : pose === "act" ? -0.35 - bob : swing * 0.65;
-      armR.current.rotation.z = driving ? -0.42 : 0;
+    if (mouth.current) {
+      const open = pose === "act" ? 1.8 + Math.sin(t * 8) * 0.6 : pose === "sit" ? 0.7 : 1;
+      mouth.current.scale.y += (open - mouth.current.scale.y) * ease;
     }
   });
 
@@ -140,62 +173,79 @@ export function Figure({
   const legColor = clothes.skirt ? skin : clothes.bottom;
   return (
     <group ref={root} rotation={[0, (turn * Math.PI) / 180, 0]}>
-      <group ref={left} position={[-0.09, 0.74, 0]}>
-        <Limb color={legColor} length={0.66} radius={0.07} />
-        <Shoe woman={woman} />
-      </group>
-      <group ref={right} position={[0.09, 0.74, 0]}>
-        <Limb color={legColor} length={0.66} radius={0.07} />
-        <Shoe woman={woman} />
+      <group ref={hip} position={[0, 0.78, 0]}>
+        <group ref={thighL} position={[-0.09, 0, 0]}>
+          <Limb color={legColor} length={0.36} radius={0.072} />
+          <group ref={shinL} position={[0, -0.36, 0]}>
+            <Limb color={legColor} length={0.32} radius={0.055} />
+            <Shoe woman={woman} />
+          </group>
+        </group>
+        <group ref={thighR} position={[0.09, 0, 0]}>
+          <Limb color={legColor} length={0.36} radius={0.072} />
+          <group ref={shinR} position={[0, -0.36, 0]}>
+            <Limb color={legColor} length={0.32} radius={0.055} />
+            <Shoe woman={woman} />
+          </group>
+        </group>
       </group>
       <group ref={torso}>
       {clothes.skirt ? (
         <mesh position={[0, 0.86, 0]}>
-          <cylinderGeometry args={[0.2, 0.28, 0.34, 6]} />
+          <cylinderGeometry args={[0.2, 0.3, 0.36, 8]} />
           <meshLambertMaterial color={clothes.bottom} flatShading />
         </mesh>
-      ) : null}
+      ) : (
+        <mesh position={[0, 0.9, 0.01]}>
+          <boxGeometry args={[woman ? 0.28 : 0.32, 0.06, 0.15]} />
+          <meshLambertMaterial color={mix(clothes.bottom, 0.15)} flatShading />
+        </mesh>
+      )}
       <mesh position={[0, 1.08, 0]}>
         <boxGeometry args={[woman ? 0.3 : 0.36, 0.16, 0.16]} />
         <meshLambertMaterial color={clothes.top} map={map} flatShading />
       </mesh>
       <mesh position={[0, 1.24, 0]}>
-        <boxGeometry args={[woman ? 0.32 : 0.4, 0.18, 0.18]} />
+        <boxGeometry args={[woman ? 0.32 : 0.4, 0.2, 0.18]} />
         <meshLambertMaterial color={clothes.top} map={map} flatShading />
       </mesh>
-      <mesh position={[-0.1, 1.36, 0]}>
-        <boxGeometry args={[0.045, 0.12, 0.04]} />
-        <meshLambertMaterial color={clothes.top} map={map} flatShading />
-      </mesh>
-      <mesh position={[0.1, 1.36, 0]}>
-        <boxGeometry args={[0.045, 0.12, 0.04]} />
-        <meshLambertMaterial color={clothes.top} map={map} flatShading />
+      <mesh position={[0, 1.34, 0.02]}>
+        <boxGeometry args={[woman ? 0.16 : 0.18, 0.04, 0.04]} />
+        <meshLambertMaterial color={mix(clothes.top, 0.2)} flatShading />
       </mesh>
       <group ref={armL} position={[-shoulder, 1.28, 0]}>
-        <Limb color={skin} length={0.48} radius={0.048} />
-        <mesh position={[0, -0.52, 0]}>
-          <sphereGeometry args={[0.046, 6, 5]} />
-          <meshLambertMaterial color={skin} flatShading />
-        </mesh>
+        <Limb color={clothes.top} length={0.24} radius={0.05} />
+        <group ref={foreL} position={[0, -0.24, 0]}>
+          <Limb color={skin} length={0.22} radius={0.04} />
+          <mesh position={[0, -0.24, 0.02]}>
+            <boxGeometry args={[0.06, 0.04, 0.07]} />
+            <meshLambertMaterial color={skin} flatShading />
+          </mesh>
+        </group>
       </group>
       <group ref={armR} position={[shoulder, 1.28, 0]}>
-        <Limb color={skin} length={0.48} radius={0.048} />
-        <mesh position={[0, -0.52, 0]}>
-          <sphereGeometry args={[0.046, 6, 5]} />
-          <meshLambertMaterial color={skin} flatShading />
-        </mesh>
+        <Limb color={clothes.top} length={0.24} radius={0.05} />
+        <group ref={foreR} position={[0, -0.24, 0]}>
+          <Limb color={skin} length={0.22} radius={0.04} />
+          <mesh position={[0, -0.24, 0.02]}>
+            <boxGeometry args={[0.06, 0.04, 0.07]} />
+            <meshLambertMaterial color={skin} flatShading />
+          </mesh>
+        </group>
       </group>
       <mesh position={[0, 1.42, 0]}>
-        <cylinderGeometry args={[0.05, 0.06, 0.08, 6]} />
+        <cylinderGeometry args={[0.05, 0.06, 0.08, 8]} />
         <meshLambertMaterial color={skin} flatShading />
       </mesh>
-      <group position={[0, 1.58, 0]}>
+      <group ref={head} position={[0, 1.58, 0]}>
         <mesh>
-          <sphereGeometry args={[0.155, 10, 8]} />
+          <sphereGeometry args={[0.155, 12, 10]} />
           <meshLambertMaterial color={skin} flatShading />
         </mesh>
-        <Face skin={skin} />
-        <Hair hair={hair} cloth={cloth} />
+        <Face skin={skin} lids={lids} mouth={mouth} />
+        <group ref={hairSway}>
+          <Hair hair={hair} cloth={cloth} />
+        </group>
         {crown ? <Crown /> : null}
       </group>
       </group>
@@ -214,49 +264,61 @@ function Limb({ color, length, radius }: { color: string; length: number; radius
 
 function Shoe({ woman }: { woman: boolean }) {
   return (
-    <mesh position={[0, -0.7, 0.04]}>
-      <boxGeometry args={[0.1, 0.045, 0.18]} />
+    <mesh position={[0, -0.34, 0.04]}>
+      <boxGeometry args={[0.09, 0.04, 0.16]} />
       <meshLambertMaterial color={woman ? "#7a3030" : "#1a1816"} flatShading />
     </mesh>
   );
 }
 
-function Face({ skin }: { skin: string }) {
+function Face({ skin, lids, mouth }: { skin: string; lids: { current: Group | null }; mouth: { current: Group | null } }) {
   const lip = mix(skin, 0.28);
   return (
-    <group position={[0, 0.01, 0.11]}>
-      <mesh position={[-0.04, 0.025, 0]}>
-        <sphereGeometry args={[0.014, 6, 5]} />
+    <group position={[0, 0.01, 0.12]}>
+      <mesh position={[-0.045, 0.02, 0]}>
+        <sphereGeometry args={[0.016, 8, 6]} />
+        <meshLambertMaterial color="#f4efe6" />
+      </mesh>
+      <mesh position={[0.045, 0.02, 0]}>
+        <sphereGeometry args={[0.016, 8, 6]} />
+        <meshLambertMaterial color="#f4efe6" />
+      </mesh>
+      <mesh position={[-0.045, 0.02, 0.008]}>
+        <sphereGeometry args={[0.008, 6, 5]} />
         <meshLambertMaterial color="#1a140f" />
       </mesh>
-      <mesh position={[0.04, 0.025, 0]}>
-        <sphereGeometry args={[0.014, 6, 5]} />
+      <mesh position={[0.045, 0.02, 0.008]}>
+        <sphereGeometry args={[0.008, 6, 5]} />
         <meshLambertMaterial color="#1a140f" />
       </mesh>
-      <mesh position={[-0.04, 0.03, 0.01]}>
-        <sphereGeometry args={[0.004, 4, 4]} />
-        <meshBasicMaterial color="#f7f4ef" />
-      </mesh>
-      <mesh position={[0.04, 0.03, 0.01]}>
-        <sphereGeometry args={[0.004, 4, 4]} />
-        <meshBasicMaterial color="#f7f4ef" />
-      </mesh>
-      <mesh position={[-0.04, 0.048, 0]}>
-        <boxGeometry args={[0.028, 0.006, 0.008]} />
+      <group ref={lids} position={[0, 0.028, 0.012]}>
+        <mesh position={[-0.045, 0, 0]}>
+          <boxGeometry args={[0.03, 0.012, 0.008]} />
+          <meshLambertMaterial color={skin} />
+        </mesh>
+        <mesh position={[0.045, 0, 0]}>
+          <boxGeometry args={[0.03, 0.012, 0.008]} />
+          <meshLambertMaterial color={skin} />
+        </mesh>
+      </group>
+      <mesh position={[-0.045, 0.042, 0.004]}>
+        <boxGeometry args={[0.03, 0.006, 0.008]} />
         <meshLambertMaterial color="#1a140f" />
       </mesh>
-      <mesh position={[0.04, 0.048, 0]}>
-        <boxGeometry args={[0.028, 0.006, 0.008]} />
+      <mesh position={[0.045, 0.042, 0.004]}>
+        <boxGeometry args={[0.03, 0.006, 0.008]} />
         <meshLambertMaterial color="#1a140f" />
       </mesh>
-      <mesh position={[0, -0.012, 0.01]} rotation={[0.4, 0, 0]}>
-        <boxGeometry args={[0.016, 0.028, 0.016]} />
-        <meshLambertMaterial color={skin} flatShading />
+      <mesh position={[0, -0.01, 0.012]} rotation={[0.5, 0, 0]}>
+        <boxGeometry args={[0.02, 0.03, 0.016]} />
+        <meshLambertMaterial color={mix(skin, 0.08)} flatShading />
       </mesh>
-      <mesh position={[0, -0.05, 0.008]}>
-        <boxGeometry args={[0.04, 0.012, 0.012]} />
-        <meshLambertMaterial color={lip} flatShading />
-      </mesh>
+      <group ref={mouth} position={[0, -0.055, 0.01]}>
+        <mesh>
+          <boxGeometry args={[0.046, 0.012, 0.012]} />
+          <meshLambertMaterial color={lip} flatShading />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -271,12 +333,24 @@ function Hair({ hair, cloth }: { hair: string; cloth: string }) {
       </mesh>
     );
   }
-  if (hair === "Low cut") {
+  if (hair === "Bald") return null;
+  if (hair === "Low cut" || hair === "Fade") {
     return (
-      <mesh position={[0, 0.04, -0.01]} scale={[1.02, 0.42, 1.05]}>
+      <mesh position={[0, 0.04, -0.01]} scale={[1.02, hair === "Fade" ? 0.28 : 0.42, 1.05]}>
         <sphereGeometry args={[0.14, 8, 6]} />
         <meshLambertMaterial color={dark} flatShading />
       </mesh>
+    );
+  }
+  if (hair === "Weave") {
+    return (
+      <group>
+        <Cap />
+        <mesh position={[0.02, -0.16, -0.04]} rotation={[0.35, 0, 0.1]}>
+          <cylinderGeometry args={[0.09, 0.05, 0.34, 6]} />
+          <meshLambertMaterial color={dark} flatShading />
+        </mesh>
+      </group>
     );
   }
   if (hair === "Bun") {
@@ -408,6 +482,12 @@ function clothMap(pattern: string, color: string) {
   texture.colorSpace = SRGBColorSpace;
   texture.needsUpdate = true;
   return texture;
+}
+
+function hashTone(text: string) {
+  let hash = 0;
+  for (const char of text) hash = (hash * 33 + char.charCodeAt(0)) % 997;
+  return hash / 997 * Math.PI * 2;
 }
 
 function mix(hex: string, amount: number) {

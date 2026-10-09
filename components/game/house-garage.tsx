@@ -20,16 +20,22 @@ export function HouseGarage({
   life,
   span = 0,
   bays,
+  shut = false,
+  onShut,
   onWalk,
   onCar,
 }: {
   life: Life;
   span?: number;
   bays: number;
+  shut?: boolean;
+  onShut?: (shut: boolean) => void;
   onWalk?: (x: number, z: number) => void;
   onCar?: (key: string, x: number, z: number) => void;
 }) {
-  const [shut, setShut] = useState(false);
+  const [localShut, setLocalShut] = useState(false);
+  const closed = onShut ? shut : localShut;
+  const setClosed = (next: boolean) => (onShut ? onShut(next) : setLocalShut(next));
   const box = garageBox(span, bays);
   const cars = motorsOf(life);
   const inside = cars.slice(0, box.count);
@@ -87,10 +93,10 @@ export function HouseGarage({
         <boxGeometry args={[0.7, 0.06, 0.28]} />
         <meshStandardMaterial color="#f7f3df" emissive="#f4e7b0" emissiveIntensity={lit ? 0.7 : 0} />
       </mesh>
-      {shut ? (
+      {closed ? (
         <Slab color="#8e99a6" position={[midX, 0.85, box.z0]} size={[width - 0.3, 1.5, 0.08]} />
       ) : (
-        <group position={[midX, 1.45, box.z0]} onClick={(event) => { event.stopPropagation(); setShut(true); }}>
+        <group position={[midX, 1.45, box.z0]} onClick={(event) => { event.stopPropagation(); setClosed(true); }}>
           {[0, 1, 2].map((band) => (
             <mesh key={band} position={[0, -band * 0.08, 0]}>
               <boxGeometry args={[width - 0.35, 0.07, 0.06]} />
@@ -99,8 +105,8 @@ export function HouseGarage({
           ))}
         </group>
       )}
-      {shut ? (
-        <mesh position={[box.x1 - 0.35, 0.9, box.z0 - 0.08]} onClick={(event) => { event.stopPropagation(); setShut(false); }}>
+      {closed ? (
+        <mesh position={[box.x1 - 0.35, 0.9, box.z0 - 0.08]} onClick={(event) => { event.stopPropagation(); setClosed(false); }}>
           <boxGeometry args={[0.12, 0.28, 0.06]} />
           <meshLambertMaterial color="#c4563a" />
         </mesh>

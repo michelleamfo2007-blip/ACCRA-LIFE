@@ -26,6 +26,7 @@ import { rivalHere } from "@/lib/game/spine";
 import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
+import { circleSolid, crowded, indexSolids, route, slide, type Bounds, type Pt, type Solid } from "@/lib/game/nav";
 
 const SKINS = ["#c68a62", "#a86f4c", "#8d5a3b", "#7a4a2c", "#653c24", "#51301d"];
 const SHIRTS = ["#CE1126", "#f5c542", "#ec4899", "#006B3F", "#f4efe6", "#e5484d"];
@@ -34,6 +35,14 @@ const HAIR = ["Afro", "Bob", "Bun", "Cut"];
 const HOTELS = new Set(["hotel", "kempinski", "movenpick"]);
 const BEACHES = new Set(["beach", "bojo", "kokrobite"]);
 const GARDENS = new Set(["aburi", "botanical", "golf", "sakumono"]);
+const VENUE_BOUNDS: Bounds = { minX: -102, maxX: 102, minZ: -50, maxZ: 88 };
+const VENUE_BODY = 3.1;
+const NPC_HOMES = [
+  { left: 50, top: 46 },
+  { left: 62, top: 70 },
+  { left: 40, top: 38 },
+  { left: 30, top: 55 },
+];
 
 export type Peer = { username: string; name: string; look?: Look; spot?: SpotPos | null };
 
@@ -112,12 +121,13 @@ export function VenueFloor({
   const [bottleShow, setBottleShow] = useState<null | { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number }>(null);
   const [guest, setGuest] = useState<ClubNpc | null>(null);
   const [empties, setEmpties] = useState<{ id: string; left: number; top: number; emoji: string }[]>([]);
-  const [drift, setDrift] = useState<[number, number][]>([
-    [0, 0],
-    [0, 0],
-    [0, 0],
-    [0, 0],
-  ]);
+  const [npcAt, setNpcAt] = useState(NPC_HOMES);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const entryRef = useRef(false);
+  const youWorld = useRef<Pt>({ x: -10, z: 8 });
+  const npcPaths = useRef<Pt[][]>([[], [], [], []]);
+  const walkFrame = useRef(0);
+  entryRef.current = entryOpen;
   const scroller = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const stopTimer = useRef<number | null>(null);
@@ -130,23 +140,48 @@ export function VenueFloor({
   const tableGuests = (life.guests ?? []).filter((guest) => guest.doing === "dine" && guest.spot === spot.id && guest.until > life.minutes);
   const party = lively || BEACHES.has(spot.id) || nightLife;
   const staff = staffFor(spot);
-  const stands = [
-    { left: "50%", top: "46%" },
-    { left: "62%", top: "70%" },
-    { left: "40%", top: "38%" },
-    { left: "30%", top: "55%" },
-  ].map((style, index) => ({
-    left: `${Number.parseFloat(style.left) + (drift[index]?.[0] ?? 0)}%`,
-    top: `${Number.parseFloat(style.top) + (drift[index]?.[1] ?? 0)}%`,
-  }));
+  const stands = npcAt.map((spot) => ({ left: `${spot.left}%`, top: `${spot.top}%` }));
   const open = people.find((person) => person.username === who) ?? null;
 
   useEffect(() => {
+    const placeId = spot.id;
     const id = window.setInterval(() => {
-      setDrift((current) => current.map(() => [Math.round((Math.random() - 0.5) * 10), Math.round((Math.random() - 0.5) * 8)] as [number, number]));
-    }, 3800);
+      const floor = stage.current;
+      if (!floor) return;
+      const taken: Pt[] = [youWorld.current];
+      let openDoor = false;
+      setNpcAt((current) =>
+        current.map((at, index) => {
+          const from = percentToWorld(at.left, at.top, floor) ?? { x: 0, z: 10 };
+          let path = npcPaths.current[index] ?? [];
+          if (!path.length) {
+            const goal = { x: from.x + (Math.random() - 0.5) * 26, z: from.z + (Math.random() - 0.5) * 16 };
+            const closed = indexSolids(venueSolids(kind, placeId, night, entryRef.current), 6);
+            path = route(from, goal, closed, VENUE_BODY, VENUE_BOUNDS);
+            if (!path.length && !entryRef.current) {
+              const opened = indexSolids(venueSolids(kind, placeId, night, true), 6);
+              const via = route(from, goal, opened, VENUE_BODY, VENUE_BOUNDS);
+              if (via.length) {
+                entryRef.current = true;
+                openDoor = true;
+                path = via;
+              }
+            }
+            npcPaths.current[index] = path;
+          }
+          if (!path.length) return at;
+          const step = path[0];
+          if (crowded(step, taken, VENUE_BODY * 2)) return at;
+          path.shift();
+          taken.push(step);
+          const screen = worldToPercent(step, floor);
+          return { left: screen.left, top: screen.top };
+        }),
+      );
+      if (openDoor) setEntryOpen(true);
+    }, 700);
     return () => window.clearInterval(id);
-  }, []);
+  }, [kind, spot.id, night]);
 
   useEffect(() => {
     moveRef.current = onMove;
@@ -156,6 +191,13 @@ export function VenueFloor({
     const first = startSpot(`${me}:${life.where}`);
     follow(first.left, "auto");
     moveRef.current?.(first.left, first.top);
+    const world = percentToWorld(first.left, first.top, stage.current);
+    if (world) youWorld.current = world;
+    entryRef.current = false;
+    setEntryOpen(false);
+    npcPaths.current = [[], [], [], []];
+    setNpcAt(NPC_HOMES);
+    cancelAnimationFrame(walkFrame.current);
     setEmpties([]);
     setBottleShow(null);
     busy.current = false;
@@ -164,6 +206,7 @@ export function VenueFloor({
     return () => {
       if (stopTimer.current) window.clearTimeout(stopTimer.current);
       if (actTimer.current) window.clearTimeout(actTimer.current);
+      cancelAnimationFrame(walkFrame.current);
     };
   }, [me, life.where]);
 
@@ -174,18 +217,105 @@ export function VenueFloor({
     box.scrollTo({ left: (floor.clientWidth * left) / 100 - box.clientWidth / 2, behavior });
   }
 
+  function bodies(doorOpen: boolean) {
+    const solids = venueSolids(kind, spot.id, night, doorOpen);
+    const floor = stage.current;
+    if (!floor) return solids;
+    for (const person of staff) {
+      const at = percentToWorld(Number.parseFloat(person.style.left), Number.parseFloat(person.style.top), floor);
+      if (at) solids.push(circleSolid(person.role, at.x, at.z, 2.4));
+    }
+    npcAt.forEach((at, index) => {
+      const world = percentToWorld(at.left, at.top, floor);
+      if (world) solids.push(circleSolid(`npc-${index}`, world.x, world.z, 2.4));
+    });
+    for (const person of people) {
+      if (!person.spot) continue;
+      const world = percentToWorld(person.spot.x, person.spot.y, floor);
+      if (world) solids.push(circleSolid(person.username, world.x, world.z, 2.4));
+    }
+    return solids;
+  }
+
   function walkTo(left: number, top: number) {
+    const floor = stage.current;
     const fromLeft = Number.parseFloat(youAt.left);
     const fromTop = Number.parseFloat(youAt.top);
-    const nextLeft = Math.max(10, Math.min(90, left));
-    const nextTop = Math.max(30, Math.min(84, top));
-    const ms = Math.round(Math.max(450, Math.min(1800, Math.hypot(nextLeft - fromLeft, nextTop - fromTop) * 30)));
-    setStride({ ms, face: nextLeft < fromLeft ? -1 : 1, moving: true });
-    setYouAt({ left: `${nextLeft}%`, top: `${nextTop}%` });
-    follow(nextLeft);
-    onMove?.(nextLeft, nextTop);
-    if (stopTimer.current) window.clearTimeout(stopTimer.current);
-    stopTimer.current = window.setTimeout(() => setStride((current) => ({ ...current, moving: false })), ms);
+    const from = percentToWorld(fromLeft, fromTop, floor) ?? youWorld.current;
+    const goal = percentToWorld(left, top, floor);
+    if (!goal || !floor) {
+      const nextLeft = Math.max(10, Math.min(90, left));
+      const nextTop = Math.max(30, Math.min(84, top));
+      const ms = Math.round(Math.max(450, Math.min(1800, Math.hypot(nextLeft - fromLeft, nextTop - fromTop) * 30)));
+      setStride({ ms, face: nextLeft < fromLeft ? -1 : 1, moving: true });
+      setYouAt({ left: `${nextLeft}%`, top: `${nextTop}%` });
+      follow(nextLeft);
+      onMove?.(nextLeft, nextTop);
+      if (stopTimer.current) window.clearTimeout(stopTimer.current);
+      stopTimer.current = window.setTimeout(() => setStride((current) => ({ ...current, moving: false })), ms);
+      return ms;
+    }
+    let door = entryRef.current;
+    let index = indexSolids(bodies(door), 6);
+    let path = route(from, goal, index, VENUE_BODY, VENUE_BOUNDS);
+    if (!path.length && !door && kind !== "shore" && kind !== "garden") {
+      door = true;
+      entryRef.current = true;
+      setEntryOpen(true);
+      index = indexSolids(bodies(true), 6);
+      path = route(from, goal, index, VENUE_BODY, VENUE_BOUNDS);
+    }
+    if (!path.length) {
+      const nudged = slide(from, goal, index, VENUE_BODY, VENUE_BOUNDS);
+      if (Math.hypot(nudged.x - from.x, nudged.z - from.z) < 0.8) {
+        const back = worldToPercent({ x: from.x + (from.x - goal.x) * 0.05, z: from.z + (from.z - goal.z) * 0.05 }, floor);
+        setStride((current) => ({ ...current, moving: false, ms: 0 }));
+        setYouAt({ left: `${back.left}%`, top: `${back.top}%` });
+        window.setTimeout(() => setYouAt({ left: `${fromLeft}%`, top: `${fromTop}%` }), 140);
+        return 180;
+      }
+      path = [{ x: nudged.x, z: nudged.z }];
+    }
+    cancelAnimationFrame(walkFrame.current);
+    const length = path.reduce((sum, point, i) => sum + Math.hypot(point.x - (i ? path[i - 1].x : from.x), point.z - (i ? path[i - 1].z : from.z)), 0);
+    const ms = Math.round(Math.max(420, Math.min(2200, length * 22)));
+    setStride({ ms: 0, face: path[0].x < from.x ? -1 : 1, moving: true });
+    youWorld.current = from;
+    let cursor = 0;
+    let segFrom = from;
+    let segTo = path[0];
+    let segAt = performance.now();
+    const step = (now: number) => {
+      const dist = Math.hypot(segTo.x - segFrom.x, segTo.z - segFrom.z) || 0.001;
+      const t = Math.min(1, ((now - segAt) / 1000) * 28 / dist);
+      const raw = { x: segFrom.x + (segTo.x - segFrom.x) * t, z: segFrom.z + (segTo.z - segFrom.z) * t };
+      const next = slide(youWorld.current, raw, index, VENUE_BODY, VENUE_BOUNDS);
+      const moved = Math.hypot(next.x - youWorld.current.x, next.z - youWorld.current.z);
+      youWorld.current = { x: next.x, z: next.z };
+      const screen = worldToPercent(youWorld.current, floor);
+      setYouAt({ left: `${screen.left}%`, top: `${screen.top}%` });
+      if (next.bumped && moved < 0.15 && t > 0.12) {
+        setStride((current) => ({ ...current, moving: false }));
+        return;
+      }
+      if (t < 1) {
+        walkFrame.current = requestAnimationFrame(step);
+        return;
+      }
+      cursor += 1;
+      if (cursor < path.length) {
+        segFrom = { ...youWorld.current };
+        segTo = path[cursor];
+        segAt = now;
+        setStride((current) => ({ ...current, face: segTo.x < segFrom.x ? -1 : 1, moving: true, ms: 0 }));
+        walkFrame.current = requestAnimationFrame(step);
+        return;
+      }
+      follow(screen.left);
+      onMove?.(screen.left, screen.top);
+      setStride((current) => ({ ...current, moving: false }));
+    };
+    walkFrame.current = requestAnimationFrame(step);
     return ms;
   }
 
@@ -370,7 +500,7 @@ export function VenueFloor({
           className="relative mx-auto h-full w-[max(100%,44rem)] max-w-3xl cursor-pointer origin-center transition-transform duration-200"
           style={{ transform: `scale(${zoom})` }}
         >
-          <VenueScene spot={spot} night={night} kind={kind} party={party} />
+          <VenueScene spot={spot} night={night} kind={kind} party={party} doorOpen={entryOpen} />
           {seats.map((seat) => {
             const guest = tableGuests.find((item) => item.seatId === seat.id) ?? (seatedAt === seat.id ? tableGuests[0] : null);
             return (
@@ -419,6 +549,14 @@ export function VenueFloor({
           {nightLife ? (
             <ClubCrowd
               spotId={spot.id}
+              kind={kind}
+              night={night}
+              doorOpen={entryOpen}
+              stage={stage}
+              onOpenDoor={() => {
+                entryRef.current = true;
+                setEntryOpen(true);
+              }}
               cheer={bottleShow?.step === "cheer" || bottleShow?.step === "pop"}
               onPick={(npc) => {
                 setWho(null);
@@ -779,14 +917,54 @@ export function VenueFloor({
   );
 }
 
-function ClubCrowd({ spotId, cheer, onPick }: { spotId: string; cheer: boolean; onPick: (npc: ClubNpc) => void }) {
+function ClubCrowd({
+  spotId,
+  kind,
+  night,
+  doorOpen,
+  stage,
+  onOpenDoor,
+  cheer,
+  onPick,
+}: {
+  spotId: string;
+  kind: Kind;
+  night: boolean;
+  doorOpen: boolean;
+  stage: { current: HTMLDivElement | null };
+  onOpenDoor: () => void;
+  cheer: boolean;
+  onPick: (npc: ClubNpc) => void;
+}) {
   const [crowd, setCrowd] = useState<ClubNpc[]>([]);
+  const at = useRef(new Map<string, Pt>());
+  const openRef = useRef(onOpenDoor);
+  openRef.current = onOpenDoor;
   useEffect(() => {
-    const pulse = () => setCrowd(clubCrowdAt(spotId));
+    const place = (npc: ClubNpc) => {
+      const floor = stage.current;
+      const world = percentToWorld(npc.left, npc.top, floor);
+      if (!world) return npc;
+      const from = at.current.get(npc.id) ?? world;
+      let index = indexSolids(venueSolids(kind, spotId, night, doorOpen), 6);
+      let path = route(from, world, index, VENUE_BODY, VENUE_BOUNDS);
+      if (!path.length && !doorOpen) {
+        index = indexSolids(venueSolids(kind, spotId, night, true), 6);
+        path = route(from, world, index, VENUE_BODY, VENUE_BOUNDS);
+        if (path.length) openRef.current();
+      }
+      const next = path[0] ?? from;
+      const held = [...at.current.values()].filter((point) => point !== from);
+      const step = crowded(next, held, VENUE_BODY * 2) ? from : next;
+      at.current.set(npc.id, step);
+      const screen = worldToPercent(step, floor);
+      return { ...npc, left: screen.left, top: screen.top };
+    };
+    const pulse = () => setCrowd(clubCrowdAt(spotId).map(place));
     pulse();
-    const id = window.setInterval(pulse, 4000);
+    const id = window.setInterval(pulse, 900);
     return () => window.clearInterval(id);
-  }, [spotId]);
+  }, [spotId, kind, night, doorOpen, stage]);
   return (
     <>
       {crowd.map((npc, index) => {
@@ -1325,7 +1503,105 @@ function youSay(talk: TalkKind, place: string) {
   return "Ei. I just got here.";
 }
 
-function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; kind: Kind; party?: boolean }) {
+function sceneBlocks(spot: Spot, night: boolean, kind: Kind, wall: string, wallSide: string): Block[] {
+  const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables" || kind === "shop" || kind === "court" || kind === "clinic" || kind === "market";
+  const walls: Block[] = boxed
+    ? [
+        { x: -118, y: 0, z: -62, w: 10, h: 86, d: 168, color: wallSide },
+        { x: -118, y: 0, z: -62, w: 236, h: 86, d: 10, color: wall },
+      ]
+    : kind === "club"
+      ? [
+          { x: -118, y: 0, z: -62, w: 8, h: 62, d: 158, color: wallSide },
+          { x: 110, y: 0, z: -62, w: 8, h: 62, d: 108, color: wallSide },
+          { x: -118, y: 0, z: -62, w: 236, h: 62, d: 8, color: wall },
+          { x: -110, y: 0, z: 92, w: 150, h: 22, d: 6, color: wall },
+          { x: -80, y: 56, z: -54, w: 170, h: 4, d: 48, color: "#100c14" },
+        ]
+      : [];
+  return [...walls, ...furniture(kind, night, spot.id), ...setDress(kind, night, spot.id)];
+}
+
+function blocksToSolids(blocks: Block[]): Solid[] {
+  const out: Solid[] = [];
+  for (const block of blocks) {
+    if (block.y < 0 || block.y > 6 || block.h < 5) continue;
+    const insetX = Math.min(1.2, block.w * 0.08);
+    const insetZ = Math.min(1.2, block.d * 0.08);
+    const minX = block.x + insetX;
+    const maxX = block.x + block.w - insetX;
+    const minZ = block.z + insetZ;
+    const maxZ = block.z + block.d - insetZ;
+    if (maxX - minX < 1 || maxZ - minZ < 1) continue;
+    out.push({ minX, maxX, minZ, maxZ });
+  }
+  return out;
+}
+
+function venueSolids(kind: Kind, spotId: string, night: boolean, doorOpen: boolean): Solid[] {
+  const spot = spotById(spotId);
+  const wall = kind === "club" ? "#4c3b52" : "#f2ebe0";
+  const wallSide = kind === "club" ? "#3a2c44" : "#ddd4c6";
+  const solids = blocksToSolids(sceneBlocks(spot, night, kind, wall, wallSide));
+  if (!doorOpen && kind !== "shore" && kind !== "garden") solids.push({ id: "entry-door", minX: -28, maxX: -8, minZ: 74, maxZ: 80 });
+  return solids;
+}
+
+function DoorLeaf({ open }: { open: boolean }) {
+  const shift = useRef(0);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const from = shift.current;
+    const to = open ? 1 : 0;
+    const started = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - started) / 340);
+      shift.current = from + (to - from) * (1 - (1 - t) ** 3);
+      setTick((n) => n + 1);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+  const block: Block = { x: -28 + shift.current * 22, y: 0, z: 74, w: 18, h: 22, d: 4, color: "#6b3a24" };
+  return (
+    <svg viewBox="0 0 760 480" preserveAspectRatio="xMidYMid slice" className="pointer-events-none absolute inset-0 h-full w-full">
+      <Blocks items={[block]} />
+    </svg>
+  );
+}
+
+function stageSpace(stage: HTMLDivElement | null) {
+  if (!stage) return null;
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  if (w < 8 || h < 8) return null;
+  const scale = Math.max(w / 760, h / 480);
+  return { w, h, scale, ox: (w - 760 * scale) / 2, oy: (h - 480 * scale) / 2 };
+}
+
+function percentToWorld(left: number, top: number, stage: HTMLDivElement | null): Pt | null {
+  const space = stageSpace(stage);
+  if (!space) return null;
+  const svgX = ((left / 100) * space.w - space.ox) / space.scale;
+  const svgY = ((top / 100) * space.h - space.oy) / space.scale;
+  const u = (svgX - 390) / 1.85;
+  const v = (svgY - 268) / 0.92;
+  return { x: (u + v) / 2, z: (v - u) / 2 };
+}
+
+function worldToPercent(point: Pt, stage: HTMLDivElement | null) {
+  const space = stageSpace(stage);
+  const [svgX, svgY] = pt(point.x, 0, point.z);
+  if (!space) return { left: 50, top: 60 };
+  return {
+    left: ((space.ox + svgX * space.scale) / space.w) * 100,
+    top: ((space.oy + svgY * space.scale) / space.h) * 100,
+  };
+}
+
+function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot; night: boolean; kind: Kind; party?: boolean; doorOpen?: boolean }) {
   const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables" || kind === "shop" || kind === "court" || kind === "clinic" || kind === "market";
   const floor =
     spot.id === "golf" || kind === "garden"
@@ -1343,7 +1619,6 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
                 : "#cfc6b4";
   const wall = kind === "club" ? "#4c3b52" : night || kind === "airport" ? "#2a2634" : "#f2ebe0";
   const wallSide = kind === "club" ? "#3a2c44" : night || kind === "airport" ? "#1a1824" : "#ddd4c6";
-  const items = [...furniture(kind, night, spot.id), ...setDress(kind, night, spot.id)];
   const title = spot.name.toUpperCase();
   const lights = lightPools(kind, spot.id, night);
   const pid = `v-${spot.id}`;
@@ -1371,21 +1646,7 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
         <Blocks
           items={[
             { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },
-            ...(boxed
-              ? [
-                  { x: -118, y: 0, z: -62, w: 10, h: 86, d: 168, color: wallSide },
-                  { x: -118, y: 0, z: -62, w: 236, h: 86, d: 10, color: wall },
-                ]
-              : kind === "club"
-                ? [
-                    { x: -118, y: 0, z: -62, w: 8, h: 62, d: 158, color: wallSide },
-                    { x: 110, y: 0, z: -62, w: 8, h: 62, d: 108, color: wallSide },
-                    { x: -118, y: 0, z: -62, w: 236, h: 62, d: 8, color: wall },
-                    { x: -110, y: 0, z: 92, w: 150, h: 22, d: 6, color: wall },
-                    { x: -80, y: 56, z: -54, w: 170, h: 4, d: 48, color: "#100c14" },
-                  ]
-                : []),
-            ...items,
+            ...sceneBlocks(spot, night, kind, wall, wallSide),
           ]}
         />
         <FloorWear kind={kind} night={night} />
@@ -1439,6 +1700,7 @@ function VenueScene({ spot, night, kind, party }: { spot: Spot; night: boolean; 
       ) : null}
       <div className={`venue-vignette pointer-events-none absolute inset-0 ${kind === "club" ? "venue-vignette-club" : ""}`} aria-hidden />
       {kind === "club" ? <div className="venue-grain pointer-events-none absolute inset-0" aria-hidden /> : null}
+      {kind !== "shore" && kind !== "garden" ? <DoorLeaf open={doorOpen} /> : null}
     </div>
   );
 }

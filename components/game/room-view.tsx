@@ -7,6 +7,8 @@ import { ItemSheet } from "@/components/game/item-sheet";
 import { fixtureCard, pieceCard, type FixtureId } from "@/lib/game/item-verbs";
 import { activeGuests, doorGuests } from "@/lib/game/home-life";
 import { bayCount, carDust, carOf, footHere, garageBox, motorsOf, setPrimary, washCar, yardTalk } from "@/lib/game/garage";
+import { BODY, homeBounds, homeSolids } from "@/lib/game/home-solids";
+import { indexSolids, route, slide, type SolidIndex } from "@/lib/game/nav";
 import { askPrice, condOf, goodsOf, materialOf, wearLine } from "@/lib/game/wear";
 import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
 
@@ -114,6 +116,15 @@ export function RoomView({
   const [draft, setDraft] = useState<Placed | null>(null);
   const [arrange, setArrange] = useState(false);
   const [beside, setBeside] = useState<string | null>(null);
+  const [doorOpen, setDoorOpen] = useState(false);
+  const [garageShut, setGarageShut] = useState(false);
+  const [recoil, setRecoil] = useState<{ x: number; z: number } | null>(null);
+  const doorRef = useRef(false);
+  const shutRef = useRef(false);
+  const lifeRef = useRef(life);
+  lifeRef.current = life;
+  doorRef.current = doorOpen;
+  shutRef.current = garageShut;
 
   function canInterrupt() {
     return !busy.current || seated.current;
@@ -131,7 +142,7 @@ export function RoomView({
     onArrangeSeen?.();
   }, [startArrange, onArrangeSeen]);
 
-  function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean) {
+  function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean, skip: string[] = []) {
     walkTo(target, null, () => {
       const sitting = !inBed && sitVerb(verb);
       if (sitting) {
@@ -152,7 +163,7 @@ export function RoomView({
         },
         inBed && (verb.sleep || verb.id === "sleep") ? 2800 : 1500,
       );
-    });
+    }, inBed ? ["fix-bed"] : skip);
   }
 
   function sitOnChair() {
@@ -163,44 +174,56 @@ export function RoomView({
       card.verbs.find((item) => /lounge|sit|rest|gist/i.test(`${item.id} ${item.label}`)) ??
       card.verbs[0];
     if (!verb) return;
-    runAt(spots.chair, verb, false);
+    runAt(spots.chair, verb, false, ["fix-sofa"]);
   }
 
   function pickVerb(verb: Verb) {
     if (fixture) {
       const spot = spots[fixture];
       setFixture(null);
-      runAt(spot, verb, fixture === "bed");
+      runAt(spot, verb, fixture === "bed", fixture === "chair" ? ["fix-sofa"] : []);
       return;
     }
     const piece = (life.furniture ?? []).find((item) => item.id === picked);
     setPicked(null);
     if (!piece) return;
-    runAt({ x: clampRoom(piece.x + (piece.x > 0 ? -0.7 : 0.7), box.minX, box.maxX), z: clampRoom(piece.z + 0.55, box.minZ, box.maxZ) }, verb, false);
+    runAt({ x: clampRoom(piece.x + (piece.x > 0 ? -0.7 : 0.7), box.minX, box.maxX), z: clampRoom(piece.z + 0.55, box.minZ, box.maxZ) }, verb, false, sitVerb(verb) ? [piece.id] : []);
   }
 
-  function walkTo(target: { x: number; z: number }, action: string | null, arrive?: () => void) {
+  function bump(from: { x: number; z: number }, toward: { x: number; z: number }) {
+    const dx = from.x - toward.x;
+    const dz = from.z - toward.z;
+    const len = Math.hypot(dx, dz) || 1;
+    setRecoil({ x: (dx / len) * 0.1, z: (dz / len) * 0.1 });
+    window.setTimeout(() => setRecoil(null), 160);
+  }
+
+  function walkTo(target: { x: number; z: number }, action: string | null, arrive?: () => void, skip: string[] = []) {
     cancelAnimationFrame(frame.current);
     seated.current = false;
     busy.current = true;
+    const here = lifeRef.current;
+    const bounds = homeBounds(here);
+    const index: SolidIndex = indexSolids(homeSolids(here, { doorOpen: doorRef.current, garageShut: shutRef.current, skip }), 0.36);
     const start = { ...posRef.current };
-    const dx = target.x - start.x;
-    const dz = target.z - start.z;
-    setHeading(Math.atan2(dx, dz));
-    setPose("walk");
-    const duration = Math.max(550, Math.hypot(dx, dz) * 300);
-    const started = performance.now();
-    const step = (now: number) => {
-      const t = Math.min(1, (now - started) / duration);
-      const eased = 1 - (1 - t) ** 3;
-      const next = { x: start.x + dx * eased, y: 0, z: start.z + dz * eased };
-      const point = { x: next.x, z: next.z };
-      posRef.current = point;
-      setPos(point);
-      if (t < 1) {
-        frame.current = requestAnimationFrame(step);
+    let path = route(start, target, index, BODY, bounds);
+    if (!path.length) {
+      const nudged = slide(start, target, index, BODY, bounds);
+      if (Math.hypot(nudged.x - start.x, nudged.z - start.z) < 0.05) {
+        bump(start, target);
+        setPose("idle");
+        busy.current = false;
         return;
       }
+      path = [{ x: nudged.x, z: nudged.z }];
+    }
+    let cursor = 0;
+    let segFrom = start;
+    let segTo = path[0];
+    let segAt = performance.now();
+    setHeading(Math.atan2(segTo.x - start.x, segTo.z - start.z));
+    setPose("walk");
+    const finish = () => {
       if (arrive) {
         arrive();
         return;
@@ -222,6 +245,35 @@ export function RoomView({
       }
       setPose("idle");
       busy.current = false;
+    };
+    const step = (now: number) => {
+      const dist = Math.hypot(segTo.x - segFrom.x, segTo.z - segFrom.z) || 0.001;
+      const t = Math.min(1, ((now - segAt) / 1000) * 2.8 / dist);
+      const raw = { x: segFrom.x + (segTo.x - segFrom.x) * t, z: segFrom.z + (segTo.z - segFrom.z) * t };
+      const next = slide(posRef.current, raw, index, BODY, bounds);
+      const moved = Math.hypot(next.x - posRef.current.x, next.z - posRef.current.z);
+      if (next.bumped && moved < 0.004 && t > 0.08) {
+        bump(posRef.current, segTo);
+        setPose("idle");
+        busy.current = false;
+        return;
+      }
+      posRef.current = { x: next.x, z: next.z };
+      setPos(posRef.current);
+      if (t < 1) {
+        frame.current = requestAnimationFrame(step);
+        return;
+      }
+      cursor += 1;
+      if (cursor < path.length) {
+        segFrom = { ...posRef.current };
+        segTo = path[cursor];
+        segAt = now;
+        setHeading(Math.atan2(segTo.x - segFrom.x, segTo.z - segFrom.z));
+        frame.current = requestAnimationFrame(step);
+        return;
+      }
+      finish();
     };
     frame.current = requestAnimationFrame(step);
   }
@@ -294,6 +346,13 @@ export function RoomView({
         guests={guests.map((guest) => ({ name: guest.name, doing: guest.doing }))}
         onAsk={onAsk}
         bays={bayCount(life)}
+        doorOpen={doorOpen}
+        recoil={recoil}
+        garageShut={garageShut}
+        onGarage={(shut) => {
+          shutRef.current = shut;
+          setGarageShut(shut);
+        }}
         onCar={(key, x, z) => {
           if (draft || !canInterrupt()) return;
           setBeside(null);
@@ -311,7 +370,13 @@ export function RoomView({
         }}
         onGo={(id) => {
           if (id === "door") {
+            doorRef.current = true;
+            setDoorOpen(true);
             walkTo(spots.door, "map");
+            window.setTimeout(() => {
+              doorRef.current = false;
+              setDoorOpen(false);
+            }, 3200);
             return;
           }
           if (draft || (!canInterrupt() && id !== "chair")) return;

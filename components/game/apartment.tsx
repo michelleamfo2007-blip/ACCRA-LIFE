@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ExtrudeGeometry, Shape, SphereGeometry, type PerspectiveCamera } from "three";
+import { ExtrudeGeometry, Shape, SphereGeometry, type Group, type PerspectiveCamera } from "three";
 import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
 import { HouseGarage } from "@/components/game/house-garage";
 import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
@@ -36,6 +36,10 @@ export function Apartment({
   onDrag,
   bays = 1,
   onCar,
+  doorOpen = false,
+  recoil = null,
+  garageShut = false,
+  onGarage,
 }: {
   life: Life;
   pos: { x: number; z: number };
@@ -59,6 +63,10 @@ export function Apartment({
   onDrag?: (x: number, z: number) => void;
   bays?: number;
   onCar?: (key: string, x: number, z: number) => void;
+  doorOpen?: boolean;
+  recoil?: { x: number; z: number } | null;
+  garageShut?: boolean;
+  onGarage?: (shut: boolean) => void;
 }) {
   const look = homeLook(life.homeId);
   const grade = look.grade;
@@ -84,10 +92,10 @@ export function Apartment({
       </mesh>
       <Floor grade={grade} floorId={life.floor} span={span} />
       <Walls grade={grade} span={span} gap={garageBox(span, bays)} />
-      <HouseGarage life={life} span={span} bays={bays} onWalk={placing ? undefined : onWalk} onCar={placing ? undefined : onCar} />
+      <HouseGarage life={life} span={span} bays={bays} shut={garageShut} onShut={onGarage} onWalk={placing ? undefined : onWalk} onCar={placing ? undefined : onCar} />
       <InteriorFinish span={span} night={night} dark={dark} />
       {grade === "high" ? <Cooler /> : null}
-      <Door color={look.door} x={-room.halfW + 0.1} onGo={onGo} />
+      <Door color={look.door} x={-room.halfW + 0.1} open={doorOpen} onGo={onGo} />
       <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
         <Bed color={bedColor} grade={grade} wide={life.inventory.includes("king")} onGo={onGo} />
         <WearMarks cond={goodsOf(life, "fix-bed").cond} dust={goodsOf(life, "fix-bed").dust} kind="bed" id="fix-bed" />
@@ -115,7 +123,7 @@ export function Apartment({
         const spot = FIXTURES.find((item) => item.id === wall.id);
         return (
           <FixtureSpot key={wall.id} piece={spotOf(built, wall.id)} active={picked === wall.id}>
-            <Divider at={[spot?.x ?? 0, spot?.z ?? 0]} along={wall.along} length={wall.length} color={spot?.color ?? "#f3ead8"} onPick={() => onPick?.(wall.id)} />
+            <Divider at={[spot?.x ?? 0, spot?.z ?? 0]} along={wall.along} length={wall.length} gap={wall.id === "fix-wall-side" ? 1.05 : 0} color={spot?.color ?? "#f3ead8"} onPick={() => onPick?.(wall.id)} />
           </FixtureSpot>
         );
       })}
@@ -167,7 +175,7 @@ export function Apartment({
           <Box color={bedColor} position={[0, 0.6, 0.34]} size={[life.inventory.includes("king") ? 2.05 : 1.52, 0.1, 1.3]} />
         </group>
       ) : (
-        <group position={[pos.x, 0, pos.z]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
+        <group position={[pos.x + (recoil?.x ?? 0), 0, pos.z + (recoil?.z ?? 0)]} onClick={(event) => { event.stopPropagation(); onAsk(); }}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
             <circleGeometry args={[0.32, 16]} />
             <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />
@@ -505,30 +513,53 @@ function Walls({ grade, span = 0, gap }: { grade: HomeGrade; span?: number; gap?
   );
 }
 
-function Door({ color, x, onGo }: { color: string; x: number; onGo: (id: string) => void }) {
+function Door({ color, x, open, onGo }: { color: string; x: number; open: boolean; onGo: (id: string) => void }) {
+  const hinge = useRef<Group>(null);
+  const yaw = useRef(0);
+  useFrame((_, dt) => {
+    const goal = open ? -1.35 : 0;
+    yaw.current += (goal - yaw.current) * Math.min(1, dt * 8);
+    if (hinge.current) hinge.current.rotation.y = yaw.current;
+  });
   return (
-    <group position={[x, 0.95, 0.15]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
-      <mesh>
-        <boxGeometry args={[0.08, 1.7, 0.82]} />
-        <meshStandardMaterial color={color} roughness={0.7} />
-      </mesh>
-      <mesh position={[0.05, 0.12, 0]}>
-        <boxGeometry args={[0.02, 1.15, 0.5]} />
-        <meshStandardMaterial color="#f4efe6" roughness={0.8} />
-      </mesh>
-      <mesh position={[0.07, 0, 0.22]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.08, 10]} />
-        <meshStandardMaterial color="#c4a46a" metalness={0.4} roughness={0.35} />
-      </mesh>
+    <group position={[x, 0, -0.26]} onClick={(event) => { event.stopPropagation(); onGo("door"); }}>
+      <group ref={hinge}>
+        <mesh position={[0.04, 0.95, 0.41]}>
+          <boxGeometry args={[0.08, 1.7, 0.82]} />
+          <meshStandardMaterial color={color} roughness={0.7} />
+        </mesh>
+        <mesh position={[0.08, 0.95, 0.41]}>
+          <boxGeometry args={[0.02, 1.15, 0.5]} />
+          <meshStandardMaterial color="#f4efe6" roughness={0.8} />
+        </mesh>
+        <mesh position={[0.1, 0.95, 0.62]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.025, 0.025, 0.08, 10]} />
+          <meshStandardMaterial color="#c4a46a" metalness={0.4} roughness={0.35} />
+        </mesh>
+      </group>
     </group>
   );
 }
 
-function Divider({ at, along, length, color, onPick }: { at: [number, number]; along: "x" | "z"; length: number; color: string; onPick: () => void }) {
-  const size: [number, number, number] = along === "x" ? [length, 1.7, 0.16] : [0.16, 1.7, length];
+function Divider({ at, along, length, color, onPick, gap = 0 }: { at: [number, number]; along: "x" | "z"; length: number; color: string; onPick: () => void; gap?: number }) {
+  const open = gap > 0.4 && gap < length - 0.3;
+  const stub = open ? (length - gap) / 2 : length;
+  const shift = open ? (stub + gap) / 2 : 0;
+  const slab = (offset: number) => {
+    const size: [number, number, number] = along === "x" ? [stub, 1.7, 0.16] : [0.16, 1.7, stub];
+    const position: [number, number, number] = along === "x" ? [offset, 0.85, 0] : [0, 0.85, offset];
+    return <PlasterBox color={color} position={position} size={size} />;
+  };
   return (
     <group position={[at[0], 0, at[1]]} onClick={(event) => { event.stopPropagation(); onPick(); }}>
-      <PlasterBox color={color} position={[0, 0.85, 0]} size={size} />
+      {open ? (
+        <>
+          {slab(-shift)}
+          {slab(shift)}
+        </>
+      ) : (
+        slab(0)
+      )}
     </group>
   );
 }

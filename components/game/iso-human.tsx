@@ -116,6 +116,7 @@ export function IsoHuman({
 }
 
 function Hair({ hair, cloth }: { hair: string; cloth: string }) {
+  if (hair === "Bald") return null;
   if (hair === "Afro") return <circle cx="50" cy="38" r="18" fill="#1c140f" />;
   if (hair === "Bun") {
     return (
