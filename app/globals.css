@@ -1697,10 +1697,16 @@ body {
 }
 .venue-haze-club {
   background:
-    radial-gradient(ellipse at 25% 30%, rgba(255, 45, 149, 0.2), transparent 40%),
-    radial-gradient(ellipse at 70% 25%, rgba(124, 92, 255, 0.22), transparent 42%),
-    radial-gradient(ellipse at 50% 80%, rgba(34, 211, 238, 0.1), transparent 45%),
-    radial-gradient(ellipse at 50% 100%, rgba(0, 0, 0, 0.4), transparent 50%);
+    radial-gradient(ellipse at 22% 38%, rgba(255, 45, 149, 0.28), transparent 36%),
+    radial-gradient(ellipse at 68% 28%, rgba(124, 92, 255, 0.32), transparent 40%),
+    radial-gradient(ellipse at 18% 62%, rgba(252, 209, 22, 0.12), transparent 28%),
+    radial-gradient(ellipse at 78% 58%, rgba(232, 177, 90, 0.1), transparent 26%),
+    radial-gradient(ellipse at 48% 18%, rgba(126, 224, 255, 0.14), transparent 24%),
+    radial-gradient(ellipse at 50% 100%, rgba(8, 2, 16, 0.62), transparent 58%);
+}
+.venue-dust-club .venue-mote {
+  background: rgba(220, 180, 255, 0.7);
+  box-shadow: 0 0 8px rgba(180, 120, 255, 0.45);
 }
 .venue-dust {
   overflow: hidden;
@@ -1719,13 +1725,49 @@ body {
   background: radial-gradient(ellipse at 48% 42%, transparent 42%, rgba(8, 6, 4, 0.38) 100%);
 }
 .venue-vignette-club {
-  background: radial-gradient(ellipse at 50% 46%, transparent 58%, rgba(28, 10, 32, 0.22) 100%);
+  background: radial-gradient(ellipse at 50% 46%, transparent 34%, rgba(10, 4, 16, 0.72) 100%);
 }
 .venue-grain {
   background-image: radial-gradient(rgba(255, 255, 255, 0.05) 0.6px, transparent 0.6px);
   background-size: 3px 3px;
   mix-blend-mode: overlay;
   opacity: 0.35;
+}
+.venue-laser-beam {
+  transform-box: fill-box;
+  transform-origin: center top;
+  animation: venue-laser 4.8s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+.venue-confetti {
+  position: absolute;
+  top: -8%;
+  width: 6px;
+  height: 9px;
+  border-radius: 1px;
+  opacity: 0.85;
+  animation: venue-confetti-fall linear infinite;
+}
+@keyframes venue-laser {
+  from {
+    opacity: 0.12;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+@keyframes venue-confetti-fall {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  to {
+    transform: translate3d(18px, 110vh, 0) rotate(220deg);
+    opacity: 0.15;
+  }
 }
 .venue-beam {
   background:
@@ -1787,6 +1829,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .venue-dance,
   .venue-beam,
+  .venue-laser-beam,
+  .venue-confetti,
   .venue-neon,
   .venue-mote,
   .club-spark,

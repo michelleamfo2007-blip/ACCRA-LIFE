@@ -5,6 +5,7 @@ import { IsoHuman } from "@/components/game/iso-human";
 import { NameSuggest } from "@/components/game/name-hints";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
+import { ShopsApp } from "@/components/game/shops-app";
 import { JusticeApp } from "@/components/game/justice-app";
 import { BetTable } from "@/components/game/bet-table";
 import { SpineApp } from "@/components/game/spine-app";
@@ -89,6 +90,7 @@ type AppId =
   | "light"
   | "settings"
   | "biz"
+  | "shops"
   | "susu"
   | "people"
   | "land"
@@ -127,7 +129,7 @@ type AppId =
   | "book"
   | "law";
 
-const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "bet", "papers", "book", "law"];
+const APP_IDS: AppId[] = ["messages", "calls", "memories", "work", "goals", "momo", "contacts", "radio", "news", "games", "boutique", "light", "settings", "biz", "shops", "susu", "people", "land", "family", "studio", "school", "garage", "farm", "health", "tailor", "badges", "crew", "events", "leader", "calendar", "stories", "bank", "fleet", "football", "pets", "community", "guide", "alerts", "feed", "trade", "trips", "chop", "charts", "house", "turf", "invite", "photos", "delivery", "bet", "papers", "book", "law"];
 
 export function Handset({
   life,
@@ -570,6 +572,7 @@ export function Handset({
               {app === "boutique" ? <BoutiqueScreen life={life} onBack={() => setApp("home")} onApply={onSocial} /> : null}
               {app === "light" ? <NoteScreen title="Light" onBack={() => setApp("home")} lines={[life.dumsor ? "Dumsor. The estate is dark." : "Current is on.", hasCurrent(life.inventory) ? "Your gen or solar can carry the room." : life.inventory.includes("bulb") ? "The rechargeable bulb is in the room." : "A bulb, a gen, or solar is in the catalogue."]} /> : null}
               {app === "biz" ? <BizApp life={life} onBack={() => setApp("home")} onApply={onSocial} onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))} /> : null}
+              {app === "shops" ? <ShopsApp life={life} username={username} onBack={() => setApp("home")} onApply={onSocial} onVisit={(spot) => (life.where === spot ? onClose() : onGo(spot))} /> : null}
               {app === "susu" ? <SusuApp me={username} life={life} social={social} cloud={cloud} onBack={() => setApp("home")} onAction={onNet} /> : null}
               {app === "people" ? (
                 <PeopleApp
@@ -871,6 +874,9 @@ function HomeScreen({
         </AppIcon>
         <AppIcon label="Business" color="#121212" onClick={() => onOpen("biz")}>
           <span className="text-2xl">🏪</span>
+        </AppIcon>
+        <AppIcon label="Shops" color="#5b21b6" onClick={() => onOpen("shops")}>
+          <span className="text-2xl">🛍️</span>
         </AppIcon>
         <AppIcon label="Chop bar" color="#CE1126" onClick={() => onOpen("chop")}>
           <span className="text-2xl">🍲</span>

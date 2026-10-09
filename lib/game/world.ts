@@ -144,6 +144,7 @@ export type Life = {
   net?: Net;
   spot?: SpotPos;
   businesses?: Business[];
+  shopBook?: ShopBook;
   bag?: Record<string, { qty: number; paid: number }>;
   soldToday?: { day: number; spots: Record<string, number> };
   pantry?: number;
@@ -399,6 +400,27 @@ export type Business = {
   heir?: string;
   /** 0–6. Any level above 0 stops a robbery and holds the person who tried. */
   security?: number;
+  /** Owner's posted hours, such as "8:00 – 20:00". */
+  hours?: string;
+  /** 0–30. A percent off the shelf. */
+  promo?: number;
+  /** Emoji on the directory avatar. */
+  icon?: string;
+  /** Neighbourhood on the shop directory. */
+  area?: string;
+};
+
+export type ShopNote = { id: string; shopId: string; stars: number; text: string; day: number };
+
+/** What you did in other people's shops, and prices you set on your own shelf. */
+export type ShopBook = {
+  follows: string[];
+  bought: Record<string, number>;
+  wrote: ShopNote[];
+  replies: Record<string, string>;
+  price: Record<string, number>;
+  added: Record<string, number>;
+  refunded?: string[];
 };
 
 export type PurseNote = { id: string; delta: number; note: string };
@@ -1531,6 +1553,17 @@ export function clone(life: Life): Life {
     seenTransfers: [...(life.seenTransfers ?? [])],
     chats: life.chats,
     businesses: (life.businesses ?? []).map((shop) => ({ ...shop, staff: shop.staff?.map((person) => ({ ...person })) })),
+    shopBook: life.shopBook
+      ? {
+          follows: [...life.shopBook.follows],
+          bought: { ...life.shopBook.bought },
+          wrote: life.shopBook.wrote.map((note) => ({ ...note })),
+          replies: { ...life.shopBook.replies },
+          price: { ...life.shopBook.price },
+          added: { ...life.shopBook.added },
+          refunded: life.shopBook.refunded ? [...life.shopBook.refunded] : undefined,
+        }
+      : undefined,
     bag: Object.fromEntries(Object.entries(life.bag ?? {}).map(([id, lot]) => [id, { ...lot }])),
     soldToday: life.soldToday ? { day: life.soldToday.day, spots: { ...life.soldToday.spots } } : undefined,
     cool: { ...(life.cool ?? {}) },

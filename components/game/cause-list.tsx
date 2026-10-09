@@ -10,6 +10,7 @@ export function CauseList({ life, you, court, onApply }: { life: Life; you: stri
   const yours = rows.find((row) => row.yours) ?? null;
   const [watch, setWatch] = useState<Hearing | null>(null);
   const [phase, setPhase] = useState(0);
+  const [openList, setOpenList] = useState(false);
   const title = courtTitle(court);
 
   function open(row: Hearing) {
@@ -27,10 +28,27 @@ export function CauseList({ life, you, court, onApply }: { life: Life; you: stri
     setWatch(null);
   }
 
+  if (!openList) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpenList(true)}
+        className="absolute left-2 top-[max(4.6rem,calc(env(safe-area-inset-top)+4rem))] z-30 max-w-[12rem] truncate rounded-full bg-[#4a3428]/90 px-3 py-1.5 text-left text-xs font-bold text-[#f6efe4] shadow"
+      >
+        Cause list · {rows.length}
+      </button>
+    );
+  }
+
   return (
     <>
       <section className="absolute left-2 right-2 top-[max(4.6rem,calc(env(safe-area-inset-top)+4rem))] z-40 max-h-[38vh] overflow-auto rounded-2xl bg-[#4a3428] p-3 text-[#f6efe4] shadow-xl">
-        <p className="text-sm font-bold tracking-wide">⚖ CAUSE LIST</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-bold tracking-wide">⚖ CAUSE LIST</p>
+          <button type="button" onClick={() => setOpenList(false)} aria-label="Close cause list" className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/15 text-xs">
+            ×
+          </button>
+        </div>
         <p className="text-xs text-[#e7d3b0]">{title}</p>
         <p className="mt-1 text-xs">{yours ? `Your case: ${yours.title} · ${yours.time}` : "No case of yours today. Watch a trial from the gallery."}</p>
         <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[#e7d3b0]">{rows.length} hearings coming up</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { bizKind } from "@/lib/game/biz-table";
+import { shelfLine } from "@/lib/game/shops";
 import { booksOf, clearNotice, postShop, restock, setMarkup, shopTitle, shopsHere, workShift } from "@/lib/game/shop-run";
 import { cedis, type Life, type StepResult } from "@/lib/game/world";
 
@@ -21,6 +22,7 @@ export function ShopFloor({ life, onApply }: { life: Life; onApply: (result: Ste
               Boss, welcome. {books.customers} people fit through on a fair day. The crew {shop.staff?.length ? `is ${shop.staff.map((person) => person.name).join(", ")}` : "is you, until you hire"}.
             </p>
             {shop.tagline ? <p className="mt-1 text-xs text-white/70">{shop.tagline}</p> : null}
+            <p className="mt-1 text-xs text-white/80">On the shelf: {shelfLine(shop.kind, shop.town)}. The board says {books.stars.toFixed(1)} stars.</p>
             <p className="mt-2 text-xs">
               {books.stars.toFixed(1)} stars · stock {books.stock} · about {cedis(books.profit)} before the till is counted
             </p>

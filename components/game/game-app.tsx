@@ -1547,6 +1547,10 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
                   setPlaceId(spot.id);
                 }}
                 onTravel={() => setTravelOpen(true)}
+                onShops={() => {
+                  setPhoneApp("shops");
+                  setTab("phone");
+                }}
                 onShow={() => {
                   chipsHidden.current = false;
                   if (chipTimer.current) window.clearTimeout(chipTimer.current);
@@ -2561,6 +2565,7 @@ function MapFilterBar({
   onPerson,
   onTravel,
   onShow,
+  onShops,
 }: {
   tucked: boolean;
   filter: string;
@@ -2576,6 +2581,7 @@ function MapFilterBar({
   onPerson: (person: SitePerson) => void;
   onTravel: () => void;
   onShow: () => void;
+  onShops: () => void;
 }) {
   const [more, setMore] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
@@ -2590,6 +2596,7 @@ function MapFilterBar({
     { id: "food", label: "Food", icon: "utensils", active: filter === "food", onClick: () => onFilter("food"), late: true },
     { id: "nightlife", label: "Night", icon: "moon", active: filter === "nightlife", onClick: () => onFilter("nightlife"), late: true },
     { id: "shopping", label: "Shop", icon: "bag", active: filter === "shopping", onClick: () => onFilter("shopping"), late: true },
+    { id: "shops", label: "Shops", icon: "bag", active: false, onClick: onShops },
     { id: "worship", label: "Worship", icon: "worship", active: filter === "worship", onClick: () => onFilter("worship"), late: true },
     { id: "transport", label: "Ride", icon: "car", active: filter === "transport", onClick: () => onFilter("transport"), late: true },
     { id: "stars", label: "Saved", icon: "bookmark", active: filter === "stars", onClick: () => onFilter("stars"), late: true },

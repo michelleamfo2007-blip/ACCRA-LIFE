@@ -1652,6 +1652,7 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
             <stop offset="100%" stopColor="#0a0806" stopOpacity={night ? 0.35 : 0.16} />
           </linearGradient>
         </defs>
+        {kind === "club" ? <ClubShadows /> : null}
         <Blocks
           items={[
             { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },
@@ -1662,8 +1663,9 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
         <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grime)`} pointerEvents="none" />
         <SpotLights pools={lights} warm={!night || kind === "club"} />
         <PracticalLights kind={kind} night={night} party={party} />
-        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-sun)`} pointerEvents="none" />
+        {kind === "club" ? null : <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-sun)`} pointerEvents="none" />}
         {party || kind === "club" ? <ClubGlow party={Boolean(party)} /> : null}
+        {kind === "club" ? <ClubBeams /> : null}
         {kind === "shore" ? <ShoreDress /> : null}
         {kind === "garden" || spot.id === "golf" ? <GardenDress golf={spot.id === "golf"} /> : null}
         {kind === "hotel" ? <Pool /> : null}
@@ -1693,10 +1695,11 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
           <StandingBoard x={-72} z={6} text={title} />
         )}
         <ellipse cx="380" cy="420" rx="340" ry="80" fill="#000" opacity={night ? 0.28 : 0.12} pointerEvents="none" />
-        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grade)`} pointerEvents="none" />
+        {kind === "club" ? <rect x="0" y="0" width="760" height="480" fill="#140818" opacity="0.28" pointerEvents="none" /> : <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grade)`} pointerEvents="none" />}
       </svg>
       <div className={`venue-haze pointer-events-none absolute inset-0 ${night ? "venue-haze-night" : "venue-haze-day"} ${kind === "club" ? "venue-haze-club" : ""}`} aria-hidden />
-      <div className="venue-dust pointer-events-none absolute inset-0" aria-hidden>
+      {kind === "club" ? <ClubConfetti /> : null}
+      <div className={`venue-dust pointer-events-none absolute inset-0 ${kind === "club" ? "venue-dust-club" : ""}`} aria-hidden>
         {Array.from({ length: 12 }, (_, i) => (
           <span key={i} className="venue-mote" style={{ left: `${8 + ((i * 17) % 84)}%`, animationDelay: `${(i % 6) * 0.7}s`, animationDuration: `${5 + (i % 4)}s` }} />
         ))}
@@ -1718,10 +1721,11 @@ function lightPools(kind: Kind, spotId: string, night: boolean): { x: number; z:
   if (spotId === "golf") return [{ x: -60, z: 20, r: 54 }, { x: 20, z: -10, r: 48 }, { x: 70, z: 30, r: 50 }, { x: 10, z: 40, r: 40 }];
   if (kind === "club")
     return [
-      { x: -50, z: 20, r: 50, color: "#ff4d9a", opacity: 0.22 },
-      { x: 10, z: -10, r: 62, color: "#7c5cff", opacity: 0.2 },
-      { x: 60, z: 30, r: 46, color: "#22d3ee", opacity: 0.18 },
-      { x: -10, z: 40, r: 40, color: "#FCD116", opacity: 0.14 },
+      { x: -6, z: 56, r: 74, color: "#ff2d95", opacity: 0.32 },
+      { x: 12, z: 42, r: 58, color: "#7c5cff", opacity: 0.28 },
+      { x: -102, z: 24, r: 34, color: "#FCD116", opacity: 0.24 },
+      { x: 72, z: 18, r: 30, color: "#e8b15a", opacity: 0.14 },
+      { x: -8, z: -38, r: 26, color: "#7ee0ff", opacity: 0.22 },
     ];
   if (kind === "airport") return [{ x: -60, z: -10, r: 48, color: "#dbeafe", opacity: night ? 0.2 : 0.14 }, { x: 10, z: 20, r: 44 }, { x: 70, z: 20, r: 42 }];
   if (kind === "shore") return [{ x: -20, z: 10, r: 56, color: "#fff6d8", opacity: 0.22 }, { x: 40, z: 30, r: 48 }, { x: -70, z: 40, r: 40 }];
@@ -1816,6 +1820,76 @@ function FloorWear({ kind, night }: { kind: Kind; night: boolean }) {
   );
 }
 
+function ClubShadows() {
+  const pools = [
+    { x: -100, z: 26, rx: 26, ry: 9 },
+    { x: -8, z: -40, rx: 40, ry: 13 },
+    { x: 74, z: 18, rx: 32, ry: 11 },
+    { x: -4, z: 56, rx: 42, ry: 14 },
+    { x: -48, z: 32, rx: 14, ry: 5 },
+  ];
+  return (
+    <g pointerEvents="none">
+      {pools.map((pool, index) => {
+        const [cx, cy] = pt(pool.x, 0.3, pool.z);
+        return <ellipse key={index} cx={cx} cy={cy} rx={pool.rx} ry={pool.ry} fill="#050308" opacity="0.55" />;
+      })}
+    </g>
+  );
+}
+
+function ClubBeams() {
+  const heads = [
+    { x: -16, z: -34, color: "#ff2d95", floorX: -28, floorZ: 52 },
+    { x: -4, z: -34, color: "#7c5cff", floorX: 4, floorZ: 64 },
+    { x: 8, z: -34, color: "#22d3ee", floorX: 22, floorZ: 48 },
+  ];
+  return (
+    <g pointerEvents="none">
+      {heads.map((head, index) => {
+        const a = pt(head.x, 46, head.z);
+        const b = pt(head.floorX - 10, 1.2, head.floorZ);
+        const c = pt(head.floorX + 10, 1.2, head.floorZ);
+        return (
+          <polygon
+            key={head.color}
+            className="venue-laser-beam"
+            points={`${a[0].toFixed(1)},${a[1].toFixed(1)} ${b[0].toFixed(1)},${b[1].toFixed(1)} ${c[0].toFixed(1)},${c[1].toFixed(1)}`}
+            fill={head.color}
+            opacity="0.28"
+            style={{ animationDelay: `${index * 0.9}s` }}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function ClubConfetti() {
+  const colors = ["#ff2d95", "#FCD116", "#7c5cff", "#22d3ee", "#ffffff"];
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {colors.flatMap((color, colorIndex) =>
+        [0, 1, 2].map((copy) => {
+          const index = colorIndex * 3 + copy;
+          return (
+            <span
+              key={`${color}-${copy}`}
+              className="venue-confetti"
+              style={{
+                left: `${(index * 17) % 96}%`,
+                background: color,
+                animationDelay: `${index * 0.28}s`,
+                animationDuration: `${3.2 + (index % 4) * 0.6}s`,
+              }}
+            />
+          );
+        }),
+      )}
+    </div>
+  );
+}
+
 function ClubGlow({ party }: { party?: boolean }) {
   const neon = pt(-20, 44, -48);
   const strip = pt(-20, 34, -30);
@@ -1826,9 +1900,11 @@ function ClubGlow({ party }: { party?: boolean }) {
       <text x={neon[0]} y={neon[1] + 4} textAnchor="middle" fill="#FCD116" fontSize="11" fontWeight="800" letterSpacing="1.5">
         LIVE · ACCRA
       </text>
-      <rect x={strip[0] - 40} y={strip[1]} width="80" height="3" fill="#ff2d95" opacity="0.75" rx="1.5" />
-      <rect x={strip2[0] - 28} y={strip2[1]} width="56" height="3" fill="#22d3ee" opacity="0.7" rx="1.5" />
-      <ellipse cx={strip[0]} cy={strip[1] + 55} rx="70" ry="22" fill="#7c5cff" opacity="0.12" />
+      <rect x={strip[0] - 40} y={strip[1]} width="80" height="3" fill="#ff2d95" opacity="0.9" rx="1.5" />
+      <rect x={strip2[0] - 28} y={strip2[1]} width="56" height="3" fill="#22d3ee" opacity="0.85" rx="1.5" />
+      <rect x={strip[0] - 70} y={strip[1] + 18} width="120" height="2" fill="#FCD116" opacity="0.75" rx="1" />
+      <ellipse cx={strip[0]} cy={strip[1] + 55} rx="70" ry="22" fill="#7c5cff" opacity="0.16" />
+      <ellipse cx={strip[0] + 8} cy={strip[1] + 78} rx="54" ry="16" fill="#ff2d95" opacity="0.1" />
       <circle cx={strip[0] + 10} cy={strip[1] - 28} r="7" fill="#f4f7ff" opacity="0.55" />
       <circle cx={strip[0] + 10} cy={strip[1] - 28} r="3" fill="#FCD116" opacity="0.8" />
     </g>

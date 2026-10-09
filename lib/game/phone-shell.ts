@@ -56,6 +56,7 @@ export const PHONE_APPS: PhoneAppDef[] = [
   { id: "radio", name: "Music", lucide: "disc-3", tint: "#1c1c1c" },
   { id: "photos", name: "Photos", lucide: "image", tint: "#c45c9a" },
   { id: "biz", name: "Business", lucide: "store", tint: "#121212" },
+  { id: "shops", name: "Shops", lucide: "shopping-bag", tint: "#5b21b6" },
   { id: "contacts", name: "Contacts", lucide: "contact", tint: "#7a5af5" },
   { id: "settings", name: "Settings", lucide: "settings", tint: "#e7edf5" },
   { id: "house", name: "Home", lucide: "home", tint: "#0b3d6b" },
