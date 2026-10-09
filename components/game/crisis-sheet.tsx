@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { IsoHuman } from "@/components/game/iso-human";
+import { LowPolyHuman } from "@/components/game/low-poly-human";
 import { askKin, callDoctor, callFriend, callRide, chooseCare, drinkNow, eatNow, getUp, keepWalking, payCare, shortenQueue, sitDown, waitCare } from "@/lib/game/crisis";
 import { cedis, type Life, type StepResult } from "@/lib/game/world";
 
@@ -47,8 +47,8 @@ export function CrisisLayer({ life, onApply }: { life: Life; onApply: (result: S
         }}
       />
       <div className="absolute inset-x-0 bottom-0 z-[60] max-h-[min(78vh,100dvh-4.5rem)] overflow-y-auto rounded-t-[28px] bg-[#1a120f] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-white shadow-[0_-16px_50px_rgba(0,0,0,.45)]">
-        <div className={`mx-auto mb-3 grid h-24 w-16 place-items-end ${crisis ? "origin-bottom rotate-[68deg]" : ""}`}>
-          <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} pose={crisis ? "sit" : "walk"} className="h-24" />
+        <div className="mx-auto mb-3 h-40 w-28">
+          <LowPolyHuman skin={life.look.skin} shirt={life.look.cloth} pants={life.look.body === "woman" ? "#1c2744" : life.look.accent} hair={life.look.hair} body={life.look.body} pose={crisis ? "faint" : "walk"} passive />
         </div>
         {warn && !crisis ? (
           <>

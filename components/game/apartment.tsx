@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ExtrudeGeometry, Shape, SphereGeometry, type Group, type Mesh, type MeshBasicMaterial, type PerspectiveCamera } from "three";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { Box3, ExtrudeGeometry, Shape, SphereGeometry, Vector3, type Group, type Mesh, type MeshBasicMaterial, type Object3D, type PerspectiveCamera } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AfricanGrey, Aquarium, BathBucket, BedPillow, BowlAndPitcher, BullionVault, CompoundDog, CookingPot, GasCooker, GoldLion, GuitarProp, HouseCat, KenteCloth, KitchenCounter, KitchenSink, LuxuryTv, MosquitoNet, OldPainting, SilkCurtains, SolarKit, StandingFan, StuddedThrone, TransistorRadio, WallAircon, WeightRack } from "@/components/game/home-figures";
 import { HouseGarage } from "@/components/game/house-garage";
 import { LaptopSet, modelFor, PlacedModel } from "@/components/game/kit-mesh";
@@ -19,11 +20,13 @@ export function Apartment({
   pose,
   heading,
   dark,
+  lit = true,
   night = false,
   bedColor,
   sofaColor,
   onAsk,
   onGo,
+  onLights,
   onWalk,
   pieces = [],
   fixtures,
@@ -37,6 +40,7 @@ export function Apartment({
   bays = 1,
   onCar,
   doorOpen = false,
+  fridgeOpen = false,
   recoil = null,
   garageShut = false,
   onGarage,
@@ -46,11 +50,13 @@ export function Apartment({
   pose: "idle" | "walk" | "act" | "sleep" | "sit";
   heading: number;
   dark: boolean;
+  lit?: boolean;
   night?: boolean;
   bedColor: string;
   sofaColor: string | null;
   onAsk: () => void;
   onGo: (id: string) => void;
+  onLights?: () => void;
   onWalk?: (x: number, z: number) => void;
   pieces?: Placed[];
   fixtures?: Placed[];
@@ -64,6 +70,7 @@ export function Apartment({
   bays?: number;
   onCar?: (key: string, x: number, z: number) => void;
   doorOpen?: boolean;
+  fridgeOpen?: boolean;
   recoil?: { x: number; z: number } | null;
   garageShut?: boolean;
   onGarage?: (shut: boolean) => void;
@@ -85,7 +92,7 @@ export function Apartment({
       <CameraRig frozen={placing} follow={placing && focus ? focus : pos} lift={placing ? 0.85 : 0} />
       <RoomShadows />
       <color attach="background" args={[dark ? "#100e0c" : night ? "#12182a" : look.sky]} />
-      <HouseLight night={night} dark={dark} />
+      <HouseLight night={night} dark={dark} lit={lit} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.06, 0.2]}>
         <circleGeometry args={[22, 64]} />
         <meshLambertMaterial color={dark ? "#3d4a32" : look.yard} />
@@ -93,7 +100,7 @@ export function Apartment({
       <Floor grade={grade} floorId={life.floor} span={span} />
       <Walls grade={grade} span={span} gap={garageBox(span, bays)} />
       <HouseGarage life={life} span={span} bays={bays} shut={garageShut} onShut={onGarage} onWalk={placing ? undefined : onWalk} onCar={placing ? undefined : onCar} />
-      <InteriorFinish span={span} night={night} dark={dark} />
+      <InteriorFinish span={span} night={Boolean(night)} dark={dark} lit={lit} mat={life.mat} onMat={placing ? undefined : () => onGo("mat")} onLights={placing ? undefined : onLights} />
       {grade === "high" ? <Cooler /> : null}
       <Door color={look.door} x={-room.halfW + 0.1} open={doorOpen} onGo={onGo} />
       <FixtureSpot piece={spotOf(built, "fix-bed")} active={picked === "fix-bed"}>
@@ -105,7 +112,7 @@ export function Apartment({
         <WearMarks cond={goodsOf(life, "fix-sofa").cond} dust={goodsOf(life, "fix-sofa").dust} kind="sofa" id="fix-sofa" />
       </FixtureSpot>
       <FixtureSpot piece={spotOf(built, "fix-fridge")} active={picked === "fix-fridge"}>
-        <Fridge onGo={onGo} />
+        <Fridge onGo={onGo} open={fridgeOpen} />
       </FixtureSpot>
       <FixtureSpot piece={spotOf(built, "fix-stove")} active={picked === "fix-stove"}>
         <Stove onGo={onGo} />
@@ -168,8 +175,11 @@ export function Apartment({
               pattern={life.look.pattern}
               outfit={life.look.outfit}
               body={life.look.body}
+              stature={life.look.height}
+              build={life.look.build}
               pose="idle"
               turn={0}
+              shadow={false}
             />
           </group>
           <Box color={bedColor} position={[0, 0.6, 0.34]} size={[life.inventory.includes("king") ? 2.05 : 1.52, 0.1, 1.3]} />
@@ -190,6 +200,7 @@ export function Apartment({
             <circleGeometry args={[0.32, 16]} />
             <meshBasicMaterial color="#1a2418" transparent opacity={0.18} />
           </mesh>
+          <group position={[0, pose === "sit" ? 0.16 : 0, 0]}>
           <Figure
             skin={life.look.skin}
             shirt={life.look.cloth}
@@ -199,10 +210,13 @@ export function Apartment({
             pattern={life.look.pattern}
             outfit={life.look.outfit}
             body={life.look.body}
+            stature={life.look.height}
+            build={life.look.build}
             crown={moodOf(life.needs).label === "Happy"}
             pose={pose}
             turn={(heading * 180) / Math.PI}
           />
+          </group>
         </group>
       )}
       {guests.slice(0, 3).map((guest, index) => {
@@ -333,17 +347,18 @@ function CameraRig({ frozen, follow, lift = 0 }: { frozen: boolean; follow: { x:
   return null;
 }
 
-function HouseLight({ night, dark }: { night: boolean; dark: boolean }) {
+function HouseLight({ night, dark, lit }: { night: boolean; dark: boolean; lit: boolean }) {
   const day = !night && !dark;
+  const glow = lit && !dark;
   return (
     <>
-      <hemisphereLight args={[day ? "#fff6ea" : dark ? "#1a2233" : "#243044", day ? "#e4d2b4" : "#14110e", day ? 0.46 : dark ? 0.05 : 0.1]} />
-      <ambientLight color={day ? "#fff8ee" : dark ? "#1a1612" : "#241c16"} intensity={day ? 0.42 : dark ? 0.04 : 0.08} />
+      <hemisphereLight args={[day ? "#fff6ea" : glow ? "#ffe7c4" : dark ? "#1a2233" : "#243044", day ? "#e4d2b4" : glow ? "#4a3424" : "#14110e", day ? 0.62 : glow ? 0.85 : dark ? 0.05 : 0.12]} />
+      <ambientLight color={day ? "#fff8ee" : glow ? "#fff1d8" : dark ? "#1a1612" : "#241c16"} intensity={day ? 0.55 : glow ? 0.72 : dark ? 0.04 : 0.1} />
       <directionalLight
         castShadow
         position={day ? [-1.6, 10.5, -8.2] : [2.2, 8, -3.5]}
-        color={day ? "#fff3dc" : "#9aadc4"}
-        intensity={day ? 1.15 : dark ? 0.05 : 0.18}
+        color={day ? "#fff3dc" : glow ? "#ffe0b0" : "#9aadc4"}
+        intensity={day ? 1.25 : glow ? 0.95 : dark ? 0.05 : 0.18}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-camera-near={1}
@@ -356,7 +371,8 @@ function HouseLight({ night, dark }: { night: boolean; dark: boolean }) {
         shadow-normalBias={0.04}
         shadow-radius={3}
       />
-      {night && !dark ? <pointLight position={[4.55, 1.7, 2.3]} color="#d7e6ff" intensity={3.4} distance={5.2} decay={2} /> : null}
+      {glow ? <pointLight position={[0.2, 2.35, 0.4]} color="#ffe0b0" intensity={night ? 2.6 : 0.7} distance={14} decay={2} /> : null}
+      {night && !dark && !glow ? <pointLight position={[4.55, 1.7, 2.3]} color="#d7e6ff" intensity={1.4} distance={5.2} decay={2} /> : null}
     </>
   );
 }
@@ -650,10 +666,38 @@ function Sofa({ color, onGo }: { color: string; onGo: (id: string) => void }) {
   );
 }
 
-function Fridge({ onGo }: { onGo: (id: string) => void }) {
+function Fridge({ onGo, open }: { onGo: (id: string) => void; open: boolean }) {
+  const gltf = useLoader(GLTFLoader, "/models/kenney/furniture/kitchenFridgeLarge.glb");
+  const left = useRef<Object3D | null>(null);
+  const right = useRef<Object3D | null>(null);
+  const yawL = useRef(0);
+  const yawR = useRef(0);
+  const fitted = useMemo(() => {
+    const root = gltf.scene.clone(true);
+    const raw = new Box3().setFromObject(root);
+    const size = raw.getSize(new Vector3());
+    root.scale.setScalar(1.45 / Math.max(size.y, 0.001));
+    root.position.set(0, 0, 0);
+    root.updateMatrixWorld(true);
+    const grounded = new Box3().setFromObject(root);
+    const center = grounded.getCenter(new Vector3());
+    left.current = root.getObjectByName("doorLeft") ?? null;
+    right.current = root.getObjectByName("doorRight") ?? null;
+    return { root, position: [-center.x, -grounded.min.y, -center.z] as [number, number, number] };
+  }, [gltf]);
+  useFrame((_, dt) => {
+    const step = Math.min(1, dt * 5);
+    const goal = open ? 1.9 : 0;
+    yawL.current += (goal - yawL.current) * step;
+    yawR.current += (-goal - yawR.current) * step;
+    if (left.current) left.current.rotation.y = yawL.current;
+    if (right.current) right.current.rotation.y = yawR.current;
+  });
   return (
     <group position={[4.55, 0, 1.7]} onClick={(event) => { event.stopPropagation(); onGo("cooler"); }}>
-      <PlacedModel file="furniture/kitchenFridgeLarge.glb" tall={1.45} />
+      <group position={fitted.position}>
+        <primitive object={fitted.root} />
+      </group>
     </group>
   );
 }

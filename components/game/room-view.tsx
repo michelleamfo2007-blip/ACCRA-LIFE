@@ -10,7 +10,7 @@ import { bayCount, carDust, carOf, footHere, garageBox, motorsOf, setPrimary, wa
 import { BODY, homeBounds, homeSolids } from "@/lib/game/home-solids";
 import { blocked, indexSolids, nearestFree, route, slide, type SolidIndex } from "@/lib/game/nav";
 import { askPrice, condOf, goodsOf, materialOf, wearLine } from "@/lib/game/wear";
-import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
+import { cedis, FIXTURES, fixtureAt, hasCurrent, homeLook, hourOf, MATS, roomReach, sellValue, SHOP, WIDEN_COST, type Life, type Placed, type StepResult, type Verb } from "@/lib/game/world";
 
 const Apartment = dynamic(() => import("@/components/game/apartment").then((mod) => mod.Apartment), { ssr: false });
 
@@ -26,7 +26,7 @@ function spotsFor(life: Life) {
   return {
     door: { x: -box.halfW + 0.3, z: 0.15, action: "map" },
     bed: { x: bed.x, z: bed.z + 0.45, action: "sleep" },
-    chair: { x: sofa.x, z: sofa.z + 0.17, action: "gist" },
+    chair: { x: sofa.x, z: sofa.z + 0.2, action: "gist" },
     radio: { x: radio.x, z: radio.z - 0.65, action: "radio" },
     cooler: { x: fridge.x - 0.85, z: fridge.z, action: "cooler" },
     stove: { x: stove.x - 0.9, z: stove.z - 0.45, action: "cook" },
@@ -42,7 +42,7 @@ type Pose = "idle" | "walk" | "act" | "sleep" | "sit";
 
 function sitVerb(verb: Verb) {
   if (verb.sleep) return false;
-  return /sit|rest|doze|sofa|chair|street|arm-|throne|watch|gist|scroll|chill|tea|papers/i.test(`${verb.id} ${verb.label}`);
+  return /sit|rest|doze|sofa|chair|street|arm-|throne|watch|gist|scroll|chill|tea|papers|lounge/i.test(`${verb.id} ${verb.label}`);
 }
 
 function isSleep(verb: Verb) {
@@ -69,6 +69,8 @@ export function RoomView({
   onAsk,
   errand = null,
   onLay,
+  onMat,
+  onLights,
   onStore,
   onSell,
   onMend,
@@ -95,6 +97,8 @@ export function RoomView({
   onAsk: () => void;
   errand?: { spot: string; n: number } | null;
   onLay?: (id: string, x: number, z: number, rot: number) => void;
+  onMat?: (id: string) => void;
+  onLights?: () => void;
   onStore?: (id: string) => void;
   onSell?: (id: string) => void;
   onMend?: (id: string, how: "clean" | "polish" | "cloth" | "repair" | "collect" | "friend") => void;
@@ -116,6 +120,7 @@ export function RoomView({
 }) {
   const night = hourOf(life.minutes) >= 19 || hourOf(life.minutes) < 5;
   const dark = life.dumsor && !hasCurrent(life.inventory);
+  const lit = !dark && life.lamps !== false;
   const bedItem = SHOP.filter((item) => item.kind === "bed" && life.inventory.includes(item.id)).sort((a, b) => b.price - a.price)[0];
   const [pos, setPos] = useState({ x: 0.2, z: 1.1 });
   const [pose, setPose] = useState<Pose>("idle");
@@ -129,10 +134,12 @@ export function RoomView({
   const onMapRef = useRef(onMap);
   const [picked, setPicked] = useState<string | null>(null);
   const [fixture, setFixture] = useState<FixtureId | null>(null);
+  const [matOpen, setMatOpen] = useState(false);
   const [draft, setDraft] = useState<Placed | null>(null);
   const [arrange, setArrange] = useState(false);
   const [beside, setBeside] = useState<string | null>(null);
   const [doorOpen, setDoorOpen] = useState(false);
+  const [coolerOpen, setCoolerOpen] = useState(false);
   const [garageShut, setGarageShut] = useState(false);
   const [recoil, setRecoil] = useState<{ x: number; z: number } | null>(null);
   const [asleepFor, setAsleepFor] = useState<number | null>(null);
@@ -191,8 +198,12 @@ export function RoomView({
 
   function runAt(target: { x: number; z: number }, verb: Verb, inBed: boolean, skip: string[] = []) {
     walkTo(target, null, () => {
-      const sitting = !inBed && sitVerb(verb);
+      const sitting = !inBed && (sitVerb(verb) || skip.includes("fix-sofa"));
       if (sitting) {
+        const sofa = fixtureAt(lifeRef.current, "fix-sofa");
+        const seat = { x: sofa.x, z: sofa.z + 0.2 };
+        posRef.current = seat;
+        setPos(seat);
         seated.current = true;
         setHeading(0);
         setPose("sit");
@@ -255,6 +266,9 @@ export function RoomView({
     seated.current = false;
     busy.current = true;
     const here = lifeRef.current;
+    const fridge = fixtureAt(here, "fix-fridge");
+    const openingFridge = Math.hypot(target.x - (fridge.x - 0.85), target.z - fridge.z) < 0.5;
+    if (!openingFridge) setCoolerOpen(false);
     const bounds = homeBounds(here);
     const index: SolidIndex = indexSolids(homeSolids(here, { doorOpen: doorRef.current, garageShut: shutRef.current, skip }), 0.36);
     let start = { ...posRef.current };
@@ -284,6 +298,7 @@ export function RoomView({
     setHeading(Math.atan2(segTo.x - start.x, segTo.z - start.z));
     setPose("walk");
     const finish = () => {
+      if (openingFridge) setCoolerOpen(true);
       if (arrive) {
         arrive();
         return;
@@ -400,13 +415,16 @@ export function RoomView({
         pose={pose}
         heading={heading}
         dark={dark}
+        lit={lit}
         night={night}
         bedColor={bedItem?.color ?? look.bed}
         sofaColor={sofaColor}
         guests={guests.map((guest) => ({ name: guest.name, doing: guest.doing }))}
         onAsk={onAsk}
+        onLights={onLights}
         bays={bayCount(life)}
         doorOpen={doorOpen}
+        fridgeOpen={coolerOpen || fixture === "cooler"}
         recoil={recoil}
         garageShut={garageShut}
         onGarage={(shut) => {
@@ -429,6 +447,10 @@ export function RoomView({
           walkTo(yard ?? { x: clampRoom(x, box.minX, box.maxX), z: clampRoom(z, box.minZ, box.maxZ) }, null);
         }}
         onGo={(id) => {
+          if (id === "mat") {
+            if (onMat) setMatOpen(true);
+            return;
+          }
           if (id === "door") {
             doorRef.current = true;
             setDoorOpen(true);
@@ -510,7 +532,45 @@ export function RoomView({
           😴 Sleepover · breakfast gist in the morning
         </div>
       ) : null}
-      {!draft && !arrange && !fixture && !picked && onCook && onHang && onSleepover && onSendHome && onInvite && onVisit ? (
+      {matOpen && onMat ? (
+        <div className="absolute inset-x-3 bottom-3 z-40 mx-auto max-w-md rounded-3xl bg-white p-3 shadow-2xl">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-bold text-[#121212]">Floor mat</p>
+            <button type="button" onClick={() => setMatOpen(false)} className="rounded-full bg-[#f4f7fb] px-3 py-1 text-xs font-bold text-[#121212]">
+              Close
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {MATS.map((mat) => {
+              const down = (life.mat ?? "rose") === mat.id;
+              return (
+                <button
+                  key={mat.id}
+                  type="button"
+                  onClick={() => {
+                    setMatOpen(false);
+                    if (!down) onMat(mat.id);
+                  }}
+                  className={`rounded-2xl p-2 text-left ${down ? "bg-[#e7f6ee]" : "bg-[#f4f7fb]"}`}
+                >
+                  <span
+                    className="block h-8 rounded-lg"
+                    style={{
+                      background:
+                        mat.id === "kente"
+                          ? "linear-gradient(90deg,#CE1126 0 16%,#FCD116 16% 32%,#006B3F 32% 48%,#111 48% 58%,#FCD116 58% 74%,#CE1126 74% 100%)"
+                          : `linear-gradient(90deg, ${mat.edge} 0 14%, ${mat.color} 14% 86%, ${mat.edge} 86%)`,
+                    }}
+                  />
+                  <span className="mt-1 block text-xs font-bold text-[#121212]">{mat.name}</span>
+                  {down ? <span className="text-[10px] font-semibold text-[#006B3F]">Down</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      {!draft && !arrange && !fixture && !picked && !matOpen && onCook && onHang && onSleepover && onSendHome && onInvite && onVisit ? (
         <HomeDesk
           life={life}
           cloud={cloud}
@@ -525,6 +585,8 @@ export function RoomView({
           onVisit={onVisit}
           onBuyHint={onUpgrade}
           onArrange={() => setArrange(true)}
+          onMat={onMat ? () => setMatOpen(true) : undefined}
+          onLights={onLights}
         />
       ) : null}
       {arrange && !draft ? (

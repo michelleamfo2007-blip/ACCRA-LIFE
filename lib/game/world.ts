@@ -138,6 +138,10 @@ export type Life = {
   span?: number;
   stored?: string[];
   floor?: string;
+  /** Cloth on the living-room mat. Missing means the rose one. */
+  mat?: string;
+  /** Room lamps. Missing means on. Dumsor still wins unless a gen or solar is running. */
+  lamps?: boolean;
   transfers?: PurseNote[];
   seenTransfers?: string[];
   chats?: unknown;
@@ -2286,6 +2290,40 @@ const FLOOR_SPOTS = [
 function openSpot(life: Life) {
   const taken = life.furniture ?? [];
   return FLOOR_SPOTS.find((slot) => !taken.some((piece) => Math.hypot(piece.x - slot.x, piece.z - slot.z) < 0.75)) ?? { x: 0.2, z: 0.4 };
+}
+
+export const MATS = [
+  { id: "rose", name: "Rose", color: "#c98478", edge: "#a85a52" },
+  { id: "cream", name: "Cream", color: "#f4efe4", edge: "#d9cbb4" },
+  { id: "kente", name: "Kente", color: "#CE1126", edge: "#FCD116" },
+  { id: "green", name: "Green", color: "#1f6b4a", edge: "#0e3d2c" },
+  { id: "indigo", name: "Indigo", color: "#2a4578", edge: "#162848" },
+  { id: "charcoal", name: "Charcoal", color: "#3a342c", edge: "#1c1916" },
+] as const;
+
+export function matById(id?: string) {
+  return MATS.find((mat) => mat.id === id) ?? MATS[0];
+}
+
+export function layMat(life: Life, id: string): StepResult {
+  const mat = MATS.find((item) => item.id === id);
+  if (!mat) return { life, notes: [], error: "That mat is gone." };
+  if ((life.mat ?? "rose") === mat.id) return { life, notes: [], error: "That mat is already down." };
+  const next = clone(life);
+  next.mat = mat.id;
+  pushLog(next, `Laid the ${mat.name.toLowerCase()} mat.`);
+  return { life: next, notes: [`${mat.name} mat is down.`] };
+}
+
+export function flipLamps(life: Life): StepResult {
+  if (life.dumsor && !hasCurrent(life.inventory)) {
+    return { life, notes: [], error: "Dumsor. The switch clicks and the room stays dark." };
+  }
+  const next = clone(life);
+  const on = life.lamps === false;
+  next.lamps = on;
+  pushLog(next, on ? "Put the lights on." : "Put the lights off.");
+  return { life: next, notes: [on ? "The lights are on." : "The lights are off."] };
 }
 
 export function sellValue(price: number) {

@@ -186,6 +186,7 @@ export type HostHome = {
   inventory: string[];
   furniture: Placed[];
   floor?: string;
+  mat?: string;
 };
 
 export type SocialView = {

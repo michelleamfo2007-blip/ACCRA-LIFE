@@ -1434,6 +1434,8 @@ export function AccraRoad({
             pattern={look.pattern}
             outfit={look.outfit}
             body={look.body}
+            stature={look.height}
+            build={look.build}
             pose={ride === "trek" || boarding ? "walk" : "idle"}
             turn={0}
           />
@@ -1448,6 +1450,8 @@ export function AccraRoad({
             pattern={look.pattern}
             outfit={look.outfit}
             body={look.body}
+            stature={look.height}
+            build={look.build}
             pose="drive"
             turn={0}
           />

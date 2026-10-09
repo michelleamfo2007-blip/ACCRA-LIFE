@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { IsoHuman } from "@/components/game/iso-human";
+import { LowPolyHuman } from "@/components/game/low-poly-human";
 import { NameSuggest } from "@/components/game/name-hints";
 import { MessagesApp, SettingsApp, type ChatMsg } from "@/components/game/phone-social";
 import { BizApp } from "@/components/game/biz-app";
@@ -1409,7 +1409,9 @@ function BoutiqueScreen({ life, onBack, onApply }: { life: Life; onBack: () => v
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f1ea] text-[#121212]">
       <AppHeader title="Boutique" onBack={onBack} />
       <div className="relative grid h-36 place-items-center bg-gradient-to-b from-[#f3e4ff] to-[#fff6df]">
-        <IsoHuman skin={look.skin} shirt={look.cloth} hair={look.hair} cloth={look.cloth} className="h-32" />
+        <div className="h-32 w-24">
+          <LowPolyHuman skin={look.skin} shirt={look.cloth} pants={look.body === "woman" ? "#1c2744" : look.accent} hair={look.hair} body={look.body} stature={look.height} build={look.build} passive />
+        </div>
         <p className="absolute bottom-2 left-3 rounded-full bg-white px-3 py-1 text-[11px] font-semibold shadow">{preview ? preview.label : life.look.outfit}</p>
       </div>
       <div className="flex gap-2 overflow-auto px-3 py-2 text-xs font-semibold">

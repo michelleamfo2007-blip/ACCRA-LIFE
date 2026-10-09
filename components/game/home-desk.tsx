@@ -31,6 +31,8 @@ export function HomeDesk({
   onVisit,
   onBuyHint,
   onArrange,
+  onMat,
+  onLights,
 }: {
   life: Life;
   cloud: boolean;
@@ -45,6 +47,8 @@ export function HomeDesk({
   onVisit: (username: string) => void;
   onBuyHint?: () => void;
   onArrange?: () => void;
+  onMat?: () => void;
+  onLights?: () => void;
 }) {
   const guests = activeGuests(life);
   const coming = enRouteGuests(life);
@@ -140,6 +144,16 @@ export function HomeDesk({
           {onArrange ? (
             <button type="button" onClick={onArrange} className="rounded-full bg-[#121212] px-2.5 py-1 text-[10px] font-bold text-white">
               Arrange
+            </button>
+          ) : null}
+          {onMat ? (
+            <button type="button" onClick={onMat} className="rounded-full bg-[#121212] px-2.5 py-1 text-[10px] font-bold text-white">
+              Mat
+            </button>
+          ) : null}
+          {onLights ? (
+            <button type="button" onClick={onLights} className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${life.lamps === false ? "bg-[#3a342c] text-white" : "bg-[#FCD116] text-[#121212]"}`}>
+              {life.lamps === false ? "Lights off" : "Lights on"}
             </button>
           ) : null}
           {onBuyHint ? (

@@ -42,27 +42,28 @@ export function modelFor(item: ShopItem): { file: string; tall?: number; span?: 
 
 export function KitMesh({ file, tall, span, lift = 0, quiet = false, silent = false }: { file: string; tall?: number; span?: number; lift?: number; quiet?: boolean; silent?: boolean }) {
   const gltf = useLoader(GLTFLoader, `${ROOT}${file}`);
-  const object = useMemo(() => {
+  const fitted = useMemo(() => {
     const root = gltf.scene.clone(true);
-    const fitted = new Box3().setFromObject(root);
-    const size = fitted.getSize(new Vector3());
+    const raw = new Box3().setFromObject(root);
+    const size = raw.getSize(new Vector3());
     const byTall = tall ? tall / Math.max(size.y, 0.001) : Number.POSITIVE_INFINITY;
     const bySpan = span ? span / Math.max(size.x, size.z, 0.001) : Number.POSITIVE_INFINITY;
     const scale = Math.min(byTall, bySpan);
     root.scale.setScalar(Number.isFinite(scale) ? scale : 1);
+    root.position.set(0, 0, 0);
+    root.updateMatrixWorld(true);
     const grounded = new Box3().setFromObject(root);
     const center = grounded.getCenter(new Vector3());
-    root.position.x -= center.x;
-    root.position.z -= center.z;
-    root.position.y -= grounded.min.y;
-    root.position.y += lift;
     if (silent) root.traverse((child) => { child.raycast = () => undefined; });
-    return root;
+    const position: [number, number, number] = [-center.x, -grounded.min.y + lift, -center.z];
+    return { root, position };
   }, [gltf, tall, span, lift, silent]);
   const shadow = span ?? tall ?? 0.6;
   return (
     <group>
-      <primitive object={object} />
+      <group position={fitted.position}>
+        <primitive object={fitted.root} />
+      </group>
       {quiet ? null : (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
           <circleGeometry args={[shadow * 0.42, 20]} />

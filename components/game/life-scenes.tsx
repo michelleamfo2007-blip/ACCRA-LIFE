@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { IsoHuman } from "@/components/game/iso-human";
+import { LowPolyHuman } from "@/components/game/low-poly-human";
 import type { FlightPhase } from "@/components/game/flight-outside";
 import { carOf } from "@/lib/game/garage";
 import type { Weather } from "@/lib/game/sky";
@@ -236,11 +236,15 @@ export function StreetRide({
         {night ? <div className="street-glow" aria-hidden /> : null}
         {walking ? (
           <div className={`street-sim street-sim-${camera}`}>
-            <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={facing} className="h-full" />
+            <div className="h-full w-16">
+              <LowPolyHuman skin={life.look.skin} shirt={life.look.cloth} pants={life.look.body === "woman" ? "#1c2744" : life.look.accent} hair={life.look.hair} body={life.look.body} stature={life.look.height} build={life.look.build} pose="walk" face={facing} passive />
+            </div>
           </div>
         ) : boarding && chase ? (
           <div className="street-board-beat">
-            <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="walk" face={1} className="h-full" />
+            <div className="h-full w-16">
+              <LowPolyHuman skin={life.look.skin} shirt={life.look.cloth} pants={life.look.body === "woman" ? "#1c2744" : life.look.accent} hair={life.look.hair} body={life.look.body} stature={life.look.height} build={life.look.build} pose="walk" face={1} passive />
+            </div>
             <div className={`street-vehicle street-vehicle-await street-vehicle-${ride.id}`}>
               <Vehicle ride={ride.id} life={life} face={1} night={night} chase slogan={slogan} />
             </div>
@@ -339,7 +343,11 @@ function Vehicle({
   chase?: boolean;
   slogan?: string;
 }) {
-  const rider = <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose="idle" face={face} className="h-full" />;
+  const rider = (
+    <span className="block h-16 w-12">
+      <LowPolyHuman skin={life.look.skin} shirt={life.look.cloth} pants={life.look.body === "woman" ? "#1c2744" : life.look.accent} hair={life.look.hair} body={life.look.body} pose="idle" face={face} passive />
+    </span>
+  );
   if (chase && ride !== "okada" && ride !== "trek") {
     const body =
       ride === "trotro" ? "chase-van" : ride === "train" ? "chase-coach" : ride === "car" ? "chase-private" : "chase-taxi";
@@ -465,7 +473,9 @@ export function ShiftFloor({
           <span key={color} className="h-16 w-16 rounded-full shadow-md" style={{ background: color }} />
         ))}
       </div>
-      <IsoHuman skin={life.look.skin} shirt={life.look.cloth} hair={life.look.hair} cloth={life.look.cloth} pose={view === "desk" ? "act" : "idle"} className="absolute bottom-[28%] left-1/2 h-64 -translate-x-1/2" />
+      <div className="absolute bottom-[28%] left-1/2 h-64 w-36 -translate-x-1/2">
+        <LowPolyHuman skin={life.look.skin} shirt={life.look.cloth} pants={life.look.body === "woman" ? "#1c2744" : life.look.accent} hair={life.look.hair} body={life.look.body} stature={life.look.height} build={life.look.build} pose={view === "desk" ? "act" : "idle"} passive />
+      </div>
       <div className="absolute left-3 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.6rem))] w-[min(280px,72vw)] rounded-3xl bg-[#1c2430]/92 p-3 text-white shadow-xl">
         <p className="font-semibold">{title}</p>
         <p className="text-xs text-white/70">{place}</p>

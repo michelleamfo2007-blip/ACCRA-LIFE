@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IsoHuman } from "@/components/game/iso-human";
+import { LowPolyHuman } from "@/components/game/low-poly-human";
 import { askPrice, buyGarment, giftGarment, rackFor, savePreset, sellGarment, tierOf, TIERS, wearGarment, wearPreset, PRESET_SLOTS, type RackItem } from "@/lib/game/boutique";
 import { cedis, type Life, type Look, type StepResult } from "@/lib/game/world";
 
@@ -18,7 +18,9 @@ export function BoutiqueFloor({ life, onApply }: { life: Life; onApply: (result:
   return (
     <div className="mt-3 rounded-3xl bg-white p-3 text-[#121212] shadow-sm">
       <div className="flex items-center gap-3">
-        <IsoHuman skin={look.skin} shirt={look.cloth} hair={look.hair} cloth={look.cloth} className="h-24" />
+        <div className="h-24 w-16 shrink-0">
+          <LowPolyHuman skin={look.skin} shirt={look.cloth} pants={look.body === "woman" ? "#1c2744" : look.accent} hair={look.hair} body={look.body} stature={look.height} build={look.build} passive />
+        </div>
         <div>
           <p className="text-sm font-semibold">{tier ? TIERS[tier].label : "Boutique"}</p>
           <p className="text-xs text-[#5c6b82]">{preview ? `Fitting room · ${preview.label}` : `Wearing ${life.look.outfit}. This town likes a ${hint} look.`}</p>

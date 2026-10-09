@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type Group } from "three";
 import { PlacedModel } from "@/components/game/kit-mesh";
 import { openHouseDress } from "@/lib/game/room-sets";
-import { roomReach } from "@/lib/game/world";
+import { matById, roomReach } from "@/lib/game/world";
 
 function mixHex(hex: string, toward: number, amount: number) {
   const n = hex.replace("#", "");
@@ -212,6 +212,27 @@ function FloorBit({ kind, x, z }: { kind: "box" | "bucket"; x: number; z: number
   );
 }
 
+export function LightSwitch({ x, z, on, disabled, onToggle }: { x: number; z: number; on: boolean; disabled?: boolean; onToggle?: () => void }) {
+  return (
+    <group position={[x, 1.22, z]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh
+        userData={{ skipShadow: true }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle?.();
+        }}
+      >
+        <boxGeometry args={[0.16, 0.26, 0.04]} />
+        <meshStandardMaterial color={disabled ? "#c8c2b8" : "#f6f1e6"} roughness={0.55} />
+      </mesh>
+      <mesh position={[0, on ? 0.05 : -0.05, 0.03]}>
+        <boxGeometry args={[0.05, 0.08, 0.03]} />
+        <meshStandardMaterial color={on ? "#f0c014" : "#3a342c"} emissive={on ? "#f0c014" : "#000000"} emissiveIntensity={on ? 0.4 : 0} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
 export function DumsorLamp({ x, z }: { x: number; z: number }) {
   return (
     <group position={[x, 0, z]}>
@@ -235,21 +256,78 @@ function CeilingFan({ x, z, on }: { x: number; z: number; on: boolean }) {
   });
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, 1.05, 0]}>
-        <cylinderGeometry args={[0.018, 0.018, 0.5, 8]} />
+      <mesh position={[0, 2.32, 0]} raycast={() => undefined}>
+        <cylinderGeometry args={[0.016, 0.016, 0.28, 8]} />
         <meshStandardMaterial color="#d9d0c2" metalness={0.25} roughness={0.4} />
       </mesh>
-      <group ref={spin}>
-        <PlacedModel file="furniture/ceilingFan.glb" span={1.15} lift={1.28} quiet silent />
+      <group ref={spin} position={[0, 2.15, 0]}>
+        <PlacedModel file="furniture/ceilingFan.glb" span={1.05} lift={0} quiet silent />
       </group>
     </group>
   );
 }
 
-export function InteriorFinish({ span, night, dark }: { span: number; night: boolean; dark: boolean }) {
+function matCloth(color: string, edge: string, kente: boolean) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 176;
+  const pen = canvas.getContext("2d");
+  if (!pen) return null;
+  pen.fillStyle = edge;
+  pen.fillRect(0, 0, 256, 176);
+  pen.fillStyle = color;
+  pen.fillRect(22, 18, 212, 140);
+  pen.strokeStyle = edge;
+  pen.lineWidth = 4;
+  pen.strokeRect(34, 28, 188, 120);
+  if (kente) {
+    const bands = ["#CE1126", "#FCD116", "#006B3F", "#111111", "#FCD116", "#CE1126"];
+    bands.forEach((band, index) => {
+      pen.fillStyle = band;
+      pen.fillRect(42 + index * 28, 36, 18, 104);
+    });
+  } else {
+    for (let i = 0; i < 90; i += 1) {
+      pen.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(40,24,16,0.06)";
+      pen.fillRect((i * 41) % 180 + 38, (i * 23) % 110 + 32, 4, 2);
+    }
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+function FloorMat({ mat, onMat }: { mat?: string; onMat?: () => void }) {
+  const cloth = matById(mat);
+  const map = useMemo(() => matCloth(cloth.color, cloth.edge, cloth.id === "kente"), [cloth]);
+  return (
+    <group position={[-1.55, 0, 0.12]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} receiveShadow>
+        <planeGeometry args={[2.45, 1.7]} />
+        <meshStandardMaterial map={map ?? undefined} color={map ? "#ffffff" : cloth.color} roughness={0.92} metalness={0} />
+      </mesh>
+      {onMat ? (
+        <mesh
+          userData={{ skipShadow: true }}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.04, 0]}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMat();
+          }}
+        >
+          <planeGeometry args={[2.45, 1.7]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      ) : null}
+    </group>
+  );
+}
+
+export function InteriorFinish({ span, night, dark, lit = true, mat, onMat, onLights }: { span: number; night: boolean; dark: boolean; lit?: boolean; mat?: string; onMat?: () => void; onLights?: () => void }) {
   const dress = openHouseDress(span);
   const room = roomReach(span);
-  const lampsOn = !dark;
+  const lampsOn = lit && !dark;
   return (
     <group>
       {dress.lights.map((lamp) => (
@@ -281,9 +359,7 @@ export function InteriorFinish({ span, night, dark }: { span: number; night: boo
       ))}
       <FloorBit kind="box" x={dress.box.x} z={dress.box.z} />
       <FloorBit kind="bucket" x={dress.bucket.x} z={dress.bucket.z} />
-      <group position={[-1.55, 0.012, 0.12]}>
-        <PlacedModel file="furniture/rugRectangle.glb" span={2.3} quiet silent />
-      </group>
+      <FloorMat mat={mat} onMat={onMat} />
       <group position={[-3.45, 0, -3.55]}>
         <PlacedModel file="furniture/pottedPlant.glb" tall={0.72} quiet silent />
       </group>
@@ -298,6 +374,7 @@ export function InteriorFinish({ span, night, dark }: { span: number; night: boo
         <PlacedModel file="furniture/bathroomMirror.glb" tall={1.15} quiet silent />
       </group>
       {dark ? <DumsorLamp x={dress.lamp.x} z={dress.lamp.z} /> : null}
+      <LightSwitch x={-room.halfW + 0.12} z={2.15} on={lampsOn} disabled={dark} onToggle={onLights} />
     </group>
   );
 }

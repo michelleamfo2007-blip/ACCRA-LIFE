@@ -89,6 +89,8 @@ import {
   freshLife,
   gemSpotId,
   giftCash,
+  layMat,
+  flipLamps,
   layPiece,
   widenRoom,
   receiveCash,
@@ -1242,6 +1244,8 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
           onAsk={() => setDoOpen(true)}
           onMotor={apply}
           onLay={(id, x, z, rot) => apply(layPiece(life, id, x, z, rot))}
+          onMat={(id) => apply(layMat(life, id))}
+          onLights={() => apply(flipLamps(life))}
           onStore={(id) => apply(storePiece(life, id))}
           onSell={(id) => apply(sellPiece(life, id))}
           onMend={(id, how) => apply(mendItem(life, id, how))}
@@ -1857,7 +1861,7 @@ function Play({ account, flash }: { account: Account; flash: (message: string) =
       {visit ? (
         <div className="absolute inset-x-0 top-0 bottom-[max(4.4rem,calc(env(safe-area-inset-bottom)+3.8rem))] z-[70] overflow-hidden bg-[#d7ecf8]">
           <div className="absolute inset-0">
-            <RoomView life={{ ...life, homeId: visit.homeId, look: visit.look, inventory: visit.inventory, furniture: visit.furniture, floor: visit.floor, stored: [], dumsor: false }} onAct={() => {}} onMap={leaveVisit} onAsk={() => {}} />
+            <RoomView life={{ ...life, homeId: visit.homeId, look: visit.look, inventory: visit.inventory, furniture: visit.furniture, floor: visit.floor, mat: visit.mat, stored: [], dumsor: false }} onAct={() => {}} onMap={leaveVisit} onAsk={() => {}} />
           </div>
           <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-[80] flex items-center justify-between gap-2">
             <p className="min-w-0 truncate rounded-full bg-white px-4 py-2 text-sm font-bold shadow-lg">

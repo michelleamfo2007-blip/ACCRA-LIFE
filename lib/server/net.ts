@@ -362,5 +362,6 @@ export async function hostHome(username: string, host: string): Promise<HostHome
     inventory: owner.life.inventory ?? [],
     furniture: owner.life.furniture ?? [],
     floor: owner.life.floor,
+    mat: owner.life.mat,
   };
 }

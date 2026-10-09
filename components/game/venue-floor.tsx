@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { ClubRoom } from "@/components/game/club-room";
+import { VenuePeople, VenueRoom, type VenueBody } from "@/components/game/venue-room";
 import { ClubSpray } from "@/components/game/club-spray";
 import { IsoHuman, type BodyPose, type FaceExtra } from "@/components/game/iso-human";
 import type { SprayId } from "@/lib/game/club-spray";
@@ -27,7 +28,7 @@ import { CauseList } from "@/components/game/cause-list";
 import { PlaceDesk } from "@/components/game/place-desk";
 import { robPerson } from "@/lib/game/justice";
 import { rivalHere } from "@/lib/game/spine";
-import { accraHour, cedis, dressNote, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
+import { accraHour, cedis, dressNote, hasCurrent, spotById, type Life, type Look, type Offer, type Spot, type StepResult, type Verb } from "@/lib/game/world";
 import type { SpotPos } from "@/lib/game/net";
 import { bagCount, isSupply } from "@/lib/game/trade";
 import { circleSolid, crowded, indexSolids, route, slide, type Bounds, type Pt, type Solid } from "@/lib/game/nav";
@@ -123,6 +124,7 @@ export function VenueFloor({
   const [seatedAt, setSeatedAt] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [bottleShow, setBottleShow] = useState<null | { bottle: Bottle; step: "walk" | "spark" | "pop" | "cheer"; left: number; top: number }>(null);
+  const [crowdCast, setCrowdCast] = useState<VenueBody[]>([]);
   const [guest, setGuest] = useState<ClubNpc | null>(null);
   const [empties, setEmpties] = useState<{ id: string; left: number; top: number; emoji: string }[]>([]);
   const [npcAt, setNpcAt] = useState(NPC_HOMES);
@@ -483,6 +485,81 @@ export function VenueFloor({
     onAct({ id: `wave-${spot.id}`, label: text, detail: text, minutes: 2, cost: 0, earn: 0, effects: { social: 6, fun: 4 }, social: true });
   }
 
+  function venueBodies(): VenueBody[] {
+    const floor = stage.current;
+    const list: VenueBody[] = [];
+    const push = (left: string, top: string, look: Omit<VenueBody, "x" | "z">) => {
+      const point = percentToWorld(Number.parseFloat(left), Number.parseFloat(top), floor);
+      if (!point) return;
+      list.push({ ...look, x: point.x, z: point.z });
+    };
+    push(youAt.left, youAt.top, {
+      id: "you",
+      skin: life.look.skin,
+      shirt: life.look.cloth,
+      pants: life.look.body === "woman" ? "#1c2744" : life.look.accent,
+      hair: life.look.hair,
+      body: life.look.body === "man" ? "man" : "woman",
+      stature: life.look.height,
+      build: life.look.build,
+      pose: stride.moving ? "walk" : doing?.dance ? "dance" : doing?.sit || seatedAt ? "sit" : doing ? "act" : "idle",
+      turn: stride.face < 0 ? 180 : 0,
+    });
+    for (const person of staff) {
+      push(person.style.left, person.style.top, {
+        id: person.role,
+        skin: person.skin,
+        shirt: person.shirt,
+        pants: "#1c1917",
+        hair: person.hair,
+        body: person.role.length % 2 === 0 ? "woman" : "man",
+        pose: person.role === "DJ" ? "dance" : person.role === "Cook" || person.role === "Bartender" ? "act" : "idle",
+        role: person.role.toLowerCase(),
+        turn: 0,
+      });
+    }
+    if (party && !nightLife) {
+      push("52%", "40%", { skin: "#8d5a3b", shirt: "#CE1126", pants: "#1c1917", hair: "Afro", pose: "dance", turn: 20 });
+      push("40%", "52%", { skin: "#c68a62", shirt: "#FCD116", pants: "#1c1917", hair: "Bun", pose: "dance", turn: 200 });
+    }
+    people.slice(0, 8).forEach((person, index) => {
+      const style = person.spot ? { left: `${person.spot.x}%`, top: `${person.spot.y}%` } : stands[index % stands.length];
+      if (!style) return;
+      push(style.left, style.top, {
+        id: person.username,
+        skin: person.look?.skin ?? "#8d5a3b",
+        shirt: person.look?.cloth ?? "#2f7de1",
+        pants: "#1c1917",
+        hair: person.look?.hair ?? "Low cut",
+        body: person.look?.body === "man" ? "man" : "woman",
+        stature: person.look?.height,
+        build: person.look?.build,
+        pose: "idle",
+        turn: index % 2 ? 160 : 8,
+      });
+    });
+    if (kind === "club") {
+      for (const body of crowdCast) list.push(body);
+    }
+    if (bottleShow) {
+      const waiterLeft = bottleShow.step === "walk" ? bottleShow.left - 12 : bottleShow.left - 4;
+      const waiterTop = bottleShow.step === "walk" ? bottleShow.top + 8 : bottleShow.top;
+      push(`${waiterLeft}%`, `${waiterTop}%`, {
+        id: "waiter",
+        skin: "#8d5a3b",
+        shirt: "#1c1917",
+        pants: "#0f0f0f",
+        hair: "Low cut",
+        body: "man",
+        pose: bottleShow.step === "walk" ? "walk" : "idle",
+        role: "waiter",
+        turn: 0,
+      });
+    }
+    faceCrowd(list);
+    return list;
+  }
+
   return (
     <div
       className="relative h-full overflow-hidden"
@@ -512,7 +589,15 @@ export function VenueFloor({
             kind={kind}
             party={party}
             doorOpen={entryOpen}
+            dark={Boolean(life.dumsor) && !hasCurrent(life.inventory)}
+            bodies={venueBodies()}
           />
+          {kind !== "club" ? (
+            <div className="pointer-events-none absolute left-1/2 top-3 z-30 w-[min(92%,26rem)] -translate-x-1/2 rounded-2xl bg-white/95 px-3 py-2 text-center shadow-lg">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#006B3F]">{spot.name}</p>
+              <p className="text-xs font-semibold leading-5 text-[#121212]">{roomLine(spot)}</p>
+            </div>
+          ) : null}
           {seats.map((seat) => {
             const guest = tableGuests.find((item) => item.seatId === seat.id) ?? (seatedAt === seat.id ? tableGuests[0] : null);
             return (
@@ -545,6 +630,7 @@ export function VenueFloor({
               shirt={person.shirt}
               hair={person.hair}
               pants={person.role === "Bouncer" ? "#0a0a0a" : "#1c1917"}
+              hollow
               pose={person.role === "DJ" ? "dj" : person.role === "Bartender" ? "drink" : person.role === "Bouncer" ? "watch" : "idle"}
               extra={person.role === "Bouncer" ? "chain" : person.role === "Bartender" ? "earrings" : "none"}
               size={person.role === "Bouncer" ? "h-24" : "h-20"}
@@ -570,6 +656,7 @@ export function VenueFloor({
                 setEntryOpen(true);
               }}
               cheer={bottleShow?.step === "cheer" || bottleShow?.step === "pop"}
+              onCast={setCrowdCast}
               onPick={(npc) => {
                 setWho(null);
                 setGuest(npc);
@@ -602,6 +689,7 @@ export function VenueFloor({
                   hair="Afro"
                   pants="#1c1917"
                   dance
+                  hollow
                   onClick={() =>
                     approach(style, () => {
                       setWho(`party:${index}`);
@@ -624,6 +712,7 @@ export function VenueFloor({
                 shirt={person.look?.cloth ?? SHIRTS[(index + 1) % SHIRTS.length]}
                 hair={person.look?.hair ?? HAIR[index % HAIR.length]}
                 pants={person.look ? (person.look.body === "woman" ? "#1c1917" : person.look.accent) : PANTS[index % PANTS.length]}
+                hollow
                 onClick={() =>
                   approach(style, () => {
                     setWho(person.username);
@@ -645,6 +734,7 @@ export function VenueFloor({
             shirt={life.look.cloth}
             hair={life.look.hair}
             pants={life.look.body === "woman" ? "#1c1917" : life.look.accent}
+            hollow
             quiet={nightLife}
             mark={nightLife}
             bubble={nightLife || stride.moving || !doing ? null : doing.label}
@@ -938,6 +1028,7 @@ function ClubCrowd({
   stage,
   onOpenDoor,
   cheer,
+  onCast,
   onPick,
 }: {
   spotId: string;
@@ -947,12 +1038,17 @@ function ClubCrowd({
   stage: { current: HTMLDivElement | null };
   onOpenDoor: () => void;
   cheer: boolean;
+  onCast?: (bodies: VenueBody[]) => void;
   onPick: (npc: ClubNpc) => void;
 }) {
   const [crowd, setCrowd] = useState<ClubNpc[]>([]);
   const at = useRef(new Map<string, Pt>());
   const openRef = useRef(onOpenDoor);
+  const castRef = useRef(onCast);
+  const cheerRef = useRef(cheer);
   openRef.current = onOpenDoor;
+  castRef.current = onCast;
+  cheerRef.current = cheer;
   useEffect(() => {
     const place = (npc: ClubNpc) => {
       const floor = stage.current;
@@ -973,7 +1069,32 @@ function ClubCrowd({
       const screen = worldToPercent(step, floor);
       return { ...npc, left: screen.left, top: screen.top };
     };
-    const pulse = () => setCrowd(clubCrowdAt(spotId).map(place));
+    const pulse = () => {
+      const placed = clubCrowdAt(spotId).map(place);
+      setCrowd(placed);
+      const bodies: VenueBody[] = [];
+      placed.forEach((npc, index) => {
+        const world = at.current.get(npc.id);
+        if (!world) return;
+        const dancing = npc.state === "dance" || (cheerRef.current && npc.state !== "bar" && npc.state !== "table");
+        const look = clubLook(npc.name, index);
+        const women = /a$|e$|i$|maame|esi|efua|adjoa|akosua|ama|akua|abena|serwa/i.test(npc.name);
+        bodies.push({
+          id: npc.id,
+          x: world.x,
+          z: world.z,
+          skin: npc.skin,
+          shirt: look.shirt || npc.shirt,
+          pants: look.pants || "#1c1917",
+          hair: npc.hair,
+          body: women ? "woman" : "man",
+          pose: dancing ? "dance" : npc.state === "bar" || npc.state === "table" ? "sit" : npc.state === "enter" || npc.state === "leave" ? "walk" : "idle",
+          turn: npc.face < 0 ? 180 : 0,
+          role: dancing ? "dancer" : undefined,
+        });
+      });
+      castRef.current?.(bodies);
+    };
     pulse();
     const id = window.setInterval(pulse, 900);
     return () => window.clearInterval(id);
@@ -1013,6 +1134,7 @@ function ClubCrowd({
             face={npc.face}
             glide
             quiet
+            hollow
             onClick={() => onPick(npc)}
           />
         );
@@ -1041,7 +1163,6 @@ function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | 
         className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center transition-[left,top] duration-700 ease-out"
         style={{ left: `${waiterLeft}%`, top: `${waiterTop}%` }}
       >
-        <IsoHuman skin="#8d5a3b" shirt="#1c1917" pants="#0f0f0f" hair="Low cut" pose="act" className="h-16 w-fit" />
         <span className="mt-[-0.4rem] text-xl">{show.bottle.emoji}</span>
       </div>
       {show.step === "spark" || show.step === "pop" || show.step === "cheer" ? (
@@ -1072,7 +1193,7 @@ function BottlePop({ show }: { show: { bottle: Bottle; step: "walk" | "spark" | 
   );
 }
 
-function LivePeer({ style, live, onClick, quiet = false, ...look }: { name: string; style: { left: string; top: string }; live: boolean; skin: string; shirt: string; hair: string; pants: string; quiet?: boolean; onClick: () => void }) {
+function LivePeer({ style, live, onClick, quiet = false, hollow = false, ...look }: { name: string; style: { left: string; top: string }; live: boolean; skin: string; shirt: string; hair: string; pants: string; quiet?: boolean; hollow?: boolean; onClick: () => void }) {
   const [walking, setWalking] = useState(false);
   const [face, setFace] = useState<1 | -1>(1);
   const { left, top } = style;
@@ -1092,7 +1213,7 @@ function LivePeer({ style, live, onClick, quiet = false, ...look }: { name: stri
       window.clearTimeout(stop);
     };
   }, [left, top, live]);
-  return <PersonTag {...look} tone="blue" online quiet={quiet} style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
+  return <PersonTag {...look} tone="blue" online quiet={quiet} hollow={hollow} style={style} pose={walking ? "walk" : "idle"} face={face} glide={live ? "live" : true} onClick={onClick} />;
 }
 
 function PersonTag({
@@ -1153,7 +1274,7 @@ function PersonTag({
       <span className="relative">
         {mark ? <span className="absolute -bottom-1 left-1/2 h-3 w-8 -translate-x-1/2 rounded-full border-2 border-[#FCD116] shadow-[0_0_10px_rgba(252,209,22,.8)]" aria-hidden /> : null}
         {hollow ? (
-          <span className={`${size} w-10`} />
+          <span className="h-14 w-8" />
         ) : (
           <IsoHuman skin={skin} shirt={shirt} pants={pants} hair={hair} pose={dance ? "dance" : pose} extra={extra} beat={beat} face={face} className={`${size} w-fit ${dance || pose === "dance" ? "venue-dance" : ""}`} />
         )}
@@ -1569,31 +1690,6 @@ function venueSolids(kind: Kind, spotId: string, night: boolean, doorOpen: boole
   return solids;
 }
 
-function DoorLeaf({ open }: { open: boolean }) {
-  const shift = useRef(0);
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const from = shift.current;
-    const to = open ? 1 : 0;
-    const started = performance.now();
-    let raf = 0;
-    const step = (now: number) => {
-      const t = Math.min(1, (now - started) / 340);
-      shift.current = from + (to - from) * (1 - (1 - t) ** 3);
-      setTick((n) => n + 1);
-      if (t < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [open]);
-  const block: Block = { x: -28 + shift.current * 22, y: 0, z: 74, w: 18, h: 22, d: 4, color: "#6b3a24" };
-  return (
-    <svg viewBox="0 0 760 480" preserveAspectRatio="xMidYMid slice" className="pointer-events-none absolute inset-0 h-full w-full">
-      <Blocks items={[block]} />
-    </svg>
-  );
-}
-
 function stageSpace(stage: HTMLDivElement | null) {
   if (!stage) return null;
   const w = stage.clientWidth;
@@ -1601,6 +1697,27 @@ function stageSpace(stage: HTMLDivElement | null) {
   if (w < 8 || h < 8) return null;
   const scale = Math.max(w / 760, h / 480);
   return { w, h, scale, ox: (w - 760 * scale) / 2, oy: (h - 480 * scale) / 2 };
+}
+
+function faceCrowd(list: VenueBody[]) {
+  for (const body of list) {
+    if (body.pose === "walk") continue;
+    const focus = body.role === "dj" || body.role === "judge" || body.role === "pastor" ? list.find((other) => other.id === "you") : null;
+    let best = focus && focus !== body ? focus : null;
+    let bestD = best ? Math.hypot(best.x - body.x, best.z - body.z) : 56;
+    if (!best) {
+      for (const other of list) {
+        if (other === body) continue;
+        const d = Math.hypot(other.x - body.x, other.z - body.z);
+        if (d < bestD && d > 2) {
+          best = other;
+          bestD = d;
+        }
+      }
+    }
+    if (!best) continue;
+    body.turn = (Math.atan2(best.x - body.x, best.z - body.z) * 180) / Math.PI;
+  }
 }
 
 function percentToWorld(left: number, top: number, stage: HTMLDivElement | null): Pt | null {
@@ -1623,92 +1740,36 @@ function worldToPercent(point: Pt, stage: HTMLDivElement | null) {
   };
 }
 
-function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot; night: boolean; kind: Kind; party?: boolean; doorOpen?: boolean }) {
-  const boxed = kind === "hotel" || kind === "hall" || kind === "airport" || kind === "tables" || kind === "shop" || kind === "court" || kind === "clinic" || kind === "market";
-  const floor =
-    spot.id === "golf" || kind === "garden"
-      ? "#3a5224"
-      : kind === "club"
-        ? "#1a1218"
-        : kind === "gym"
-          ? "#2a3038"
-          : kind === "airport"
-            ? "#a8bc72"
-            : kind === "shore"
-              ? "#c4a574"
-              : night
-                ? "#2a2e36"
-                : "#cfc6b4";
-  const wall = kind === "club" ? "#4c3b52" : night || kind === "airport" ? "#2a2634" : "#f2ebe0";
-  const wallSide = kind === "club" ? "#3a2c44" : night || kind === "airport" ? "#1a1824" : "#ddd4c6";
-  const title = spot.name.toUpperCase();
-  const lights = lightPools(kind, spot.id, night);
-  const pid = `v-${spot.id}`;
+function VenueScene({ spot, night, kind, party, doorOpen = false, dark = false, bodies = [] }: { spot: Spot; night: boolean; kind: Kind; party?: boolean; doorOpen?: boolean; dark?: boolean; bodies?: VenueBody[] }) {
+  const wall = kind === "club" ? "#4c3b52" : "#f4efe6";
+  const wallSide = kind === "club" ? "#3a2c44" : "#e7dfd2";
   return (
     <div className="absolute inset-0">
-      {kind === "club" ? <ClubRoom name={spot.name} /> : null}
-      {kind === "club" ? null : (
-      <svg viewBox="0 0 760 480" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <pattern id={`${pid}-grime`} width="28" height="28" patternUnits="userSpaceOnUse">
-            <rect width="28" height="28" fill="transparent" />
-            <circle cx="4" cy="9" r="1.2" fill="#000" opacity="0.07" />
-            <circle cx="18" cy="22" r="1.6" fill="#000" opacity="0.05" />
-            <circle cx="22" cy="6" r="0.9" fill="#fff" opacity="0.04" />
-            <path d="M2 20h8M14 4h6" stroke="#000" strokeWidth="0.6" opacity="0.05" />
-          </pattern>
-          <radialGradient id={`${pid}-sun`} cx={night ? "28%" : "62%"} cy={night ? "8%" : "6%"} r="70%">
-            <stop offset="0%" stopColor={night ? "#ff7a4a" : "#ffe2a8"} stopOpacity={night ? 0.22 : 0.38} />
-            <stop offset="45%" stopColor={night ? "#6b3a8a" : "#f0b060"} stopOpacity={night ? 0.1 : 0.12} />
-            <stop offset="100%" stopColor="#000" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id={`${pid}-grade`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={night ? "#1a1028" : "#f6d9a0"} stopOpacity={night ? 0.18 : 0.12} />
-            <stop offset="100%" stopColor="#0a0806" stopOpacity={night ? 0.35 : 0.16} />
-          </linearGradient>
-        </defs>
-        <Blocks
-          items={[
-            { x: -118, y: -4, z: -62, w: 236, h: 4, d: 168, color: floor },
-            ...sceneBlocks(spot, night, kind, wall, wallSide),
-          ]}
+      {kind === "club" ? (
+        <>
+          <ClubRoom name={spot.name} />
+          <VenuePeople bodies={bodies} />
+        </>
+      ) : (
+        <VenueRoom
+          name={spot.name}
+          kind={kind}
+          night={night}
+          dark={dark}
+          blocks={sceneBlocks(spot, night, kind, wall, wallSide)}
+          doorOpen={doorOpen}
+          bodies={bodies}
         />
-        <FloorWear kind={kind} night={night} />
-        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grime)`} pointerEvents="none" />
-        <SpotLights pools={lights} warm={!night} />
-        <PracticalLights kind={kind} night={night} party={party} />
-        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-sun)`} pointerEvents="none" />
-        {party ? <ClubGlow party /> : null}
-        {kind === "shore" ? <ShoreDress /> : null}
-        {kind === "garden" || spot.id === "golf" ? <GardenDress golf={spot.id === "golf"} /> : null}
-        {kind === "hotel" ? <Pool /> : null}
-        {kind === "airport" ? <AirportDress night={night} /> : null}
-        {kind === "airport" ? (
-          <>
-            <FaceSign axis="x" x={-102} y={48} z={-51} length={88} tall={14} text="CHECK-IN · ACCRA LIFE AIR" fill="#1d4ed8" ink="white" />
-            <FaceSign axis="z" x={-107} y={46} z={20} length={52} tall={13} text="DEPARTURES" fill="#006B3F" ink="white" />
-          </>
-        ) : spot.id === "golf" ? (
-          <StandingBoard x={-20} z={-40} text="ACCRA GOLF CLUB" />
-        ) : boxed ? (
-          <>
-            <FaceSign axis="x" x={-6} y={52} z={-51} length={112} tall={15} text={title} fill="#121212" ink="white" />
-            <FaceSign axis="z" x={-107} y={50} z={28} length={58} tall={14} text={bannerLine(kind)} fill="#1f4d3a" ink="white" />
-          </>
-        ) : (
-          <StandingBoard x={-72} z={6} text={title} />
-        )}
-        <ellipse cx="380" cy="420" rx="340" ry="80" fill="#000" opacity={night ? 0.28 : 0.12} pointerEvents="none" />
-        <rect x="0" y="0" width="760" height="480" fill={`url(#${pid}-grade)`} pointerEvents="none" />
-      </svg>
       )}
-      <div className={`venue-haze pointer-events-none absolute inset-0 ${night ? "venue-haze-night" : "venue-haze-day"} ${kind === "club" ? "venue-haze-club" : ""}`} aria-hidden />
+      {kind === "club" ? <div className={`venue-haze pointer-events-none absolute inset-0 ${night ? "venue-haze-night" : "venue-haze-day"} venue-haze-club`} aria-hidden /> : null}
       {kind === "club" ? <ClubConfetti /> : null}
-      <div className={`venue-dust pointer-events-none absolute inset-0 ${kind === "club" ? "venue-dust-club" : ""}`} aria-hidden>
-        {Array.from({ length: 12 }, (_, i) => (
-          <span key={i} className="venue-mote" style={{ left: `${8 + ((i * 17) % 84)}%`, animationDelay: `${(i % 6) * 0.7}s`, animationDuration: `${5 + (i % 4)}s` }} />
-        ))}
-      </div>
+      {kind === "club" ? (
+        <div className="venue-dust pointer-events-none absolute inset-0 venue-dust-club" aria-hidden>
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} className="venue-mote" style={{ left: `${8 + ((i * 17) % 84)}%`, animationDelay: `${(i % 6) * 0.7}s`, animationDuration: `${5 + (i % 4)}s` }} />
+          ))}
+        </div>
+      ) : null}
       {kind === "club" || party ? (
         <>
           <div className="venue-beam pointer-events-none absolute inset-0" aria-hidden />
@@ -1717,7 +1778,6 @@ function VenueScene({ spot, night, kind, party, doorOpen = false }: { spot: Spot
       ) : null}
       <div className={`venue-vignette pointer-events-none absolute inset-0 ${kind === "club" ? "venue-vignette-club" : ""}`} aria-hidden />
       {kind === "club" ? <div className="venue-grain pointer-events-none absolute inset-0" aria-hidden /> : null}
-      {kind !== "shore" && kind !== "garden" ? <DoorLeaf open={doorOpen} /> : null}
     </div>
   );
 }
