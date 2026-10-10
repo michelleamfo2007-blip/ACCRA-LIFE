@@ -400,6 +400,23 @@ export function RoomView({
     setPicked(null);
   }
 
+  function grab(id: string, fresh?: Placed) {
+    if (draft && draft.id !== id) onLay?.(draft.id, draft.x, draft.z, draft.rot);
+    if (draft?.id === id) return;
+    setPicked(null);
+    setFixture(null);
+    if (fresh) {
+      setDraft(fresh);
+      return;
+    }
+    if (FIXTURES.some((item) => item.id === id)) {
+      setDraft(fixtureAt(life, id));
+      return;
+    }
+    const piece = (life.furniture ?? []).find((item) => item.id === id);
+    if (piece) setDraft({ ...piece });
+  }
+
   const owns = (id: string) => life.inventory.includes(id);
   const look = homeLook(life.homeId);
   const spots = spotsFor(life);
@@ -448,10 +465,12 @@ export function RoomView({
         }}
         onGo={(id) => {
           if (id === "mat") {
+            if (arrange) return;
             if (onMat) setMatOpen(true);
             return;
           }
           if (id === "door") {
+            if (arrange) return;
             doorRef.current = true;
             setDoorOpen(true);
             walkTo(spots.door, "map");
@@ -459,6 +478,20 @@ export function RoomView({
               doorRef.current = false;
               setDoorOpen(false);
             }, 3200);
+            return;
+          }
+          if (arrange) {
+            const movable: Record<string, string> = {
+              bed: "fix-bed",
+              chair: "fix-sofa",
+              radio: "fix-radio",
+              cooler: "fix-fridge",
+              stove: "fix-stove",
+              toilet: "fix-toilet",
+              shower: "fix-shower",
+            };
+            const fixtureId = movable[id];
+            if (fixtureId) grab(fixtureId);
             return;
           }
           if (draft || (!canInterrupt() && id !== "chair")) return;
@@ -476,9 +509,12 @@ export function RoomView({
         placing={Boolean(draft)}
         focus={draft ? { x: draft.x, z: draft.z } : null}
         onPick={(id) => {
+          if (arrange) {
+            grab(id);
+            return;
+          }
           if (id.startsWith("fix-wall")) {
             if (draft?.id === id) return;
-            setArrange(false);
             setPicked(null);
             setFixture(null);
             setDraft(fixtureAt(life, id));
@@ -595,12 +631,7 @@ export function RoomView({
           onClose={() => setArrange(false)}
           onBuy={() => onUpgrade?.()}
           onWiden={() => onWiden?.()}
-          onPick={(piece) => {
-            setPicked(null);
-            setFixture(null);
-            setDraft(piece);
-            setArrange(false);
-          }}
+          onPick={(piece) => grab(piece.id, piece)}
         />
       ) : null}
       {!draft && !fixture && !picked ? (
@@ -747,7 +778,7 @@ function ArrangeTray({
           Done
         </button>
       </div>
-      <p className="mt-1 text-xs text-[#5c6b82]">Walls move too. Drag one to split off a bedroom, then rotate it. Buy another wall or a second bed in the shop.</p>
+      <p className="mt-1 text-xs text-[#5c6b82]">Touch the sofa, the bed, a wall, or anything else in the room. Place it, then touch the next one. Done when the room feels right.</p>
       {widen != null ? (
         <button type="button" onClick={onWiden} className="mt-3 w-full rounded-full bg-[#006B3F] py-2.5 text-sm font-bold text-white">
           Push the walls out · {cedis(widen)}
@@ -766,7 +797,7 @@ function ArrangeTray({
             <span className="h-8 w-8 rounded-lg border border-black/5" style={{ background: item.color }} />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">{item.name}</span>
-              <span className="block text-[11px] text-[#5c6b82]">Already here · move it</span>
+              <span className="block text-[11px] text-[#5c6b82]">In the room · touch it to move</span>
             </span>
           </button>
         ))}
